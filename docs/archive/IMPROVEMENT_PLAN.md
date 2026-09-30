@@ -151,8 +151,7 @@ Add a `scaffold` group to [creature_lab/cli.py](creature_lab/cli.py):
 
 ```python
 @scaffold_app.command("worm")
-def scaffold_worm(segments: int = 4, out: Path = Path("worm.json")):
-    ...
+def scaffold_worm(segments: int = 4, out: Path = Path("worm.json")): ...
 ```
 
 **URDF export specifics** ([creature_lab/export/urdf.py](creature_lab/export/urdf.py)):
@@ -329,12 +328,12 @@ New file [creature_lab/diagnosis.py](creature_lab/diagnosis.py):
 @dataclass
 class DiagnosisResult:
     metrics: dict[str, float]
-    patterns: list[str]          # detected failure pattern names
-    explanations: list[str]      # human-readable descriptions
-    suggestions: list[str]       # concrete edits to try
+    patterns: list[str]  # detected failure pattern names
+    explanations: list[str]  # human-readable descriptions
+    suggestions: list[str]  # concrete edits to try
 
-def diagnose(trace: EpisodeTrace, task: TaskSpec) -> DiagnosisResult:
-    ...
+
+def diagnose(trace: EpisodeTrace, task: TaskSpec) -> DiagnosisResult: ...
 ```
 
 **Failure patterns to detect (implement these in order):**
@@ -396,10 +395,11 @@ class ObservationSpec(StrictModel):
     include_contacts: bool = False
     include_target_vector: bool = False
 
-# schema/action.py  
+
+# schema/action.py
 class ActionSpec(StrictModel):
     mode: Literal["torque", "position", "velocity"] = "position"
-    joints: list[str]           # which joints this agent controls
+    joints: list[str]  # which joints this agent controls
     clip_range: tuple[float, float] = (-1.0, 1.0)
 ```
 
@@ -575,8 +575,7 @@ def generate_humanoid(
     height: float = 1.6,
     mass: float = 60.0,
     dof: Literal[8, 12] = 8,
-) -> CreatureSpec:
-    ...
+) -> CreatureSpec: ...
 ```
 
 The generator should produce:
@@ -641,8 +640,10 @@ co-evolution of body and controller*.
 def mutate_morphology(spec: CreatureSpec, rng) -> CreatureSpec:
     """Randomly resize a limb, shift an anchor, or flip a joint axis."""
 
+
 def mutate_controller(spec: CreatureSpec, rng) -> CreatureSpec:
     """Randomly change motor amplitude, frequency, or phase."""
+
 
 def crossover(a: CreatureSpec, b: CreatureSpec, rng) -> CreatureSpec:
     """Combine the parts from one creature with the motors from another."""

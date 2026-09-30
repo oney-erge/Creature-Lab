@@ -43,7 +43,8 @@ ROOT = Path(__file__).resolve().parents[1]
 # Console noise the editor emits by design (WebGL/software-render/reconnect chatter).
 _NOISE = (
     "GPU stall due to ReadPixels",
-    "THREE.THREE.Clock",
+    "THREE.Clock",
+    "KHR_parallel_shader_compile",
     "Software mode",
     "WebGL support:",
     "Detected chrome version",
