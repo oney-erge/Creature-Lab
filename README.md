@@ -1,15 +1,26 @@
-# Creature Lab
+<p align="center">
+  <img src="docs/assets/creature-lab-logo.svg" width="96" height="96" alt="Creature Lab logo" />
+</p>
 
-[![CI](https://github.com/oney-erge/Creature-Lab/actions/workflows/ci.yml/badge.svg)](https://github.com/oney-erge/Creature-Lab/actions/workflows/ci.yml)
-![Python](https://img.shields.io/badge/python-3.11%2B-blue)
-![License](https://img.shields.io/badge/license-Apache--2.0-blue)
+<h1 align="center">Creature Lab</h1>
 
-**Creature Lab is a failure-first, local workbench for robot morphology experiments.** Design a
-body, run it in physics, and find out whether a failure came from the body, controller, task,
-fragility, or simulator — then hand someone the exact experiment that proves it. Everything is
-inspectable JSON and runs offline on an ordinary laptop.
+<p align="center">
+  <strong>A failure-first, local workbench for robot morphology experiments.</strong>
+</p>
 
-![Creature Lab demo](docs/assets/demo.gif)
+<p align="center">
+  <a href="https://github.com/oney-erge/Creature-Lab/actions/workflows/ci.yml"><img src="https://github.com/oney-erge/Creature-Lab/actions/workflows/ci.yml/badge.svg" alt="CI status" /></a>
+  <img src="https://img.shields.io/badge/python-3.11%2B-blue" alt="Python 3.11+" />
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="Apache-2.0 license" /></a>
+</p>
+
+<p align="center">
+  <img src="docs/assets/demo.gif" width="480" alt="Creature Lab demo: a blue quadruped robot walking on a checkered floor in simulation" />
+</p>
+
+Design a body, run it in physics, and find out whether a failure came from the body, controller,
+task, fragility, or simulator — then hand someone the exact experiment that proves it. Everything
+is inspectable JSON and runs offline on an ordinary laptop.
 
 ```text
 Design → Run → Autopsy → Improve → Verify → Share
@@ -21,28 +32,15 @@ early-prototyping tool — not hardware qualification, a cloud service, or a GPU
 
 ## Start Here
 
-From a fresh checkout, run one launcher. It installs the starter extras, checks the environment,
+```bash
+git clone https://github.com/oney-erge/Creature-Lab.git
+cd Creature-Lab
+./run.sh            # Linux. macOS: ./run.command   Windows: .\run.bat
+```
+
+From a fresh checkout, the launcher installs the starter extras, checks the environment,
 and opens the interactive **build editor** in your browser — configure a creature first, then
 run it, instead of jumping straight into physics.
-
-```powershell
-.\run.bat
-```
-
-```bash
-./run.command  # macOS
-./run.sh       # Linux
-```
-
-Use `.\run.ps1` from PowerShell.
-
-The launcher accepts `doctor`, `repair`, `docker`, `logs`, and `stop`, and
-reuses a current locked environment on later runs. Docker binds the editor to
-loopback and preserves runs and outputs in named volumes.
-
-Setup checks disk space, prevents concurrent environment changes, and retries
-temporary network failures up to three times. Failures are recorded in
-`.setup/install.log`.
 
 A terminal shows setup progress and an editor URL such as `http://localhost:8080`. Pick a
 preset, tune it, click **Simulate** to run it through the physics pipeline and read its
@@ -58,6 +56,19 @@ uv run creature-lab
 ```
 
 If launch fails, start with `python scripts/start.py --dry-run` and `uv run creature-lab doctor`.
+
+<details>
+<summary>Launcher details</summary>
+
+Use `.\run.ps1` from PowerShell. The launcher accepts `doctor`, `repair`, `docker`, `logs`, and
+`stop`, and reuses a current locked environment on later runs. Docker binds the editor to
+loopback and preserves runs and outputs in named volumes.
+
+Setup checks disk space, prevents concurrent environment changes, and retries
+temporary network failures up to three times. Failures are recorded in
+`.setup/install.log`.
+
+</details>
 
 ## Manual Quickstart
 
