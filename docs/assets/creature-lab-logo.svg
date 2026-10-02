@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128" role="img" aria-labelledby="t">
+  <title id="t">Creature Lab logo: a modular quadruped robot with visible joints on a checkered floor</title>
+  <defs>
+    <clipPath id="tile"><rect x="4" y="4" width="120" height="120" rx="28"/></clipPath>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1e293b"/>
+      <stop offset="1" stop-color="#0f172a"/>
+    </linearGradient>
+  </defs>
+  <g clip-path="url(#tile)">
+    <rect width="128" height="128" fill="url(#bg)"/>
+    <!-- checkered floor -->
+    <path d="M0 96h128v32H0z" fill="#334155"/>
+    <path d="M0 96h32l-8 16H0zM64 96h32l8 16H72zM24 112h32l8 16H16zM88 112h32l8 16H96z" fill="#475569"/>
+    <!-- legs: thigh, shin -->
+    <g stroke-linecap="round" fill="none">
+      <path d="M44 66l-12 14l-4 12" stroke="#60a5fa" stroke-width="7"/>
+      <path d="M56 70l-4 12l2 10" stroke="#3b82f6" stroke-width="7"/>
+      <path d="M76 70l6 12l-2 10" stroke="#3b82f6" stroke-width="7"/>
+      <path d="M88 66l10 14l6 12" stroke="#60a5fa" stroke-width="7"/>
+    </g>
+    <!-- body -->
+    <rect x="34" y="44" width="60" height="26" rx="8" fill="#3b82f6"/>
+    <rect x="34" y="44" width="60" height="9" rx="4.5" fill="#93c5fd" opacity=".55"/>
+    <!-- joints -->
+    <g fill="#e0f2fe">
+      <circle cx="44" cy="66" r="4"/><circle cx="56" cy="70" r="4"/>
+      <circle cx="76" cy="70" r="4"/><circle cx="88" cy="66" r="4"/>
+    </g>
+    <!-- sensor eye -->
+    <circle cx="86" cy="54" r="4" fill="#0f172a"/><circle cx="87.2" cy="52.8" r="1.4" fill="#e0f2fe"/>
+  </g>
+  <rect x="4" y="4" width="120" height="120" rx="28" fill="none" stroke="#94a3b8" stroke-opacity=".35" stroke-width="2"/>
+</svg>
