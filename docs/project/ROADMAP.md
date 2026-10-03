@@ -24,5 +24,5 @@ for hardware relevance. Do not imply hardware qualification before choosing and 
 - Do not front-load architecture language ahead of the design → move → test → improve loop.
 - Keep one authoritative roadmap. New plans update `GRAND_PLAN.md`; they do not spawn a new file.
 - Do not add generic agent orchestration, personas, or memory APIs; Creature Lab is the physical
-  experiment layer, not Agentarium.
+  experiment layer, not AgentGymnasium.
 - Do not remove advanced commands that already work; keep them lower in the docs.
