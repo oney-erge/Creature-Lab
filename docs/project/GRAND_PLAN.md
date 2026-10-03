@@ -43,7 +43,7 @@ before it shows anything else.
 
 ### What it is **not** (hard boundaries, agreed by all three source plans)
 
-Creature Lab is deliberately *not* Agentarium and not a simulation platform. Do **not** add:
+Creature Lab is deliberately *not* AgentGymnasium and not a simulation platform. Do **not** add:
 multi-agent arenas, agent personas/memory, generic agent orchestration, challenge-generation
 chat, world-building systems, leaderboards, cloud execution, hosted dashboards, real-time LLM
 motor control, GPU-scale RL infrastructure, or a second frontend framework. An optional LLM may
@@ -86,7 +86,7 @@ UX and de-confusion come before the controller architecture.
 
 Everything all three plans agree on — tabs, basic/advanced modes, undo/redo/snapshots, async
 simulation with progress+cancel, playback separated from simulation, actionable diagnosis, run
-history, incremental preview, a visual scorecard, and the Agentarium boundary — is adopted
+history, incremental preview, a visual scorecard, and the AgentGymnasium boundary — is adopted
 wholesale and is the backbone of Phases 1–2 below.
 
 ---
