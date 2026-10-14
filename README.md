@@ -178,3 +178,7 @@ checklist and [docs/project/RELEASING.md](docs/project/RELEASING.md) for the rel
 
 Do not build a PyBullet project. Build a backend-agnostic creature lab where PyBullet is only
 the first backend.
+
+## Author
+
+Built by [Oney Erge](https://oneyerge.com).
