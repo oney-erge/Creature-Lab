@@ -73,12 +73,13 @@ if ($Action -eq "doctor") {
 Enter-InstallLock
 Assert-InstallFreeSpace -Path $PSScriptRoot -RequiredGB 3
 if (-not $uv) { $uv = Ensure-Uv }
+Remove-IncompleteVenv $PSScriptRoot
 $syncArgs = @("sync", "--frozen", "--extra", "sim", "--extra", "viz")
 if ($Action -eq "repair") { $syncArgs += "--reinstall" }
 Invoke-InstallRetry "dependency synchronization" {
-  $output = & $uv @syncArgs 2>&1
-  if ($LASTEXITCODE -ne 0) { throw "uv sync failed: $($output -join [Environment]::NewLine)" }
-  $output | Write-Host
+  $result = Invoke-InstallNative $uv $syncArgs
+  if ($result.ExitCode -ne 0) { throw "uv sync failed: $($result.Output -join [Environment]::NewLine)" }
+  $result.Output | Write-Host
 }
 Complete-Install
 
