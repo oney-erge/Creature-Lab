@@ -9,7 +9,8 @@ COPY examples/ ./examples/
 RUN uv sync --frozen --no-dev --extra sim --extra viz --no-editable
 
 FROM python:3.11-slim-bookworm@sha256:0bee7276f83efd4a1ee05bbbf4281d95ed28e079220a9457f25a93e3f1e3c31b AS runtime
-ENV PATH="/app/.venv/bin:$PATH" PYTHONUNBUFFERED=1
+# Listen on every interface inside the container; compose.yaml publishes the port on 127.0.0.1 only.
+ENV PATH="/app/.venv/bin:$PATH" PYTHONUNBUFFERED=1 CREATURE_LAB_HOST=0.0.0.0
 RUN useradd --create-home --uid 10001 creature
 WORKDIR /app
 COPY --from=builder --chown=creature:creature /app /app

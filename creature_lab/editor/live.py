@@ -20,7 +20,13 @@ from creature_lab.qualification import qualify as run_qualify
 from creature_lab.robustness import RobustnessResult, run_trials
 from creature_lab.runs import DEFAULT_RUNS_DIR, save_run
 from creature_lab.schema import CreatureSpec, EpisodeTrace, FrameState, TaskSpec
-from creature_lab.viewers.viser_viewer import apply_frame, build_scene, creature_reach, remove_scene
+from creature_lab.viewers.viser_viewer import (
+    DEFAULT_HOST,
+    apply_frame,
+    build_scene,
+    creature_reach,
+    remove_scene,
+)
 
 #: (creature, task, *, on_step=None, should_stop=None) -> EpisodeTrace. The keyword
 #: hooks are optional so any plain ``(creature, task) -> EpisodeTrace`` callable still
@@ -215,6 +221,7 @@ def run_editor(
     *,
     simulate: SimulateFn,
     simulate_other_backend: SimulateFn | None = None,
+    host: str = DEFAULT_HOST,
     port: int = 8080,
     open_browser: bool = False,
     runs_dir: Path = DEFAULT_RUNS_DIR,
@@ -231,7 +238,7 @@ def run_editor(
     """
     import viser
 
-    server = viser.ViserServer(port=port)
+    server = viser.ViserServer(host=host, port=port)
     server.gui.configure_theme(
         control_layout="fixed",
         control_width="large",
