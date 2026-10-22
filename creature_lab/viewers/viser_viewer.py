@@ -21,6 +21,9 @@ from typing import Any
 from creature_lab.schema import CreatureSpec, EpisodeTrace, FrameState, PartSpec, TaskSpec
 from creature_lab.schema.creature import ShapeType
 
+# Viser listens on every network interface unless told otherwise; this server has no sign-in,
+# so bind to this computer only by default. Pass host="0.0.0.0" to share it on purpose.
+DEFAULT_HOST = "127.0.0.1"
 _DEFAULT_COLOR = (0.6, 0.6, 0.6)
 _CONTACT_COLOR = (255, 60, 40)
 _MAX_CONTACT_MARKERS = 16
@@ -291,6 +294,7 @@ def stream_frames(
     *,
     task: TaskSpec | None = None,
     fps: float = 30.0,
+    host: str = DEFAULT_HOST,
     port: int = 8080,
     hold: bool = True,
     open_browser: bool = False,
@@ -307,7 +311,7 @@ def stream_frames(
     """
     import viser
 
-    server = viser.ViserServer(port=port)
+    server = viser.ViserServer(host=host, port=port)
     if open_browser:
         webbrowser.open(f"http://localhost:{port}", new=2)
     handles = build_scene(server, creature, task)
@@ -338,6 +342,7 @@ def play_trace(
     task: TaskSpec | None = None,
     fps: float = 30.0,
     loop: bool = True,
+    host: str = DEFAULT_HOST,
     port: int = 8080,
     debug: bool = False,
     open_browser: bool = False,
@@ -348,6 +353,7 @@ def play_trace(
         trace.frames,
         task=task,
         fps=fps,
+        host=host,
         port=port,
         hold=loop,
         open_browser=open_browser,
@@ -365,6 +371,7 @@ def compare_traces(
     task_b: TaskSpec | None = None,
     gap: float = 1.0,
     fps: float = 30.0,
+    host: str = DEFAULT_HOST,
     port: int = 8080,
     hold: bool = True,
     open_browser: bool = False,
@@ -372,7 +379,7 @@ def compare_traces(
     """Replay two runs side by side in one Viser scene (B offset by ``gap`` in y)."""
     import viser
 
-    server = viser.ViserServer(port=port)
+    server = viser.ViserServer(host=host, port=port)
     if open_browser:
         webbrowser.open(f"http://localhost:{port}", new=2)
     handles_a = build_scene(server, creature_a, task_a, prefix="/a", add_floor=True)

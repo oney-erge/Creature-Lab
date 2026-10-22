@@ -5,6 +5,17 @@ All notable changes to Creature Lab are documented here. Format loosely follows
 
 ## [Unreleased]
 
+### Security
+
+- The viewer, replay, compare and build-editor servers now listen on `127.0.0.1` only. They used
+  Viser's default, which accepts connections from every network interface, so on a shared network
+  anyone could open the build editor. The editor has no sign-in and can open and save files by path.
+  To share it on purpose, pass `--host 0.0.0.0` (or set `CREATURE_LAB_HOST`); the command prints a
+  warning when you do. The Docker image sets `CREATURE_LAB_HOST=0.0.0.0` inside the container, and
+  `compose.yaml` still publishes the port on `127.0.0.1` only. A plain `docker run -p 8080:8080`
+  publishes it on all interfaces, so use `-p 127.0.0.1:8080:8080`.
+- Added `SECURITY.md`.
+
 ### Added
 
 - **Re-fit gait:** the build editor's Test phase can now CMA-ES retune a body's own motor
