@@ -52,6 +52,7 @@ from creature_lab.schema import (
 )
 from creature_lab.schema.trace import TRACE_SCHEMA_VERSION
 from creature_lab.validation import EpisodeInputError, validate_episode_inputs
+from creature_lab.viewers.viser_viewer import DEFAULT_HOST
 
 app = typer.Typer(
     help=(
@@ -387,6 +388,27 @@ def _default(ctx: typer.Context) -> None:
     )
 
 
+HostOption = Annotated[
+    str,
+    typer.Option(
+        envvar="CREATURE_LAB_HOST",
+        help="Address to listen on. The default accepts connections from this computer only; "
+        "use 0.0.0.0 to let other devices connect (there is no sign-in).",
+    ),
+]
+
+
+def _warn_if_network_exposed(host: str) -> None:
+    """Say plainly when the viewer is reachable from other devices; it has no sign-in."""
+    if host in {"127.0.0.1", "localhost", "::1"}:
+        return
+    console.print(
+        f"[yellow]warning:[/yellow] listening on {host}. Anyone who can reach this port can "
+        "use the viewer and editor (no sign-in). Do this only on a network you trust, or behind "
+        "a port mapping that stays on this computer, as the Docker setup does."
+    )
+
+
 @app.command(rich_help_panel="Start Here")
 def demo(
     creature_path: Annotated[
@@ -403,6 +425,7 @@ def demo(
         Path | None, typer.Option(help="TaskSpec JSON (default: built-in crawl_forward).")
     ] = None,
     fps: Annotated[float, typer.Option(help="Playback frames per second.")] = 60.0,
+    host: HostOption = DEFAULT_HOST,
     port: Annotated[int, typer.Option(help="Port for the Viser server.")] = 8080,
     open_browser: Annotated[
         bool,
@@ -470,6 +493,7 @@ def demo(
         finally:
             backend.close()
 
+    _warn_if_network_exposed(host)
     console.print(
         f"[green]serving[/green] {creature.name!r} on http://localhost:{port} (Ctrl+C to stop)"
     )
@@ -478,6 +502,7 @@ def demo(
         live_frames(),
         task=task_spec,
         fps=fps,
+        host=host,
         port=port,
         hold=hold,
         open_browser=open_browser,
@@ -646,6 +671,7 @@ def build(
         str, typer.Option(help="Physics backend for Simulate: 'pybullet' or 'mujoco'.")
     ] = "pybullet",
     seed: Annotated[int | None, typer.Option(help="Seed recorded in simulated traces.")] = None,
+    host: HostOption = DEFAULT_HOST,
     port: Annotated[int, typer.Option(help="Port for the Viser build editor.")] = 8080,
     open_browser: Annotated[
         bool,
@@ -736,6 +762,7 @@ def build(
             creature, task_for_run, seed=seed, controller=controller, backend=other_backend
         )
 
+    _warn_if_network_exposed(host)
     console.print(
         f"[green]serving[/green] build editor on http://localhost:{port} (Ctrl+C to stop)"
     )
@@ -743,6 +770,7 @@ def build(
         session,
         simulate=simulate_current,
         simulate_other_backend=simulate_other_backend,
+        host=host,
         port=port,
         open_browser=open_browser,
         runs_dir=runs_dir,
@@ -1718,6 +1746,7 @@ def view(
         Path, typer.Option(help="Directory used when resolving the `latest` alias.")
     ] = DEFAULT_RUNS_DIR,
     fps: Annotated[float, typer.Option(help="Playback frames per second.")] = 30.0,
+    host: HostOption = DEFAULT_HOST,
     port: Annotated[int, typer.Option(help="Port for the Viser server.")] = 8080,
     open_browser: Annotated[
         bool,
@@ -1741,6 +1770,7 @@ def view(
         )
         raise typer.Exit(code=2) from exc
 
+    _warn_if_network_exposed(host)
     console.print(
         f"[green]serving[/green] {trace.run_id!r} on http://localhost:{port} (Ctrl+C to stop)"
     )
@@ -1749,6 +1779,7 @@ def view(
         trace,
         task=task_spec,
         fps=fps,
+        host=host,
         port=port,
         debug=debug,
         open_browser=open_browser,
@@ -1761,6 +1792,7 @@ def compare(
     run_b: Annotated[Path, typer.Argument(help="Second run directory (or trace.json).")],
     gap: Annotated[float, typer.Option(help="Sideways spacing between the two creatures.")] = 1.0,
     fps: Annotated[float, typer.Option(help="Playback frames per second.")] = 30.0,
+    host: HostOption = DEFAULT_HOST,
     port: Annotated[int, typer.Option(help="Port for the Viser server.")] = 8080,
     open_browser: Annotated[
         bool,
@@ -1819,6 +1851,7 @@ def compare(
         )
         raise typer.Exit(code=2) from exc
 
+    _warn_if_network_exposed(host)
     console.print(
         f"[green]serving[/green] {trace_a.run_id!r} vs {trace_b.run_id!r} "
         f"on http://localhost:{port} (Ctrl+C to stop)"
@@ -1832,6 +1865,7 @@ def compare(
         task_b=_load_task_for_trace(run_b, None, runs_dir),
         gap=gap,
         fps=fps,
+        host=host,
         port=port,
         open_browser=open_browser,
     )
