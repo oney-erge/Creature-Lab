@@ -5,6 +5,13 @@ All notable changes to Creature Lab are documented here. Format loosely follows
 
 ## [Unreleased]
 
+### Changed
+
+- Launch with the Python environment that was just synchronized, rather than
+  requesting Python 3.11 after a different supported version was installed.
+- Explain the PyBullet source-build requirement on Windows and macOS before
+  users begin setup.
+
 ### Security
 
 - The viewer, replay, compare and build-editor servers now listen on `127.0.0.1` only. They used

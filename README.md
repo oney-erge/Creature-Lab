@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/assets/creature-lab-logo.svg" width="96" height="96" alt="Creature Lab logo" />
+  <img src="https://raw.githubusercontent.com/oney-erge/Creature-Lab/main/docs/assets/creature-lab-logo.svg" width="96" height="96" alt="Creature Lab logo" />
 </p>
 
 <h1 align="center">Creature Lab</h1>
@@ -13,7 +13,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/assets/demo.gif" width="480" alt="Creature Lab demo: a blue quadruped robot walking on a checkered floor in simulation" />
+  <img src="https://raw.githubusercontent.com/oney-erge/Creature-Lab/main/docs/assets/demo.gif" width="480" alt="Creature Lab demo: a blue quadruped robot walking on a checkered floor in simulation" />
 </p>
 
 Creature Lab is a local workbench for designing modular robot bodies, running
@@ -39,6 +39,11 @@ cd Creature-Lab
 On Windows, use `.\run.bat`. The launcher sets up the starter environment and
 opens the browser-based build editor. Pick a preset, tune its body and motors,
 click **Simulate**, then read the score, diagnosis, and robustness results.
+
+PyBullet's current PyPI release has no Windows or macOS wheels. On those
+platforms its first installation builds from source and requires a working C++
+toolchain; it may take several minutes. Linux x86-64 has a Python 3.11 wheel.
+See [Getting Started](docs/GETTING_STARTED.md) for setup and troubleshooting.
 
 Each run produces ordinary JSON: a creature, task, controller, trace, hashes,
 and runtime provenance. That is the project's central unit: a minimum
@@ -70,7 +75,9 @@ uv run creature-lab evolve examples/quadruped.json --task examples/crawl_forward
 - `evolve` searches for a better body and gait.
 
 The [Getting Started guide](docs/GETTING_STARTED.md) walks through a complete
-first session. The [CLI reference](docs/CLI_REFERENCE.md) covers every command.
+first session. Try the [two-gait lesson](docs/GAIT_LESSON.md) to compare two
+saved quadruped runs. The [CLI reference](docs/CLI_REFERENCE.md) covers every
+command.
 
 ## What it includes
 

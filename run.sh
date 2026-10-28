@@ -72,7 +72,7 @@ sync_args=(sync --frozen --extra sim --extra viz)
 install_retry "dependency synchronization" "$uv" "${sync_args[@]}"
 install_complete
 
-args=(run --python 3.11 --frozen --no-sync python scripts/start.py --skip-sync)
+args=(run --frozen --no-sync python scripts/start.py --skip-sync)
 [ "$no_browser" -eq 1 ] && args+=(--no-open-browser)
 args+=("${forward[@]}")
 exec "$uv" "${args[@]}"

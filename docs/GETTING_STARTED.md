@@ -16,6 +16,11 @@ Use the launcher from the repository root:
 ```
 
 The first run installs what it needs; later runs reuse the current environment.
+If setup fails, inspect `.setup/install.log` in the checkout.
+PyBullet 3.2.7 has no Windows or macOS PyPI wheels. A first install there builds
+the 80 MB source distribution and requires a working C++ compiler; it can take
+several minutes. Linux x86-64 has a Python 3.11 wheel, while other Python and
+platform combinations may also need a source build.
 For direct control of the build editor after installation, use:
 
 ```bash

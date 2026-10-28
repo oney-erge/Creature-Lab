@@ -83,7 +83,7 @@ Invoke-InstallRetry "dependency synchronization" {
 }
 Complete-Install
 
-$launchArgs = @("run", "--python", "3.11", "--frozen", "--no-sync", "python", "scripts/start.py", "--skip-sync")
+$launchArgs = @("run", "--frozen", "--no-sync", "python", "scripts/start.py", "--skip-sync")
 if ($NoBrowser) { $launchArgs += "--no-open-browser" }
 $launchArgs += $RemainingArgs
 & $uv @launchArgs
