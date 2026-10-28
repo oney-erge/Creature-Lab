@@ -102,3 +102,10 @@ target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
+
+[tool.uv]
+# litellm (the `llm` extra) still declares filelock<4, but the October 2026
+# filelock CVEs are fixed only in 4.2.1+. litellm calls only FileLock(path,
+# timeout, mode) and Timeout, which 4.x keeps (BerriAI/litellm#48635); remove
+# this once a litellm release lifts the cap.
+override-dependencies = ["filelock>=4.2.1"]
