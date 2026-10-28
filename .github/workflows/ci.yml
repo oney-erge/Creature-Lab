@@ -97,7 +97,7 @@ jobs:
       - name: Set up Python
         run: uv python install ${{ matrix.python }}
       - name: Sync runtime and test dependencies
-        run: uv sync --extra dev --extra ${{ matrix.physics-extra }} --extra viz --extra export --extra evolve
+        run: uv sync --extra ${{ matrix.physics-extra }} --extra viz --extra export --extra evolve
       - name: Platform test suite
         run: uv run pytest -m "not optional_backend"
       - name: Launcher and CLI smoke

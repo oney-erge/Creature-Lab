@@ -31,10 +31,6 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = [
-    "pytest>=8.0",
-    "ruff>=0.6",
-]
 sim = [
     "pybullet>=3.2.6",
     "numpy>=1.26",  # pybullet imports numpy at runtime but does not pin it
@@ -73,6 +69,12 @@ rl = [
     # directly (its step()/reset() are an older, already-tested 4-tuple API).
     "gymnasium>=0.29",
     "stable-baselines3>=2.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.6",
 ]
 
 [project.scripts]
