@@ -504,10 +504,6 @@ dependencies = [
 browser = [
     { name = "playwright" },
 ]
-dev = [
-    { name = "pytest" },
-    { name = "ruff" },
-]
 evolve = [
     { name = "cmaes" },
 ]
@@ -537,6 +533,12 @@ viz = [
     { name = "viser" },
 ]
 
+[package.dev-dependencies]
+dev = [
+    { name = "pytest" },
+    { name = "ruff" },
+]
+
 [package.metadata]
 requires-dist = [
     { name = "cmaes", marker = "extra == 'evolve'", specifier = ">=0.10" },
@@ -552,15 +554,19 @@ requires-dist = [
     { name = "playwright", marker = "extra == 'browser'", specifier = ">=1.40" },
     { name = "pybullet", marker = "extra == 'sim'", specifier = ">=3.2.6" },
     { name = "pydantic", specifier = ">=2.7" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
     { name = "rich", specifier = ">=13.7" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.6" },
     { name = "stable-baselines3", marker = "extra == 'rl'", specifier = ">=2.0" },
     { name = "trimesh", marker = "extra == 'viz'", specifier = ">=4.0" },
     { name = "typer", specifier = ">=0.12" },
     { name = "viser", marker = "extra == 'viz'", specifier = ">=1.0" },
 ]
-provides-extras = ["dev", "sim", "viz", "export", "llm", "evolve", "mujoco", "browser", "rl"]
+provides-extras = ["sim", "viz", "export", "llm", "evolve", "mujoco", "browser", "rl"]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "pytest", specifier = ">=8.0" },
+    { name = "ruff", specifier = ">=0.6" },
+]
 
 [[package]]
 name = "cuda-bindings"
