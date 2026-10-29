@@ -1,11 +1,22 @@
 # Creature Lab — Grand Plan (single source of truth)
 
-**Status:** 0.2 implementation complete; future work is evidence-led. This document supersedes the three drafts in `docs/archive/some-plans/`
+**Status:** active roadmap; the historical 0.2 plan below is implementation history. This document supersedes the three drafts in `docs/archive/some-plans/`
 (final roadmap, streamlined controller roadmap, UI/UX plan) and the completed
 [`IMPROVEMENT_PLAN_2026.md`](../archive/IMPROVEMENT_PLAN_2026.md). When those disagree with this
 file, this file wins. Keep **one** active roadmap.
 
-## 0.2 delivery summary
+## Current priorities
+
+1. Provide a supported compiler-free starter runtime on each platform actually offered; measure
+   full download size and first use before making delivery claims.
+2. Verify the editor's failure lessons, counterfactual analysis, comparison, and experimental
+   standalone replay with real browser and clean-machine journeys when permitted.
+3. Expand the failure lessons with recorded, reproducible outcomes and a controlled-perturbation
+   comparison. Keep body-only and controller-retuned experiments distinct.
+4. Calibrate and document per-body/per-joint backend differences and steep-terrain diagnosis
+   before suggesting behavioral portability or hardware readiness.
+
+## Historical 0.2 delivery summary
 
 The hardening/adoption pass is complete in the working tree:
 
@@ -17,8 +28,8 @@ The hardening/adoption pass is complete in the working tree:
   executable score/fall contracts; unstable entries are labeled challenges.
 - **Differentiator:** `autopsy` attributes controller/body-task/fragility/backend failures and
   emits a report plus reproducible pack; the Failure Zoo supplies intentional examples.
-- **Release readiness:** version 0.2.0 metadata, Linux/Windows/macOS CI, browser CI, clean-wheel
-  smoke, and a manual verified-artifact release workflow.
+- **Release preparation:** version 0.2.0 metadata, cross-platform workflows, a clean-wheel smoke
+  path, and a manual artifact workflow. Those historical checks do not verify later changes.
 
 The older phase narratives below remain as implementation history. Statements that something is
 "deferred" there are superseded by this summary and the current CLI reference when the feature
@@ -29,8 +40,8 @@ now exists.
 ## 1. What Creature Lab is (say it in one breath)
 
 > **Creature Lab is a failure-first, local workbench for reproducible robot morphology
-> experiments.** It determines whether a failure came from the body, controller, task,
-> fragility, or simulator—without requiring URDF or simulator code.
+> experiments.** It helps investigate whether a failure came from the body, controller, task,
+> fragility, or simulator—without requiring URDF or simulator code. Explanations are heuristic.
 
 The loop, and the whole product, is:
 

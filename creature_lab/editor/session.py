@@ -396,6 +396,36 @@ class EditorSession:
         self.task = presets.generate_task(task_name)
         self.last_message = f"Started {presets.preset_label(creature_name)} · {goal_label}"
 
+    def load_failure_lesson(self, case_id: str) -> None:
+        """Load a packaged failure into the editable body/task and sinusoid gait."""
+        from creature_lab.failure_zoo import build_failure_case
+        from creature_lab.schema.controller import ControllerType
+
+        creature, task, controller, case = build_failure_case(case_id)
+        if controller.type != ControllerType.SINUSOID or not controller.motors:
+            raise ValueError("This lesson needs a sinusoid controller that the editor can edit.")
+        motors = {motor.joint: motor for motor in controller.motors}
+        data = creature.model_dump(mode="json")
+        if set(motors) != {motor["joint"] for motor in data["motors"]}:
+            raise ValueError("The lesson controller does not match this body's motors.")
+        for motor in data["motors"]:
+            gait = motors[motor["joint"]]
+            for key in ("amplitude", "frequency", "phase", "offset"):
+                motor[key] = getattr(gait, key)
+        edited = CreatureSpec.model_validate(data)
+        self._checkpoint()
+        self.creature = edited
+        self.task = task
+        self.template = "custom"
+        self.params = {}
+        self.task_preset = task.name
+        self.selected_part_id = edited.parts[0].id
+        self.selected_motor_id = edited.motors[0].joint if edited.motors else ""
+        self.controller = "sinusoid"
+        self.last_message = (
+            f"Loaded {case.title}. Simulate, inspect the result, then change one thing."
+        )
+
     def set_body_param(self, key: str, value: float) -> None:
         if self.template == "custom":
             self.last_message = "Loaded JSON is custom; use part and motor controls to edit it."
@@ -441,6 +471,29 @@ class EditorSession:
         data["terrain"]["friction"] = friction
         self.task = TaskSpec.model_validate(data)
         self.last_message = f"Terrain friction set to {friction:.2f}"
+
+    def set_lateral_push(self, force: float) -> None:
+        """Set a repeatable one-timestep force at the task midpoint, or remove it."""
+        from creature_lab.diagnosis import root_id
+
+        data = _model_data(self.task)
+        data["impulse_event"] = (
+            {
+                "time": self.task.duration / 2,
+                "part_id": root_id(self.creature),
+                "force": [0, force, 0],
+            }
+            if force != 0
+            else None
+        )
+        updated = TaskSpec.model_validate(data)
+        self._checkpoint()
+        self.task = updated
+        self.last_message = (
+            "Lateral push removed."
+            if force == 0
+            else f"Lateral push set to {force:.0f} N for one step."
+        )
 
     def set_target_position(self, position: tuple[float, float, float]) -> None:
         if self.task.target is None:

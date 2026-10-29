@@ -226,7 +226,7 @@ def test_evolve_llm_strategy_cli_writes_rationale_into_lineage(tmp_path):
     import json
 
     lineage = json.loads((run_dir / "lineage.json").read_text())
-    assert lineage["strategy"] == "llm"
+    assert lineage["strategy"] == "tool_random"
     mutated_nodes = [node for node in lineage["nodes"] if node["index"] > 0]
     assert mutated_nodes
     assert all("note" in node and node["note"] for node in mutated_nodes)

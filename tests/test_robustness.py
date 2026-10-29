@@ -183,21 +183,22 @@ def test_robustness_levels_are_ordered_trial_counts():
 def test_plain_language_verdict_robust():
     result = _result(scores=[1.0, 1.02, 0.99, 1.01], fell=[False, False, False, False])
     verdict = plain_language_verdict(result)
-    assert verdict.startswith("Robust")
+    assert verdict.startswith("Passed these checks")
     assert "4 of 4 trials" in verdict
+    assert "mass scales" in verdict and "friction scales" in verdict
 
 
 def test_plain_language_verdict_fragile_on_high_fail_rate():
     result = _result(scores=[1.0, 0.1, 1.0, 0.1], fell=[False, True, False, True])
     verdict = plain_language_verdict(result)
-    assert verdict.startswith("Fragile")
+    assert verdict.startswith("Failures or variation in these checks")
     assert "2 of 4 trials" in verdict
 
 
 def test_plain_language_verdict_moderately_robust():
     result = _result(scores=[1.0, 0.85, 1.0, 1.0, 0.9], fell=[False, False, False, False, True])
     verdict = plain_language_verdict(result)
-    assert verdict.startswith("Moderately robust")
+    assert verdict.startswith("Some sensitivity in these checks")
 
 
 def test_plain_language_verdict_handles_zero_mean_score():

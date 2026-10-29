@@ -4,7 +4,7 @@
 
 <h1 align="center">Creature Lab</h1>
 
-<p align="center"><strong>Design robots, simulate them, and understand why they succeed or fail.</strong></p>
+<p align="center"><strong>Build a robot, see why it fails, and compare what fixed it.</strong></p>
 
 <p align="center">
   <a href="https://github.com/oney-erge/Creature-Lab/actions/workflows/ci.yml"><img src="https://github.com/oney-erge/Creature-Lab/actions/workflows/ci.yml/badge.svg" alt="CI status" /></a>
@@ -38,7 +38,9 @@ cd Creature-Lab
 
 On Windows, use `.\run.bat`. The launcher sets up the starter environment and
 opens the browser-based build editor. Pick a preset, tune its body and motors,
-click **Simulate**, then read the score, diagnosis, and robustness results.
+click **Simulate**, then read the result. Use **Explain failure** to run a
+counterfactual analysis, compare saved runs in History, and download its report
+and experiment pack.
 
 PyBullet's current PyPI release has no Windows or macOS wheels. On those
 platforms its first installation builds from source and requires a working C++

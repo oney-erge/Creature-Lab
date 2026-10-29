@@ -92,9 +92,10 @@ uv run creature-lab run examples/quadruped.json --task examples/crawl_forward.js
 - `evolve` searches for a better body/gait via `--mutate body,controller` (mutating the body's
   own `MotorSpec` amplitude/frequency/phase — unrelated to the `--controller` flag above; evolve
   always simulates with the default open-loop `sinusoid` policy, it has no `--controller` option).
-  `--strategy llm` uses the validated agent tool layer (offline by default) as the mutation
-  operator instead of the structural body/controller mutators; each attempt's rationale is saved
-  into `lineage.json` (`creature-lab lineage <run>` shows it).
+  `--strategy tool_random` uses seeded random proposals through the validated agent tool layer
+  instead of the structural body/controller mutators; it does not call a model. Each proposal
+  is recorded in `lineage.json` (`creature-lab lineage <run>` shows it). The former `llm` name
+  is a deprecated alias; the separate `ask` command can use a configured model.
 - `optimize` tunes a creature's gait (CMA-ES over each motor's amplitude/frequency/phase, body
   untouched — the same search `evolve --strategy cmaes` runs) and saves the result as a portable
   `controller.json` instead of a new creature file. The un-tuned default gait leaves real
@@ -125,7 +126,7 @@ uv run creature-lab run examples/quadruped.json --task examples/crawl_forward.js
   result. Also available as a **Qualify** panel in `creature-lab build`'s Test phase (see
   `docs/BUILD_EDITOR.md`).
 - `autopsy` runs the selected-controller baseline, a curated-controller counterfactual,
-  task-aware perturbations, optional backend comparison, causal attribution, and emits
+  task-aware perturbations, optional backend comparison, heuristic candidate explanations, and emits
   HTML/Markdown/JSON plus a verified pack.
 - `failure list` and `failure export <id>` expose intentionally broken experiments with an
   expected diagnosis for teaching and regression work.

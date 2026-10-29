@@ -436,7 +436,9 @@ def comparison_to_html(
         for key, v in comparison["signals"].items()
     )
     delta = comparison["score_delta"]
-    delta_class = "ok" if delta >= 0 else "pattern"
+    differences = comparison.get("conditions_changed_or_unknown", [])
+    delta_class = "meta" if differences else "ok" if delta >= 0 else "pattern"
+    conditions = _escape(", ".join(differences) if differences else "none detected")
     title = f"{comparison['run_a']} vs {comparison['run_b']}"
 
     return f"""<!doctype html>
@@ -456,6 +458,8 @@ def comparison_to_html(
 </p>
 <div class="card">
   <strong class="{delta_class}">Score delta: {"+" if delta >= 0 else ""}{_fmt(delta)}</strong>
+  <p>Changed or unknown: {conditions}. Compare scores only when task, backend, and evaluation
+  conditions are compatible.</p>
 </div>
 
 <h2>Root path (top-down, overlaid)</h2>

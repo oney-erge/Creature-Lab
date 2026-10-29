@@ -48,7 +48,8 @@ uv run creature-lab zoo list
 
 `quadruped`, `hexapod`, `tripod`, `worm`, and `humanoid_12dof` each ship a measured
 `controller.json`. `zoo run` selects the `curated` controller by default: the packaged gait for
-an exact matching body, posture feedback for edited humanoids, and a safe fallback otherwise.
+compatible joint IDs, posture feedback where the packaged gait is incompatible, and a safe
+fallback otherwise.
 
 ```bash
 uv run creature-lab zoo run quadruped

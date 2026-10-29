@@ -14,7 +14,7 @@ import math
 import time
 import webbrowser
 from collections import defaultdict, deque
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -286,6 +286,42 @@ def apply_frame(
             marker.visible = True
         else:
             marker.visible = False
+
+
+def recorded_replay_html(
+    creature: CreatureSpec,
+    trace: EpisodeTrace,
+    *,
+    task: TaskSpec | None = None,
+    on_frame: Callable[[int, int], None] | None = None,
+    should_stop: Callable[[], bool] | None = None,
+) -> str:
+    """Serialize recorded poses into Viser's experimental standalone 3D player.
+
+    This opens an isolated loopback server only while serializing; it never
+    mutates the live editor scene or re-simulates the episode.
+    """
+    import viser
+
+    server = viser.ViserServer(host="127.0.0.1", port=0, verbose=False)
+    try:
+        reach = creature_reach(creature)
+        server.initial_camera.position = (reach * 1.54, -reach * 1.54, reach * 1.56)
+        server.initial_camera.look_at = (0.0, 0.0, reach * 0.35)
+        handles = build_scene(server, creature, task)
+        serializer = server.get_scene_serializer()
+        previous = trace.frames[0].t
+        for index, frame in enumerate(trace.frames):
+            if should_stop is not None and should_stop():
+                raise InterruptedError("Replay export cancelled")
+            serializer.insert_sleep(max(0.0, frame.t - previous))
+            apply_frame(handles, frame)
+            previous = frame.t
+            if on_frame is not None:
+                on_frame(index + 1, len(trace.frames))
+        return serializer.as_html(dark_mode=True)
+    finally:
+        server.stop()
 
 
 def stream_frames(

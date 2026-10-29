@@ -18,7 +18,7 @@ from creature_lab.editor.session import EditorSession
 from creature_lab.qualification import BUILTIN_PROFILES, QualificationResult
 from creature_lab.qualification import qualify as run_qualify
 from creature_lab.robustness import RobustnessResult, run_trials
-from creature_lab.runs import DEFAULT_RUNS_DIR, save_run
+from creature_lab.runs import DEFAULT_RUNS_DIR, load_trace, save_run
 from creature_lab.schema import CreatureSpec, EpisodeTrace, FrameState, TaskSpec
 from creature_lab.viewers.viser_viewer import (
     DEFAULT_HOST,
@@ -431,6 +431,96 @@ def run_editor(
         if not job_manager.start(work):
             session.last_message = "A job is already running."
 
+    def start_autopsy_job() -> None:
+        """Run the existing counterfactual analysis and save a shareable pack."""
+        from creature_lab.autopsy import autopsy_to_html, autopsy_to_markdown, run_autopsy
+        from creature_lab.exporting import export_design_pack, verify_design_pack
+        from creature_lab.io_utils import atomic_write_text
+
+        creature = session.creature
+        task_for_run = session.task
+        controller = session.controller
+
+        def work(reporter: ProgressReporter) -> tuple[Any, Path, EpisodeTrace]:
+            import json
+
+            completed = 0
+
+            def simulate_with(c: CreatureSpec, t: TaskSpec, selected: str) -> EpisodeTrace:
+                nonlocal completed
+                reporter.check_cancelled()
+                reporter.report(completed / 7, f"simulation {completed + 1}/7")
+                try:
+                    trace = simulate(
+                        c, t, controller=selected, should_stop=lambda: reporter.cancel_requested
+                    )
+                except Exception:
+                    if reporter.cancel_requested:
+                        raise JobCancelled from None
+                    raise
+                reporter.check_cancelled()
+                completed += 1
+                return trace
+
+            result = run_autopsy(
+                creature,
+                task_for_run,
+                simulate=lambda c, t: simulate_with(c, t, controller),
+                simulate_reference=lambda c, t: simulate_with(c, t, "curated"),
+                robustness_trials=5,
+            )
+            reporter.check_cancelled()
+            run_dir = save_run(
+                creature, result.baseline_trace, runs_dir=runs_dir, task=task_for_run
+            )
+            saved_trace = load_trace(run_dir)
+            report_dir = run_dir / "autopsy"
+            report_dir.mkdir()
+            pack_dir = report_dir / "experiment_pack"
+            export_design_pack(
+                creature, task_for_run, saved_trace, out_dir=pack_dir, source_dir=run_dir
+            )
+            verification = verify_design_pack(pack_dir)
+            if not verification.valid:
+                raise ValueError(
+                    "Experiment pack verification failed: " + "; ".join(verification.errors)
+                )
+            atomic_write_text(
+                report_dir / "autopsy.json", json.dumps(result.to_json_dict(), indent=2)
+            )
+            atomic_write_text(report_dir / "autopsy.md", autopsy_to_markdown(result))
+            atomic_write_text(report_dir / "autopsy.html", autopsy_to_html(result))
+            return result, report_dir, saved_trace
+
+        if not job_manager.start(work):
+            session.last_message = "A job is already running."
+
+    def start_replay_export_job(trace: EpisodeTrace) -> None:
+        from creature_lab.viewers.viser_viewer import recorded_replay_html
+
+        creature = session.creature
+        task_for_run = session.task
+
+        def work(reporter: ProgressReporter) -> tuple[str, str]:
+            def on_frame(done: int, total: int) -> None:
+                reporter.report(done / total if total else 1.0, f"recording frame {done}/{total}")
+
+            try:
+                page = recorded_replay_html(
+                    creature,
+                    trace,
+                    task=task_for_run,
+                    on_frame=on_frame,
+                    should_stop=lambda: reporter.cancel_requested,
+                )
+            except InterruptedError:
+                raise JobCancelled from None
+            reporter.check_cancelled()
+            return trace.run_id, page
+
+        if not job_manager.start(work):
+            session.last_message = "A job is already running."
+
     controls_holder["controls"] = BuildControls(
         server.gui,
         session,
@@ -442,6 +532,8 @@ def run_editor(
         on_start_robustness=start_robustness_job,
         on_start_qualify=start_qualify_job,
         on_start_refit_gait=start_refit_gait_job,
+        on_start_autopsy=start_autopsy_job,
+        on_start_replay_export=start_replay_export_job,
         on_playback_frame=preview.apply_playback_frame,
         notify=notify,
         on_frame_camera=lambda: preview.frame_camera(),

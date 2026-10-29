@@ -142,6 +142,8 @@ ROBUSTNESS_LEVELS: dict[str, int] = {"Quick": 5, "Standard": 10, "Thorough": 25}
 def plain_language_verdict(result: RobustnessResult) -> str:
     """One-sentence, non-technical read of a robustness sweep's outcome."""
     trials = len(result.trials)
+    if not trials:
+        return "No trials completed."
     passed = sum(
         (not trial.fell) if trial.succeeded is None else trial.succeeded for trial in result.trials
     )
@@ -150,10 +152,14 @@ def plain_language_verdict(result: RobustnessResult) -> str:
     )
     detail = (
         f"met the evaluation criterion in {passed} of {trials} trials, "
-        f"with scores varying by about {spread:.0%}."
+        f"with scores varying by about {spread:.0%}. "
+        f"Observed mass scales {min(t.mass_scale for t in result.trials):.2f}–"
+        f"{max(t.mass_scale for t in result.trials):.2f} and friction scales "
+        f"{min(t.friction_scale for t in result.trials):.2f}–"
+        f"{max(t.friction_scale for t in result.trials):.2f}."
     )
     if result.fail_rate == 0.0 and spread < 0.1:
-        return f"Robust — {detail}"
+        return f"Passed these checks — {detail}"
     if result.fail_rate <= 0.2 and spread < 0.25:
-        return f"Moderately robust — {detail}"
-    return f"Fragile — {detail}"
+        return f"Some sensitivity in these checks — {detail}"
+    return f"Failures or variation in these checks — {detail}"

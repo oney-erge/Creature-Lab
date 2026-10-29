@@ -1,5 +1,7 @@
 """Tests for the failure-diagnosis engine (synthetic traces, no physics)."""
 
+import math
+
 from creature_lab.diagnosis import diagnose
 from creature_lab.schema import CreatureSpec, EpisodeTrace, TaskSpec
 
@@ -111,6 +113,31 @@ def test_early_fall_is_detected():
     result = diagnose(_trace(frames), _creature())
     assert "early_fall" in result.patterns
     assert 0 < result.metrics["fall_time"] < 1.0
+
+
+def test_climbing_slope_uses_ground_relative_height():
+    angle = 0.3
+    frames = []
+    for i in range(30):
+        x = i * 0.05
+        frame = _frame(i / 10, x=x, contacts=[_ground("leg_a"), _ground("leg_b")])
+        for part in frame["parts"].values():
+            part["position"][2] += x * math.tan(angle)
+        frames.append(frame)
+    task = TaskSpec.model_validate(
+        {"name": "slope", "duration": 3, "terrain": {"type": "slope", "slope_angle": angle}}
+    )
+    result = diagnose(_trace(frames), _creature(), task)
+    assert result.metrics["com_height_std"] < 0.05
+    assert "com_instability" not in result.patterns
+
+
+def test_recorded_motion_beyond_heightfield_is_reported():
+    task = TaskSpec.model_validate({"name": "slope", "duration": 3, "terrain": {"type": "slope"}})
+    frames = [_frame(0, 0), _frame(1, 4)]
+    result = diagnose(_trace(frames), _creature(), task)
+    assert result.metrics["terrain_outside_frames"] == 1
+    assert "outside_terrain" in result.patterns
 
 
 def test_lateral_drift_is_detected():

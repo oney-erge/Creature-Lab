@@ -236,6 +236,43 @@ def build_report_bundle(
 def build_comparison(report_a: dict[str, Any], report_b: dict[str, Any]) -> dict[str, Any]:
     """Score and signal deltas (``b - a``) between two reports built by ``build_report``."""
     summary_a, summary_b = report_a["summary"], report_b["summary"]
+    differences: list[str] = []
+    creature_a, creature_b = report_a.get("creature", {}), report_b.get("creature", {})
+    task_a, task_b = report_a.get("task", {}), report_b.get("task", {})
+    backend_a, backend_b = report_a.get("backend", {}), report_b.get("backend", {})
+    repro_a = report_a.get("reproducibility", {})
+    repro_b = report_b.get("reproducibility", {})
+    fields = (
+        (
+            "body or embedded motors",
+            creature_a.get("hash"),
+            creature_b.get("hash"),
+        ),
+        ("task", task_a.get("hash"), task_b.get("hash")),
+        (
+            "controller",
+            repro_a.get("controller_hash"),
+            repro_b.get("controller_hash"),
+        ),
+        ("backend", backend_a.get("name"), backend_b.get("name")),
+        ("backend version", backend_a.get("version"), backend_b.get("version")),
+        (
+            "timestep",
+            repro_a.get("timestep"),
+            repro_b.get("timestep"),
+        ),
+    )
+    for label, a, b in fields:
+        if a is None or b is None:
+            differences.append(f"{label} unknown")
+        elif a != b:
+            differences.append(label)
+    policy_a = repro_a.get("policy_hash")
+    policy_b = repro_b.get("policy_hash")
+    if policy_a != policy_b:
+        differences.append("policy")
+    if report_a.get("warnings") or report_b.get("warnings"):
+        differences.append("run warnings; inspect original reports")
     signals: dict[str, dict[str, float]] = {}
     for key in ("net_displacement", "forward_displacement", "total_joint_motion"):
         value_a, value_b = summary_a.get(key), summary_b.get(key)
@@ -248,6 +285,7 @@ def build_comparison(report_a: dict[str, Any], report_b: dict[str, Any]) -> dict
         "score_b": report_b["score"],
         "score_delta": report_b["score"] - report_a["score"],
         "signals": signals,
+        "conditions_changed_or_unknown": differences,
     }
 
 

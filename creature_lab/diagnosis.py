@@ -15,6 +15,13 @@ from collections import Counter
 from dataclasses import dataclass, field
 
 from creature_lab.schema import CreatureSpec, EpisodeTrace, TaskSpec
+from creature_lab.terrain import (
+    DEFAULT_CELL_SIZE,
+    DEFAULT_COLS,
+    DEFAULT_ROWS,
+    heightfield_grid,
+    is_flat,
+)
 
 # Tuning thresholds (metres / radians / fractions). Calibrated against the bundled
 # zoo: good walkers travel 0.4-0.9 m forward; the tripod drifts backward.
@@ -69,6 +76,7 @@ class _Signals:
     #: (initial distance to task.target - final distance), horizontal only. None
     #: when the task has no target.
     target_progress: float | None = None
+    terrain_outside_frames: int = 0
 
 
 def root_id(creature: CreatureSpec) -> str:
@@ -130,10 +138,27 @@ def _signals(trace: EpisodeTrace, creature: CreatureSpec, task: TaskSpec | None 
     root_part_id = root_id(creature)
     steady_heights: list[float] = []
     fall_time: float | None = None
+    grid = (
+        heightfield_grid(task.terrain) if task is not None and not is_flat(task.terrain) else None
+    )
+    terrain_outside_frames = 0
     for frame in frames:
-        if frame.t >= settle_t:
-            steady_heights.append(com(frame)[2])
         pose = frame.parts.get(root_part_id)
+        ground_height = 0.0
+        inside = True
+        if grid is not None and pose is not None:
+            x, y, _ = pose.position
+            half_x = DEFAULT_ROWS * DEFAULT_CELL_SIZE / 2
+            half_y = DEFAULT_COLS * DEFAULT_CELL_SIZE / 2
+            inside = -half_x <= x < half_x and -half_y <= y < half_y
+            if inside:
+                row = min(DEFAULT_ROWS - 1, max(0, round((x + half_x) / DEFAULT_CELL_SIZE)))
+                col = min(DEFAULT_COLS - 1, max(0, round((y + half_y) / DEFAULT_CELL_SIZE)))
+                ground_height = grid[row][col]
+            else:
+                terrain_outside_frames += 1
+        if frame.t >= settle_t and inside:
+            steady_heights.append(com(frame)[2] - ground_height)
         if pose is not None and fall_time is None and not is_upright(pose.orientation):
             fall_time = frame.t
     com_height_std = statistics.pstdev(steady_heights) if len(steady_heights) > 1 else 0.0
@@ -175,6 +200,7 @@ def _signals(trace: EpisodeTrace, creature: CreatureSpec, task: TaskSpec | None 
         contact_fraction=contact_fraction,
         motors_over_limit=motors_over_limit,
         target_progress=target_progress,
+        terrain_outside_frames=terrain_outside_frames,
     )
 
 
@@ -202,12 +228,21 @@ def diagnose(
             "total_joint_motion": sig.joint_motion,
             "fall_time": sig.fall_time if sig.fall_time is not None else -1.0,
             "com_height_std": sig.com_height_std,
+            "terrain_outside_frames": float(sig.terrain_outside_frames),
             "contact_frames_fraction": (
                 sig.frames_with_contact / sig.frame_count if sig.frame_count else 0.0
             ),
             **({"target_progress": sig.target_progress} if sig.target_progress is not None else {}),
         }
     )
+
+    if sig.terrain_outside_frames:
+        result.add(
+            "outside_terrain",
+            f"The root left the finite terrain grid in {sig.terrain_outside_frames} frame(s); "
+            "ground-relative height is unavailable there.",
+            "Shorten the episode or keep the target and motion inside the terrain extent.",
+        )
 
     # 1. Motors that swing past their own joint limit (read from the creature spec).
     if sig.motors_over_limit:

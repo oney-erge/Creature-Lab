@@ -36,7 +36,7 @@ from creature_lab.editor.session import AVAILABLE_CONTROLLERS, EditorSession
 from creature_lab.hashing import spec_hash
 from creature_lab.qualification import BUILTIN_PROFILES, QualificationResult
 from creature_lab.robustness import ROBUSTNESS_LEVELS, RobustnessResult, plain_language_verdict
-from creature_lab.runs import DEFAULT_RUNS_DIR, RunSummary, list_recent_runs, load_trace
+from creature_lab.runs import DEFAULT_RUNS_DIR, RunSummary, list_recent_runs, load_run
 from creature_lab.schema import EpisodeSummary, EpisodeTrace, FrameState, TaskSpec
 from creature_lab.schema.creature import ShapeType
 
@@ -62,6 +62,8 @@ class BuildControls:
         notify: Callable[[str, str, str], None] | None = None,
         on_frame_camera: Callable[[], None] | None = None,
         on_start_refit_gait: Callable[[int], None] | None = None,
+        on_start_autopsy: Callable[[], None] | None = None,
+        on_start_replay_export: Callable[[EpisodeTrace], None] | None = None,
         runs_dir: Path = DEFAULT_RUNS_DIR,
         show_onboarding: bool = False,
     ) -> None:
@@ -76,6 +78,8 @@ class BuildControls:
         self.on_start_robustness = on_start_robustness
         self.on_start_qualify = on_start_qualify
         self.on_start_refit_gait = on_start_refit_gait or (lambda attempts: None)
+        self.on_start_autopsy = on_start_autopsy
+        self.on_start_replay_export = on_start_replay_export
         self.on_playback_frame = on_playback_frame
         #: (title, body, color) -> None, broadcast to every connected browser tab.
         #: Optional so the fake-GUI unit tests don't need to supply one.
@@ -102,6 +106,7 @@ class BuildControls:
         # Persistent handles updated in place.
         self._message: Any | None = None
         self._controller_resolution_md: Any | None = None
+        self._controller_dropdown: Any | None = None
         self._simulate_button: Any | None = None
         self._undo_button: Any | None = None
         self._redo_button: Any | None = None
@@ -117,6 +122,12 @@ class BuildControls:
         self._qualify_button: Any | None = None
         self._qualify_result_md: Any | None = None
         self._refit_gait_button: Any | None = None
+        self._autopsy_button: Any | None = None
+        self._replay_export_button: Any | None = None
+        self._replay_export_client: Any | None = None
+        self._last_autopsy: Any | None = None
+        self._autopsy_report_dir: Path | None = None
+        self._pending_signature: tuple[str, str, str] | None = None
         self._last_trace: EpisodeTrace | None = None
         self._last_robustness: RobustnessResult | None = None
         self._last_qualification: QualificationResult | None = None
@@ -139,6 +150,7 @@ class BuildControls:
     def _build(self, *, show_onboarding: bool = False) -> None:
         self.gui.add_markdown("## Creature Lab")
         self.gui.add_markdown("_Design -> Move -> Test -> Improve_")
+        self.gui.add_markdown("Browser tabs connected to this editor share the same session.")
 
         # First-run picker, at the top of the panel so it is the first thing seen.
         # Deliberately an inline folder, NOT a modal: a Viser/Mantine modal traps
@@ -169,6 +181,7 @@ class BuildControls:
         with self._test_tab:
             self._build_run_section()
             self._build_refit_gait_section()
+            self._build_lesson_section()
 
         self._build_project_folder()
         self._build_history_folder()
@@ -349,6 +362,7 @@ class BuildControls:
                 hint="'target_seek' steers toward the task's target - pick a task with "
                 "one (e.g. reach_target) or it errors when you Simulate.",
             )
+            self._controller_dropdown = controller
             controller.on_update(
                 lambda event: self._safe(
                     lambda: self.session.set_controller(event.target.value),
@@ -366,6 +380,30 @@ class BuildControls:
             self._simulate_button.on_click(lambda _event: self._start_simulate())
             validate = self.gui.add_button("Validate", icon="check")
             validate.on_click(lambda _event: self._update_status())
+
+    def _build_lesson_section(self) -> None:
+        lessons = {
+            "Frozen gait": "frozen-gait",
+            "Overdriven gait": "overdriven-gait",
+            "Ice-rink task": "ice-rink-task",
+        }
+        with self.gui.add_folder("Failure lessons", expand_by_default=False, order=26):
+            self.gui.add_markdown(
+                "Load a deliberately difficult case, simulate it, and change one thing. "
+                "Loading replaces the editable body/task and selects the sinusoid controller; "
+                "Undo restores the body/task."
+            )
+            choice = self.gui.add_dropdown("Lesson", list(lessons), initial_value="Frozen gait")
+            button = self.gui.add_button("Load lesson")
+
+            def load(_event: Any) -> None:
+                self._history_action(
+                    lambda: self.session.load_failure_lesson(lessons[choice.value])
+                )
+                if self._controller_dropdown is not None:
+                    self._controller_dropdown.value = self.session.controller
+
+            button.on_click(load)
 
     def _build_refit_gait_section(self) -> None:
         """CMA-ES re-tune this body's own sinusoid motors (order=25: right after
@@ -781,7 +819,11 @@ class BuildControls:
             )
             motor = next(m for m in self.session.creature.motors if m.joint == motor_id)
             amplitude = self.gui.add_slider(
-                "Range (amplitude)", min=0.0, max=1.8, step=0.05, initial_value=motor.amplitude
+                "Range (amplitude)",
+                min=0.0,
+                max=max(1.8, motor.amplitude),
+                step=0.05,
+                initial_value=motor.amplitude,
             )
             amplitude.on_update(
                 lambda event: self._safe(
@@ -930,23 +972,44 @@ class BuildControls:
                         rebuild_task=False,
                     )
                 )
-            if self._advanced:
-                friction = self.gui.add_slider(
-                    "Friction",
-                    min=0.0,
-                    max=2.0,
-                    step=0.05,
-                    initial_value=self.session.task.terrain.friction,
+            friction = self.gui.add_slider(
+                "Friction",
+                min=0.0,
+                max=max(2.0, self.session.task.terrain.friction),
+                step=0.01,
+                initial_value=self.session.task.terrain.friction,
+            )
+            friction.on_update(
+                lambda event: self._safe(
+                    lambda: self.session.set_task_friction(float(event.target.value)),
+                    rebuild_body=False,
+                    rebuild_part=False,
+                    rebuild_motion=False,
+                    rebuild_task=False,
                 )
-                friction.on_update(
-                    lambda event: self._safe(
-                        lambda: self.session.set_task_friction(float(event.target.value)),
-                        rebuild_body=False,
-                        rebuild_part=False,
-                        rebuild_motion=False,
-                        rebuild_task=False,
-                    )
+            )
+            push = self.session.task.impulse_event
+            self.gui.add_markdown(
+                "Lateral push is a one-step force on the root at half the episode. "
+                "Changing it replaces any existing push event; zero removes it."
+            )
+            push_force = push.force[1] if push else 0.0
+            push_slider = self.gui.add_slider(
+                "Lateral push (N)",
+                min=min(-500.0, push_force),
+                max=max(500.0, push_force),
+                step=5.0,
+                initial_value=push_force,
+            )
+            push_slider.on_update(
+                lambda event: self._safe(
+                    lambda: self.session.set_lateral_push(float(event.target.value)),
+                    rebuild_body=False,
+                    rebuild_part=False,
+                    rebuild_motion=False,
+                    rebuild_task=False,
                 )
+            )
 
     def _set_target_axis(self, index: int, value: float) -> None:
         if self.session.task.target is None:
@@ -968,6 +1031,7 @@ class BuildControls:
             self._update_status()
             return
         self._pending_job_kind = "simulate"
+        self._pending_signature = self._current_run_signature()
         self.on_start_simulate()
         self._render_job_status(self.job_manager.status())
 
@@ -982,6 +1046,7 @@ class BuildControls:
             self._update_status()
             return
         self._pending_job_kind = "robustness"
+        self._pending_signature = self._current_run_signature()
         self.on_start_robustness(trials, mass_jitter, friction_jitter)
         self._render_job_status(self.job_manager.status())
 
@@ -996,7 +1061,37 @@ class BuildControls:
             self._update_status()
             return
         self._pending_job_kind = "qualify"
+        self._pending_signature = self._current_run_signature()
         self.on_start_qualify(profile_name)
+        self._render_job_status(self.job_manager.status())
+
+    def _start_autopsy(self) -> None:
+        if self.on_start_autopsy is None or self.job_manager.is_running:
+            self.session.last_message = "A job is already running or analysis is unavailable."
+            self._update_status()
+            return
+        if not self.session.status().ok:
+            self.session.last_message = "Fix validation errors before explaining the result."
+            self._update_status()
+            return
+        self._pending_signature = self._current_run_signature()
+        self._pending_job_kind = "autopsy"
+        self.on_start_autopsy()
+        self._render_job_status(self.job_manager.status())
+
+    def _start_replay_export(self, event: Any) -> None:
+        client = getattr(event, "client", None)
+        if self.job_manager.is_running or self.on_start_replay_export is None or client is None:
+            self.session.last_message = "Replay export is unavailable while another job is running."
+            self._update_status()
+            return
+        if self._last_trace is None:
+            self.session.last_message = "Simulate or load a compatible replay first."
+            self._update_status()
+            return
+        self._replay_export_client = client
+        self._pending_job_kind = "replay_export"
+        self.on_start_replay_export(self._last_trace)
         self._render_job_status(self.job_manager.status())
 
     def _start_refit_gait(self, attempts: int) -> None:
@@ -1014,6 +1109,7 @@ class BuildControls:
             self._update_status()
             return
         self._pending_job_kind = "refit_gait"
+        self._pending_signature = self._current_run_signature()
         self.on_start_refit_gait(attempts)
         self._render_job_status(self.job_manager.status())
 
@@ -1054,6 +1150,10 @@ class BuildControls:
             self._qualify_button.disabled = running
         if self._refit_gait_button is not None:
             self._refit_gait_button.disabled = running
+        if self._autopsy_button is not None:
+            self._autopsy_button.disabled = running
+        if self._replay_export_button is not None:
+            self._replay_export_button.disabled = running
 
     def _current_run_signature(self) -> tuple[str, str, str]:
         """Identity of the current (creature, task, controller) - a run is stale once
@@ -1077,12 +1177,38 @@ class BuildControls:
         self._last_trace = None
         self._last_robustness = None
         self._last_qualification = None
+        self._last_autopsy = None
+        self._autopsy_report_dir = None
         self._last_run_signature = None
         self.playback.clear()
         return True
 
     def _consume_completed_job(self, status: JobStatus) -> None:
         kind, self._pending_job_kind = self._pending_job_kind, None
+        signature, self._pending_signature = self._pending_signature, None
+        if kind == "replay_export":
+            run_id, page = status.result
+            client, self._replay_export_client = self._replay_export_client, None
+            try:
+                if client is not None:
+                    client.send_file_download(
+                        f"creature-lab-replay-{run_id}.html", page.encode("utf-8")
+                    )
+                    self.session.last_message = (
+                        "Recorded replay is available in the browser download notification."
+                    )
+            except Exception as exc:
+                self.session.last_message = f"Could not send the replay to the browser: {exc}"
+            self._update_status()
+            return
+        if signature is not None and signature != self._current_run_signature():
+            self.session.last_message = (
+                "The design or task changed while the job ran; its result was not applied. "
+                "Completed simulation and analysis runs remain in History."
+            )
+            self._rebuild_run_history_controls()
+            self._update_status()
+            return
         if kind == "refit_gait":
             # Route through _history_action (not the run-signature bookkeeping
             # below): this is a body/motor mutation, like Undo/Reset-to-template/
@@ -1099,6 +1225,8 @@ class BuildControls:
         self._last_run_signature = self._current_run_signature()
         if kind == "simulate":
             trace, run_dir = status.result
+            self._last_autopsy = None
+            self._autopsy_report_dir = None
             self._last_trace = trace
             self.playback.load(trace)
             first = self.playback.current_frame()
@@ -1118,6 +1246,18 @@ class BuildControls:
             self._last_qualification = status.result
             verdict = "PASS" if status.result.passed else "FAIL"
             self.session.last_message = f"Qualification: {verdict} ({status.result.profile})"
+        elif kind == "autopsy":
+            result, report_dir, trace = status.result
+            self._last_autopsy = result
+            self._autopsy_report_dir = report_dir
+            self._last_trace = trace
+            self.playback.load(trace)
+            first = self.playback.current_frame()
+            if first is not None:
+                self.on_playback_frame(first)
+            self.session.last_message = f"Analysis saved to {report_dir}."
+            self._rebuild_playback_controls()
+            self._rebuild_run_history_controls()
         self._rebuild_metrics_controls()
         self._render_robustness_result()
         self._render_qualify_result()
@@ -1158,6 +1298,8 @@ class BuildControls:
 
     def _consume_ended_job(self, status: JobStatus) -> None:
         self._pending_job_kind = None
+        self._pending_signature = None
+        self._replay_export_client = None
         if status.state == "cancelled":
             self.session.last_message = "Cancelled."
         else:
@@ -1285,6 +1427,8 @@ class BuildControls:
 
     def _rebuild_metrics_controls(self) -> None:
         self._remove_folder("_metrics_folder")
+        self._autopsy_button = None
+        self._replay_export_button = None
         with self._test_tab:
             # order=20: pinned right after Run regardless of rebuild churn - the
             # payoff of the whole tool shouldn't require scrolling past Task/
@@ -1325,7 +1469,44 @@ class BuildControls:
                 ):
                     self._render_diagnosis_card(pattern, explanation, suggestion)
             else:
-                self.gui.add_markdown("No failure patterns detected — this run looks healthy.")
+                self.gui.add_markdown("No failure patterns detected by these checks.")
+
+            fall_time = result.metrics.get("fall_time", -1.0)
+            if fall_time >= 0 and trace.frames:
+                fall_index = min(
+                    range(len(trace.frames)), key=lambda i: abs(trace.frames[i].t - fall_time)
+                )
+                jump = self.gui.add_button(f"Show first fall ({fall_time:.2f}s)")
+                jump.on_click(lambda _event: self._seek_to_event(fall_index))
+
+            if self.on_start_replay_export is not None:
+                self._replay_export_button = self.gui.add_button("Download recorded 3D replay")
+                self._replay_export_button.on_click(self._start_replay_export)
+                self._replay_export_button.disabled = self.job_manager.is_running
+                self.gui.add_markdown(
+                    "Experimental standalone viewer; this records poses and does not rerun physics."
+                )
+
+            if self.on_start_autopsy is not None:
+                self.gui.add_markdown(
+                    "**Explain this result:** rerun the selected and curated controllers, then "
+                    "run five seeded mass/friction checks. This performs seven simulations."
+                )
+                self._autopsy_button = self.gui.add_button("Explain failure", icon="search")
+                self._autopsy_button.on_click(lambda _event: self._start_autopsy())
+                self._autopsy_button.disabled = self.job_manager.is_running
+                if self._last_autopsy is not None and self._autopsy_report_dir is not None:
+                    autopsy = self._last_autopsy
+                    self.gui.add_markdown(
+                        f"**Candidate explanation:** {autopsy.primary_cause} "
+                        f"({autopsy.confidence} heuristic evidence strength).\n\n"
+                        f"{autopsy.summary}\n\nThis is not proof of causation.\n\n"
+                        + "\n".join(f"- {item.name}: {item.detail}" for item in autopsy.evidence)
+                    )
+                    download = self.gui.add_button(
+                        "Download analysis and verified pack", icon="download"
+                    )
+                    download.on_click(self._download_autopsy)
 
             if summary.warnings:
                 self.gui.add_markdown(
@@ -1340,6 +1521,32 @@ class BuildControls:
         if fix_label is not None:
             apply_button = self.gui.add_button(f"Apply fix: {fix_label}", icon="wand")
             apply_button.on_click(lambda _event, p=pattern: self._apply_diagnosis_fix(p))
+
+    def _seek_to_event(self, index: int) -> None:
+        self.playback.pause()
+        self._seek_playback(index)
+        self._sync_playback_widgets()
+
+    def _download_autopsy(self, event: Any) -> None:
+        import io
+        import zipfile
+
+        report_dir = self._autopsy_report_dir
+        client = getattr(event, "client", None)
+        if report_dir is None or client is None:
+            self.session.last_message = "Analysis download is unavailable for this client."
+            self._update_status()
+            return
+        try:
+            data = io.BytesIO()
+            with zipfile.ZipFile(data, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+                for path in sorted(report_dir.rglob("*")):
+                    if path.is_file() and not path.is_symlink():
+                        archive.write(path, path.relative_to(report_dir).as_posix())
+            client.send_file_download("creature-lab-analysis.zip", data.getvalue())
+        except OSError as exc:
+            self.session.last_message = f"Could not prepare analysis download: {exc}"
+            self._update_status()
 
     def _apply_diagnosis_fix(self, pattern: str) -> None:
         self._history_action(lambda: self.session.apply_diagnosis_fix(pattern))
@@ -1476,6 +1683,72 @@ class BuildControls:
 
             restore_button.on_click(lambda _event: self._restore_run(dropdown.value))
             replay_button.on_click(lambda _event: self._replay_run(dropdown.value))
+            if len(labels) > 1:
+                other = self.gui.add_dropdown("Compare with", labels, initial_value=labels[1])
+                comparison = self.gui.add_markdown("")
+                compare_button = self.gui.add_button("Compare saved results")
+                compare_button.on_click(
+                    lambda _event: self._compare_saved_runs(dropdown.value, other.value, comparison)
+                )
+                export_button = self.gui.add_button("Download comparison HTML")
+                export_button.on_click(
+                    lambda event: self._download_comparison(event, dropdown.value, other.value)
+                )
+
+    def _compare_saved_runs(self, left_label: str, right_label: str, output: Any) -> None:
+        left = self._run_history_by_label.get(left_label)
+        right = self._run_history_by_label.get(right_label)
+        if left is None or right is None:
+            return
+        try:
+            from creature_lab.reports import build_comparison, build_report
+
+            a = build_report(left.run_dir)
+            b = build_report(right.run_dir)
+            differences = build_comparison(a, b)["conditions_changed_or_unknown"]
+            conditions = ", ".join(differences) if differences else "none detected"
+
+            def fall_label(fell: bool | None) -> str:
+                return "fall unknown" if fell is None else "fell" if fell else "no fall detected"
+
+            output.content = (
+                f"**{left.run_id}**: score {a['score']:+.3f}, "
+                f"forward {a['summary']['forward_displacement']:+.3f} m, "
+                f"{fall_label(a['summary']['fell'])}\n\n"
+                f"**{right.run_id}**: score {b['score']:+.3f}, "
+                f"forward {b['summary']['forward_displacement']:+.3f} m, "
+                f"{fall_label(b['summary']['fell'])}\n\n"
+                f"**Changed or unknown:** {conditions}. Compare scores only when task, "
+                "backend, and evaluation conditions are compatible."
+            )
+        except (OSError, ValueError) as exc:
+            output.content = f"Could not compare these saved runs: {exc}"
+
+    def _download_comparison(self, event: Any, left_label: str, right_label: str) -> None:
+        from creature_lab.reports import build_comparison, build_report_bundle
+        from creature_lab.reports_html import comparison_to_html
+
+        left = self._run_history_by_label.get(left_label)
+        right = self._run_history_by_label.get(right_label)
+        client = getattr(event, "client", None)
+        if left is None or right is None or client is None:
+            return
+        try:
+            a, trace_a, creature_a, _ = build_report_bundle(left.run_dir)
+            b, trace_b, creature_b, _ = build_report_bundle(right.run_dir)
+            page = comparison_to_html(
+                a,
+                b,
+                build_comparison(a, b),
+                creature_a=creature_a,
+                trace_a=trace_a,
+                creature_b=creature_b,
+                trace_b=trace_b,
+            )
+            client.send_file_download("creature-lab-comparison.html", page.encode("utf-8"))
+        except (OSError, ValueError) as exc:
+            self.session.last_message = f"Could not prepare comparison: {exc}"
+            self._update_status()
 
     @staticmethod
     def _run_history_label(run: RunSummary) -> str:
@@ -1523,12 +1796,25 @@ class BuildControls:
         if run is None:
             return
         try:
-            trace = load_trace(run.run_dir)
+            creature, task, trace = load_run(run.run_dir)
+            if spec_hash(creature) != spec_hash(self.session.creature) or (
+                task is not None and spec_hash(task) != spec_hash(self.session.task)
+            ):
+                self.session.last_message = (
+                    "Restore this run's design and task before replaying it."
+                )
+                self._update_status()
+                return
         except Exception as exc:
             self.session.last_message = f"Could not load trace: {exc}"
             self._update_status()
             return
         self._last_trace = trace
+        self._last_run_signature = self._current_run_signature()
+        self._last_autopsy = None
+        self._autopsy_report_dir = None
+        self._last_robustness = None
+        self._last_qualification = None
         self.playback.load(trace)
         first = self.playback.current_frame()
         if first is not None:

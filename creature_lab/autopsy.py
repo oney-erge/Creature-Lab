@@ -53,6 +53,7 @@ class AutopsyResult:
             "profile": self.profile,
             "primary_cause": self.primary_cause,
             "confidence": self.confidence,
+            "confidence_method": "heuristic; not a calibrated probability",
             "summary": self.summary,
             "evidence": [evidence.__dict__ for evidence in self.evidence],
             "recommendations": self.recommendations,
@@ -222,7 +223,10 @@ def autopsy_to_markdown(result: AutopsyResult) -> str:
     lines = [
         f"# Creature Lab Experiment Autopsy: {result.creature}",
         "",
-        f"**Primary cause:** `{result.primary_cause}` ({result.confidence} confidence)",
+        f"**Candidate explanation:** `{result.primary_cause}` "
+        f"({result.confidence} heuristic evidence strength)",
+        "",
+        "This rule-based assessment is not a calibrated probability or proof of causation.",
         "",
         result.summary,
         "",
@@ -253,8 +257,10 @@ def autopsy_to_html(result: AutopsyResult) -> str:
 .card{{border:1px solid #ccd3df;border-radius:12px;padding:1.2rem;margin:1rem 0}}
 .pass{{color:#176b3a}}.fail{{color:#a52b2b}}code{{background:#eef1f6;padding:.15rem .35rem}}
 </style></head><body><h1>Experiment Autopsy: {html.escape(result.creature)}</h1>
-<div class="card"><h2>Primary cause: <code>{html.escape(result.primary_cause)}</code></h2>
-<p>{html.escape(result.summary)}</p><p>Confidence: {html.escape(result.confidence)}</p></div>
+<div class="card"><h2>Candidate explanation: <code>{html.escape(result.primary_cause)}</code></h2>
+<p>{html.escape(result.summary)}</p><p>Heuristic evidence strength:
+{html.escape(result.confidence)}.
+This rule-based assessment is not a calibrated probability or proof of causation.</p></div>
 <h2>Evidence</h2><ul>{evidence}</ul><h2>Recommended next experiments</h2>
 <ul>{recommendations}</ul><details><summary>Machine-readable result</summary>
 <pre>{html.escape(json.dumps(payload, indent=2))}</pre></details></body></html>"""

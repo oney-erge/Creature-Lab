@@ -7,8 +7,8 @@ without a simulator (see CLAUDE.md: do not rely on exact physics reproducibility
 
 Strategies: ``hill_climb`` (greedy), ``genetic`` (population + crossover),
 ``map_elites`` (quality-diversity archive), ``cmaes`` (controller-parameter CMA-ES,
-needs the optional ``cmaes`` package), and the ``llm_mutate`` operator (proposes edits
-through the validated agent tool layer instead of the structural mutators below).
+needs the optional ``cmaes`` package), and the ``tool_random_mutate`` operator
+(proposes random edits through the validated agent tool layer).
 """
 
 from __future__ import annotations
@@ -361,7 +361,7 @@ def cmaes(
     return EvolutionResult(best, best_score, history)
 
 
-def llm_mutate(
+def tool_random_mutate(
     spec: CreatureSpec,
     rng: random.Random,
     *,
@@ -369,7 +369,7 @@ def llm_mutate(
 ) -> CreatureSpec:
     """A ``mutate_fn`` that proposes one edit through the validated agent tool layer.
 
-    Uses the offline, no-provider ``RandomToolPolicy`` (so ``evolve --strategy llm`` needs
+    Uses the offline, no-provider ``RandomToolPolicy`` (so ``evolve --strategy tool_random`` needs
     no API key and stays deterministic/testable), reseeded from ``rng`` on every call so a
     fixed top-level ``--seed`` still reproduces the whole run. A creature with nothing
     tunable yields a "no-op" proposal that the tool layer rejects; that is not an error
@@ -388,3 +388,7 @@ def llm_mutate(
         return apply_tool(spec, proposal.tool, proposal.args)
     except ToolError:
         return spec
+
+
+# Backwards-compatible Python API for callers using the former misleading name.
+llm_mutate = tool_random_mutate

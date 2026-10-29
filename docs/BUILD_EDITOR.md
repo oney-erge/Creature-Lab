@@ -157,10 +157,31 @@ The **Result** section shows:
   preset, widen the stance) show an **Apply fix** button — applying is one undo step; re-simulate
   afterward to see the effect.
 - Any validation warnings carried in the trace.
+- **Show first fall** pauses the recorded trace at the detected fall frame when one exists.
+- **Download recorded 3D replay** uses Viser's experimental scene serializer to create a
+  standalone HTML viewer. It records the saved poses; it does not run physics in the browser.
 
 So the loop is: tweak a slider (or apply a suggested fix) → Simulate → read *why* it failed →
 tweak again, all in one phase. **Back to Design** pauses playback, restores the editable pose, and
 shows the body controls; it does not rely on browser-local tab state.
+
+**Explain failure** runs seven simulations: the selected controller, the curated controller,
+and five seeded mass/friction variations. It displays the observations and a rule-based candidate
+explanation, then saves a report and a hash-verified experiment pack under the baseline run.
+Download the report and pack from Result. Evidence strength is heuristic, not a probability or
+proof of causation; a curated controller can itself be unsuitable for an edited body.
+
+In **Run History**, select two saved runs and choose **Compare saved results** to see their scores,
+forward displacement, and any changed or unknown body, task, controller, or backend. Restore a
+run's design and task before replaying it. Browser tabs connected to the same editor share a
+session, so edits and playback controls are visible across tabs.
+
+**Failure lessons** loads the packaged frozen-gait, overdriven-gait, or ice-rink case into the
+editor and selects its sinusoid controller. Loading a lesson is undoable for the body and task;
+controller selection is a separate run setting. In Task, friction and lateral push are editable.
+The push is a force in newtons applied for one timestep at mid-episode, recorded in the task;
+changing it replaces any previous push event, and zero removes it. Compare the same task and
+controller before and after a body change, or label a controller-retuned comparison separately.
 
 ## Robustness Panel: Is This Gait Actually Robust?
 
@@ -171,8 +192,8 @@ creature/task under small seeded mass/friction perturbations and reports the sco
 - Basic mode offers a **Level**: Quick (5 trials), Standard (10), or Thorough (25). Advanced mode
   exposes raw **Trials**/**Mass jitter**/**Friction jitter** sliders instead.
 - **Run robustness sweep** runs that many perturbed episodes (real physics each time, so Thorough
-  takes a while — cancel it if needed) and leads with a plain-language verdict ("Robust",
-  "Moderately robust", "Fragile") before the mean/std, min–max range, and fail rate.
+  takes a while — cancel it if needed) and leads with a description of the observed outcomes,
+  sample count, and observed mass/friction scales before the mean/std, range, and fail rate.
 - A wide spread or a high fail rate means the gait only works for the exact recorded body/terrain
   — not a robust result. This is the same engine behind the `creature-lab robustness <run>` CLI
   command (see `docs/CLI_REFERENCE.md`), run directly against the in-editor creature instead of a
@@ -213,7 +234,8 @@ The **Open**/**Save** path fields pick their format from the file extension:
 | `.urdf` | Best-effort import (primitives + revolute/continuous/fixed joints; meshes, materials, and sensors are skipped and reported as a warning) | Full export |
 | `.xml` / `.mjcf` | *(not supported)* | One-way MJCF export |
 
-URDF is a full round trip; MJCF export is currently one-way (there is no MJCF importer yet), so a
+URDF import and export support a subset of bodies and joints; meshes, materials, and sensors may
+be skipped with warnings. MJCF export is currently one-way (there is no MJCF importer yet), so a
 `.xml`/`.mjcf` save can't be reopened in the editor — reopen the `.json` you built it from instead.
 
 ## What Else You Can Do

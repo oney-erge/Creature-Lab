@@ -7,6 +7,12 @@ All notable changes to Creature Lab are documented here. Format loosely follows
 
 ### Changed
 
+- The former `evolve --strategy llm` name is a deprecated alias for the seeded,
+  offline `tool_random` strategy; it never invoked a model. Reports distinguish
+  heuristic evidence from calibrated confidence.
+- Diagnosis uses an approximate terrain-relative height and reports recorded
+  positions outside the finite heightfield. Steep-terrain fall detection remains
+  a heuristic.
 - Launch with the Python environment that was just synchronized, rather than
   requesting Python 3.11 after a different supported version was installed.
 - Explain the PyBullet source-build requirement on Windows and macOS before
@@ -25,6 +31,9 @@ All notable changes to Creature Lab are documented here. Format loosely follows
 
 ### Added
 
+- The editor loads three failure lessons, records a repeatable lateral push,
+  runs the existing autopsy, compares saved runs, and downloads reports, verified
+  packs, and experimental standalone recorded 3D replays.
 - **Re-fit gait:** the build editor's Test phase can now CMA-ES retune a body's own motor
   amplitude/frequency/phase in place, as a background job with progress and Cancel — the same
   search behind `creature-lab optimize`, for when a packaged gait no longer fits an edited body.
