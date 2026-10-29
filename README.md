@@ -21,10 +21,10 @@ them in physics, and finding out whether a result came from the body,
 controller, task, fragility, or simulator. It saves the exact experiment so you
 can inspect, replay, improve, and share it.
 
-Try the [recorded quadruped replay](https://github.com/oney-erge/Creature-Lab/releases/download/preview-0.2.0/creature-lab-recorded-example.html):
-download the HTML file and open it in a browser. An [experimental Windows x64
-portable download](https://github.com/oney-erge/Creature-Lab/releases/tag/preview-0.2.0)
-is also available; it has not yet been tested on a clean machine.
+Try the [recorded quadruped replay](https://oney-physics-replays.hazycow18.chatgpt.site/creature-lab.html)
+in your browser. [Experimental portable downloads](https://github.com/oney-erge/Creature-Lab/releases/tag/preview-0.2.0)
+are available for Windows x64 and Linux x86-64; they have not yet been tested
+on clean machines.
 
 ```text
 Design -> simulate -> diagnose -> improve -> verify -> share
