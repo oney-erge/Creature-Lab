@@ -433,13 +433,21 @@ def run_editor(
 
     def start_autopsy_job() -> None:
         """Run the existing counterfactual analysis and save a shareable pack."""
-        from creature_lab.autopsy import autopsy_to_html, autopsy_to_markdown, run_autopsy
+        from creature_lab.autopsy import (
+            autopsy_to_html,
+            autopsy_to_markdown,
+            distinct_curated_reference,
+            run_autopsy,
+            write_autopsy_evidence,
+        )
         from creature_lab.exporting import export_design_pack, verify_design_pack
         from creature_lab.io_utils import atomic_write_text
 
         creature = session.creature
         task_for_run = session.task
         controller = session.controller
+        has_reference = distinct_curated_reference(creature, controller)
+        simulation_count = 7 if has_reference else 6
 
         def work(reporter: ProgressReporter) -> tuple[Any, Path, EpisodeTrace]:
             import json
@@ -449,7 +457,9 @@ def run_editor(
             def simulate_with(c: CreatureSpec, t: TaskSpec, selected: str) -> EpisodeTrace:
                 nonlocal completed
                 reporter.check_cancelled()
-                reporter.report(completed / 7, f"simulation {completed + 1}/7")
+                reporter.report(
+                    completed / simulation_count, f"simulation {completed + 1}/{simulation_count}"
+                )
                 try:
                     trace = simulate(
                         c, t, controller=selected, should_stop=lambda: reporter.cancel_requested
@@ -466,7 +476,9 @@ def run_editor(
                 creature,
                 task_for_run,
                 simulate=lambda c, t: simulate_with(c, t, controller),
-                simulate_reference=lambda c, t: simulate_with(c, t, "curated"),
+                simulate_reference=(lambda c, t: simulate_with(c, t, "curated"))
+                if has_reference
+                else None,
                 robustness_trials=5,
             )
             reporter.check_cancelled()
@@ -485,6 +497,7 @@ def run_editor(
                 raise ValueError(
                     "Experiment pack verification failed: " + "; ".join(verification.errors)
                 )
+            write_autopsy_evidence(result, creature, task_for_run, report_dir)
             atomic_write_text(
                 report_dir / "autopsy.json", json.dumps(result.to_json_dict(), indent=2)
             )

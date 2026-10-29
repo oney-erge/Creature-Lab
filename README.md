@@ -73,7 +73,7 @@ uv run creature-lab evolve examples/quadruped.json --task examples/crawl_forward
 ```
 
 - `zoo run` runs a curated creature and controller.
-- `autopsy` explains why a result scored as it did and writes a reproducible pack.
+- `autopsy` proposes an explanation and writes the recorded evidence in verified packs.
 - `evolve` searches for a better body and gait.
 
 The [Getting Started guide](docs/GETTING_STARTED.md) walks through a complete

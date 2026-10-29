@@ -6,8 +6,14 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
-from creature_lab.autopsy import autopsy_to_html, run_autopsy
+from creature_lab.autopsy import (
+    autopsy_to_html,
+    distinct_curated_reference,
+    run_autopsy,
+    write_autopsy_evidence,
+)
 from creature_lab.cli import app
+from creature_lab.exporting import verify_design_pack
 from creature_lab.failure_zoo import build_failure_case, list_failure_cases
 from creature_lab.qualification import QualificationProfile
 from creature_lab.schema import CreatureSpec, EpisodeTrace, TaskSpec
@@ -83,6 +89,39 @@ def test_autopsy_attributes_fragility_after_nominal_success():
     )
 
     assert result.primary_cause == "fragility"
+
+
+def test_missing_controller_counterfactual_does_not_attribute_failure():
+    profile = QualificationProfile(name="move", description="", min_score=0.05)
+    result = run_autopsy(
+        CREATURE,
+        TASK,
+        simulate=lambda _c, _t: _trace(0.0),
+        simulate_reference=None,
+        profile=profile,
+        robustness_trials=2,
+    )
+    assert result.primary_cause == "undetermined"
+    assert result.reference_trace is None
+    assert result.evidence[1].passed is None
+    assert result.to_json_dict()["robustness"]["trial_details"][0]["seed"] == 0
+    assert not distinct_curated_reference(CREATURE, "curated")
+
+
+def test_autopsy_evidence_preserves_each_trial_and_reference(tmp_path: Path):
+    profile = QualificationProfile(name="move", description="", min_score=0.05)
+    result = run_autopsy(
+        CREATURE,
+        TASK,
+        simulate=lambda _c, _t: _trace(0.0),
+        simulate_reference=lambda _c, _t: _trace(0.5),
+        profile=profile,
+        robustness_trials=2,
+    )
+    write_autopsy_evidence(result, CREATURE, TASK, tmp_path)
+    for name in ("reference", "trial_001", "trial_002"):
+        assert verify_design_pack(tmp_path / "evidence" / name).valid
+    assert len(result.to_json_dict()["evidence_packs"]["trials"]) == 2
 
 
 def test_failure_zoo_cases_build_valid_artifacts():

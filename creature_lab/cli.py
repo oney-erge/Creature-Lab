@@ -2206,8 +2206,10 @@ def autopsy_cmd(
     from creature_lab.autopsy import (
         autopsy_to_html,
         autopsy_to_markdown,
+        distinct_curated_reference,
         infer_profile,
         run_autopsy,
+        write_autopsy_evidence,
     )
     from creature_lab.io_utils import atomic_write_text
 
@@ -2248,7 +2250,9 @@ def autopsy_cmd(
         creature,
         task_spec,
         simulate=simulate_selected,
-        simulate_reference=simulate_reference,
+        simulate_reference=(
+            simulate_reference if distinct_curated_reference(creature, controller) else None
+        ),
         profile=profile_spec,
         simulate_other_backend=simulate_other,
         robustness_trials=robustness_trials,
@@ -2273,6 +2277,7 @@ def autopsy_cmd(
         source_dir=run_dir,
         overwrite=overwrite,
     )
+    write_autopsy_evidence(result, creature, task_spec, out_dir, overwrite=overwrite)
 
     if json_output:
         _print_json(payload)
@@ -2283,7 +2288,13 @@ def autopsy_cmd(
     )
     console.print(result.summary)
     for item in result.evidence:
-        status = "[green]PASS[/green]" if item.passed else "[red]FAIL[/red]"
+        status = (
+            "[dim]SKIPPED[/dim]"
+            if item.passed is None
+            else "[green]PASS[/green]"
+            if item.passed
+            else "[red]FAIL[/red]"
+        )
         console.print(f"  {status} {item.name}: {item.detail}")
     console.print(f"[green]wrote[/green] report + verified experiment pack -> {out_dir}")
 

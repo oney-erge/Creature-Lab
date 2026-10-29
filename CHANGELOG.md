@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Skip indistinguishable controller counterfactuals, preserve reference and perturbation
+  recordings in verified evidence packs, and report individual trial conditions.
+- Align side-by-side 3D playback by recorded time and render each task's own terrain and target.
+
 All notable changes to Creature Lab are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 

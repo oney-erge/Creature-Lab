@@ -40,6 +40,10 @@ creature-lab autopsy creature.json --task task.json \
 
 Use the generated pack as the submission. A complete submission includes the hypothesis, the
 single variable changed, the autopsy report, and `verify-pack` output.
+The report's `evidence/` folder contains separate hash-verifiable packs for the recorded
+reference and perturbation runs. Its JSON records trial seeds and scale factors. If the selected
+controller and curated reference cannot be distinguished, the reference is skipped and the
+report does not attribute a failure to the controller comparison.
 
 ## Instructor Regression Check
 

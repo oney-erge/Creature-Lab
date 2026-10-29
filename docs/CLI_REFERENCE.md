@@ -125,9 +125,11 @@ uv run creature-lab run examples/quadruped.json --task examples/crawl_forward.js
   damage/impulse event) rather than running physics first. `--json` prints a machine-readable
   result. Also available as a **Qualify** panel in `creature-lab build`'s Test phase (see
   `docs/BUILD_EDITOR.md`).
-- `autopsy` runs the selected-controller baseline, a curated-controller counterfactual,
-  task-aware perturbations, optional backend comparison, heuristic candidate explanations, and emits
-  HTML/Markdown/JSON plus a verified pack.
+- `autopsy` runs the selected-controller baseline, a distinct curated-controller counterfactual
+  when available, task-aware perturbations, and optional backend comparison. It emits
+  HTML/Markdown/JSON plus verified packs for the baseline, reference, and perturbation runs.
+  The JSON records each trial's seed, mass and friction scales, score, and outcome. Identical
+  or indistinguishable controller references are skipped and cannot support an attribution.
 - `failure list` and `failure export <id>` expose intentionally broken experiments with an
   expected diagnosis for teaching and regression work.
 - `controller scaffold <cpg|target_seek|posture>` writes a starter `controller.json` with that

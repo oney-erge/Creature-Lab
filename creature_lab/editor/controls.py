@@ -1489,8 +1489,9 @@ class BuildControls:
 
             if self.on_start_autopsy is not None:
                 self.gui.add_markdown(
-                    "**Explain this result:** rerun the selected and curated controllers, then "
-                    "run five seeded mass/friction checks. This performs seven simulations."
+                    "**Explain this result:** run the selected controller, a distinct curated "
+                    "reference when available, and five seeded mass/friction checks "
+                    "(six or seven simulations)."
                 )
                 self._autopsy_button = self.gui.add_button("Explain failure", icon="search")
                 self._autopsy_button.on_click(lambda _event: self._start_autopsy())

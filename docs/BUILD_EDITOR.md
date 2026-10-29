@@ -165,9 +165,11 @@ So the loop is: tweak a slider (or apply a suggested fix) → Simulate → read 
 tweak again, all in one phase. **Back to Design** pauses playback, restores the editable pose, and
 shows the body controls; it does not rely on browser-local tab state.
 
-**Explain failure** runs seven simulations: the selected controller, the curated controller,
-and five seeded mass/friction variations. It displays the observations and a rule-based candidate
-explanation, then saves a report and a hash-verified experiment pack under the baseline run.
+**Explain failure** runs the selected controller, a curated reference when it is distinct,
+and five seeded mass/friction variations (six or seven simulations). If no distinct reference
+is available, the controller counterfactual is marked skipped. It displays the observations
+and a rule-based candidate explanation, then saves a report and hash-verified packs for the
+baseline and each recorded reference or trial under the baseline run.
 Download the report and pack from Result. Evidence strength is heuristic, not a probability or
 proof of causation; a curated controller can itself be unsuitable for an edited body.
 

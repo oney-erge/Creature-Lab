@@ -13,6 +13,7 @@ from __future__ import annotations
 import math
 import time
 import webbrowser
+from bisect import bisect_right
 from collections import defaultdict, deque
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
@@ -116,7 +117,9 @@ def _add_part(scene: Any, name: str, part: PartSpec) -> Any:
     return scene.add_mesh_trimesh(name, mesh)
 
 
-def _add_floor(server: Any, task: TaskSpec | None, creature: CreatureSpec | None = None) -> Any:
+def _add_floor(
+    server: Any, task: TaskSpec | None, creature: CreatureSpec | None = None, *, prefix: str = ""
+) -> Any:
     """Draw the ground: a flat grid, or a mesh built from the task's terrain heightfield.
 
     Without this, replaying a non-flat-terrain run would show the creature floating
@@ -132,7 +135,7 @@ def _add_floor(server: Any, task: TaskSpec | None, creature: CreatureSpec | None
 
     if task is None or is_flat(task.terrain):
         size = 10.0 if creature is None else max(2.0, creature_reach(creature) * 8)
-        return server.scene.add_grid("/floor", width=size, height=size, plane="xy")
+        return server.scene.add_grid(f"{prefix}/floor", width=size, height=size, plane="xy")
 
     import numpy as np
     import trimesh
@@ -159,7 +162,7 @@ def _add_floor(server: Any, task: TaskSpec | None, creature: CreatureSpec | None
             faces.append((top_left, bottom_right, top_right))
     mesh = trimesh.Trimesh(vertices=vertices, faces=np.array(faces))
     mesh.visual.vertex_colors = np.array([140, 140, 140, 255], dtype=np.uint8)
-    return server.scene.add_mesh_trimesh("/floor", mesh)
+    return server.scene.add_mesh_trimesh(f"{prefix}/floor", mesh)
 
 
 def build_scene(
@@ -170,6 +173,7 @@ def build_scene(
     max_contacts: int = _MAX_CONTACT_MARKERS,
     prefix: str = "",
     add_floor: bool = True,
+    offset: tuple[float, float, float] = (0.0, 0.0, 0.0),
 ) -> SceneHandles:
     """Add a floor, optional target, one handle per part, and a contact-marker pool.
 
@@ -177,13 +181,15 @@ def build_scene(
     can share one server (used by ``compare``); ``add_floor`` lets the caller draw a
     single shared floor.
     """
-    floor = _add_floor(server, task, creature) if add_floor else None
+    floor = _add_floor(server, task, creature, prefix=prefix) if add_floor else None
+    if floor is not None:
+        floor.position = offset
     extras: list[Any] = []
     if task is not None and task.target is not None:
         target = server.scene.add_icosphere(
             f"{prefix}/target", radius=task.target.radius, color=(255, 180, 40)
         )
-        target.position = task.target.position
+        target.position = tuple(task.target.position[i] + offset[i] for i in range(3))
         extras.append(target)
     parts = {
         part.id: _add_part(server.scene, f"{prefix}/parts/{part.id}", part)
@@ -412,24 +418,46 @@ def compare_traces(
     hold: bool = True,
     open_browser: bool = False,
 ) -> None:
-    """Replay two runs side by side in one Viser scene (B offset by ``gap`` in y)."""
+    """Replay both runs at the same recorded simulation time, with separate terrain."""
     import viser
 
+    from creature_lab.terrain import DEFAULT_CELL_SIZE, DEFAULT_COLS, is_flat
+
+    if fps <= 0:
+        raise ValueError("fps must be positive")
+    times_a = [frame.t for frame in trace_a.frames]
+    times_b = [frame.t for frame in trace_b.frames]
+    if times_a != sorted(times_a) or times_b != sorted(times_b):
+        raise ValueError("comparison requires traces with nondecreasing frame times")
+
+    def floor_width(creature: CreatureSpec, task: TaskSpec | None) -> float:
+        if task is not None and not is_flat(task.terrain):
+            return DEFAULT_COLS * DEFAULT_CELL_SIZE
+        return max(2.0, creature_reach(creature) * 8)
+
+    spacing = max(
+        gap, (floor_width(creature_a, task_a) + floor_width(creature_b, task_b)) / 2 + 0.2
+    )
+    offset_a = (0.0, spacing / 2, 0.0)
+    offset_b = (0.0, -spacing / 2, 0.0)
+
     server = viser.ViserServer(host=host, port=port)
-    if open_browser:
-        webbrowser.open(f"http://localhost:{port}", new=2)
-    handles_a = build_scene(server, creature_a, task_a, prefix="/a", add_floor=True)
-    handles_b = build_scene(server, creature_b, task_b, prefix="/b", add_floor=False)
-    offset_a = (0.0, gap / 2, 0.0)
-    offset_b = (0.0, -gap / 2, 0.0)
     frames_a, frames_b = trace_a.frames, trace_b.frames
-    n = max(len(frames_a), len(frames_b))
+    duration = max(times_a[-1], times_b[-1])
+    n = math.ceil(duration * fps)
     delay = 1.0 / fps
     try:
+        handles_a = build_scene(server, creature_a, task_a, prefix="/a", offset=offset_a)
+        handles_b = build_scene(server, creature_b, task_b, prefix="/b", offset=offset_b)
+        if open_browser:
+            webbrowser.open(f"http://localhost:{port}", new=2)
         while True:
-            for i in range(n):
-                apply_frame(handles_a, frames_a[min(i, len(frames_a) - 1)], offset=offset_a)
-                apply_frame(handles_b, frames_b[min(i, len(frames_b) - 1)], offset=offset_b)
+            for i in range(n + 1):
+                t = min(i / fps, duration)
+                index_a = max(0, bisect_right(times_a, t) - 1)
+                index_b = max(0, bisect_right(times_b, t) - 1)
+                apply_frame(handles_a, frames_a[index_a], offset=offset_a)
+                apply_frame(handles_b, frames_b[index_b], offset=offset_b)
                 time.sleep(delay)
             if not hold:
                 break

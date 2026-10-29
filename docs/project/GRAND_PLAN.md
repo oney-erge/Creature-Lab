@@ -16,6 +16,10 @@ file, this file wins. Keep **one** active roadmap.
 4. Calibrate and document per-body/per-joint backend differences and steep-terrain diagnosis
    before suggesting behavioral portability or hardware readiness.
 
+The autopsy now skips indistinguishable controller counterfactuals and saves recorded trial
+evidence in individual packs. The 3D comparison aligns timestamps and renders separate task
+terrain. These changes require direct runtime verification when permitted.
+
 ## Historical 0.2 delivery summary
 
 The hardening/adoption pass is complete in the working tree:
