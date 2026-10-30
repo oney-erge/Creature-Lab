@@ -120,7 +120,7 @@ _RECOMMENDATIONS: dict[str, str] = {
 }
 
 
-def _task_setup_check(profile: QualificationProfile, task: TaskSpec) -> QualificationCheck | None:
+def task_setup_check(profile: QualificationProfile, task: TaskSpec) -> QualificationCheck | None:
     """Whether the task itself meets this profile's precondition.
 
     Checked first and short-circuits the rest of ``qualify`` when it fails: without
@@ -163,7 +163,7 @@ def qualify(
     Checks run in priority order (task setup, then baseline success, then
     robustness, then backend portability); the first one to fail becomes
     ``primary_blocker``. A failed task-setup check short-circuits everything else
-    (there is nothing meaningful to simulate yet - see ``_task_setup_check``); the
+    (there is nothing meaningful to simulate yet - see ``task_setup_check``); the
     checks downstream of a failed baseline still run and are reported, since a
     creature-level failure doesn't invalidate what robustness/portability show.
 
@@ -174,7 +174,7 @@ def qualify(
     Stopping early still returns a ``QualificationResult`` built from whatever
     trials completed; the caller decides whether that should count as "cancelled".
     """
-    setup_check = _task_setup_check(profile, task)
+    setup_check = task_setup_check(profile, task)
     if setup_check is not None and not setup_check.passed:
         return QualificationResult(
             profile=profile.name,
@@ -182,6 +182,21 @@ def qualify(
             checks=[setup_check],
             primary_blocker=setup_check.name,
             recommended_next_test=_RECOMMENDATIONS[setup_check.name],
+        )
+
+    if profile.max_sim2sim_gap is not None and simulate_other_backend is None:
+        return QualificationResult(
+            profile=profile.name,
+            passed=False,
+            checks=[
+                QualificationCheck(
+                    "Backend portability",
+                    False,
+                    "A second physics backend is required but unavailable.",
+                )
+            ],
+            primary_blocker="Backend portability",
+            recommended_next_test="Install the other physics backend before running this profile.",
         )
 
     checks: list[QualificationCheck] = []

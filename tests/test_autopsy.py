@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 from typer.testing import CliRunner
 
 from creature_lab.autopsy import (
@@ -106,6 +107,32 @@ def test_missing_controller_counterfactual_does_not_attribute_failure():
     assert result.evidence[1].passed is None
     assert result.to_json_dict()["robustness"]["trial_details"][0]["seed"] == 0
     assert not distinct_curated_reference(CREATURE, "curated")
+
+
+def test_two_failing_controllers_do_not_establish_a_body_or_task_cause():
+    profile = QualificationProfile(name="move", description="", min_score=0.05)
+    result = run_autopsy(
+        CREATURE,
+        TASK,
+        simulate=lambda _c, _t: _trace(0.0),
+        simulate_reference=lambda _c, _t: _trace(0.0),
+        profile=profile,
+        robustness_trials=2,
+    )
+    assert result.primary_cause == "undetermined"
+    assert "Both tested controllers failed" in result.summary
+
+
+def test_autopsy_rejects_mismatched_profile_before_simulating():
+    profile = QualificationProfile(name="push", description="", require_disturbance_event=True)
+
+    def unexpected_simulation(_creature, _task):
+        raise AssertionError("simulation must not start for an invalid task")
+
+    with pytest.raises(ValueError, match="Task/profile mismatch"):
+        run_autopsy(
+            CREATURE, TASK, simulate=unexpected_simulation, simulate_reference=None, profile=profile
+        )
 
 
 def test_autopsy_evidence_preserves_each_trial_and_reference(tmp_path: Path):

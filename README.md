@@ -27,6 +27,8 @@ are available for Windows x64 and Linux x86-64 with PyBullet, and for macOS Inte
 and Apple Silicon with MuJoCo. The macOS previews can behave differently and lack
 PyBullet-only features; the Intel preview uses an older MuJoCo version. These
 previews have not yet been tested on clean machines.
+The previews contain the earlier release snapshot; use a current checkout for the latest
+editor and analysis changes.
 
 ```text
 Design -> simulate -> diagnose -> improve -> verify -> share

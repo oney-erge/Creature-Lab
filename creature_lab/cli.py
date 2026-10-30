@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import random
 from collections.abc import Callable, Iterator
@@ -751,7 +752,11 @@ def build(
     other_backend = "mujoco" if backend == "pybullet" else "pybullet"
 
     def simulate_other_backend(
-        creature: CreatureSpec, task_for_run: TaskSpec, *, controller: str = "sinusoid"
+        creature: CreatureSpec,
+        task_for_run: TaskSpec,
+        *,
+        controller: str = "sinusoid",
+        should_stop: Callable[[], bool] | None = None,
     ) -> EpisodeTrace:
         """For the editor's Qualify panel's backend-portable check - same as
         ``simulate_current`` but pinned to the backend the session isn't already
@@ -759,7 +764,12 @@ def build(
         about concrete backend names; the editor treats `simulate` as opaque."""
         _check_inputs(creature, task_for_run)
         return _simulate(
-            creature, task_for_run, seed=seed, controller=controller, backend=other_backend
+            creature,
+            task_for_run,
+            seed=seed,
+            controller=controller,
+            backend=other_backend,
+            should_stop=should_stop,
         )
 
     _warn_if_network_exposed(host)
@@ -769,7 +779,9 @@ def build(
     run_editor(
         session,
         simulate=simulate_current,
-        simulate_other_backend=simulate_other_backend,
+        simulate_other_backend=(
+            simulate_other_backend if importlib.util.find_spec(other_backend) is not None else None
+        ),
         host=host,
         port=port,
         open_browser=open_browser,
@@ -2240,23 +2252,27 @@ def autopsy_cmd(
         return _simulate(c, t, controller="curated", backend=backend)
 
     simulate_other = None
-    if check_portability:
+    if check_portability or profile_spec.max_sim2sim_gap is not None:
         other_backend = "mujoco" if backend == "pybullet" else "pybullet"
 
         def simulate_other(c: CreatureSpec, t: TaskSpec) -> EpisodeTrace:
             return _simulate(c, t, controller=controller, backend=other_backend)
 
-    result = run_autopsy(
-        creature,
-        task_spec,
-        simulate=simulate_selected,
-        simulate_reference=(
-            simulate_reference if distinct_curated_reference(creature, controller) else None
-        ),
-        profile=profile_spec,
-        simulate_other_backend=simulate_other,
-        robustness_trials=robustness_trials,
-    )
+    try:
+        result = run_autopsy(
+            creature,
+            task_spec,
+            simulate=simulate_selected,
+            simulate_reference=(
+                simulate_reference if distinct_curated_reference(creature, controller) else None
+            ),
+            profile=profile_spec,
+            simulate_other_backend=simulate_other,
+            robustness_trials=robustness_trials,
+        )
+    except ValueError as exc:
+        console.print(f"[red]error:[/red] {exc}")
+        raise typer.Exit(code=2) from exc
     run_dir = save_run(creature, result.baseline_trace, runs_dir=runs_dir, task=task_spec)
     out_dir = out or Path("outputs") / f"autopsy_{result.baseline_trace.run_id}"
     if out_dir.exists() and any(out_dir.iterdir()) and not overwrite:
@@ -2282,10 +2298,7 @@ def autopsy_cmd(
     if json_output:
         _print_json(payload)
         return
-    console.print(
-        f"[bold]AUTOPSY:[/bold] {result.primary_cause} "
-        f"([cyan]{result.confidence} heuristic evidence strength[/cyan])"
-    )
+    console.print(f"[bold]AUTOPSY:[/bold] {result.primary_cause} (heuristic candidate)")
     console.print(result.summary)
     for item in result.evidence:
         status = (

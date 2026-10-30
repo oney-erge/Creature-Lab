@@ -105,18 +105,22 @@ The Test phase's **Run** section has a **Controller** dropdown — `curated` (de
 `target_seek`, or `posture` — before the Simulate button (a portable `controller.json` spec, see
 `docs/CLI_REFERENCE.md`'s `controller` command, is a CLI-only `--controller` option; the
 dropdown offers the stable named controllers). `curated` uses a measured packaged gait for any
-body whose joints still match it — resizing a part, retuning an amplitude, or changing mass/color
+body whose joints still match it — resizing a part or changing mass/color
 does not invalidate it, only removing or renaming the joints it drives does (see
 `docs/KNOWN_ISSUES.md`); otherwise it falls back to `posture` for humanoids, or a safe default
 otherwise. Since `curated` is a placeholder resolved right before Simulate runs, a line right
 below the dropdown states what it actually resolves to (e.g. "Runs: **packaged walking gait**" or
 "Runs: **posture (holds a standing pose, does not walk)**"), and a notification calls it out
 explicitly if a body edit ever does make the packaged gait fall back — so "nothing happened, and
-nothing said why" cannot recur silently. If the packaged gait no longer fits after editing, use
+nothing said why" cannot recur silently. In Motion, choose **Use editable gait** before editing
+motor trajectories. A packaged sinusoid is copied into the editable motors; selecting another
+controller switches to the body's current sinusoid. This change and subsequent gait edits can be
+undone. If the packaged gait no longer fits after editing, use
 **Re-fit gait** (below Result) to CMA-ES retune this body's own motor amplitude/frequency/phase
 (the same search behind `creature-lab optimize`, run as a background job with progress and
-Cancel) instead of a separate CLI round trip; the retuned motors are one undo step, like any other
-design change. `target_seek` steers toward the current
+Cancel) instead of a separate CLI round trip. The retuned sinusoid becomes the active controller;
+the change is one undo step. Re-fit is unavailable when the optional `evolve` extra is absent.
+`target_seek` steers toward the current
 task's target (heading-error steering, slowing and stopping near it); the status line shows an
 error and disables Simulate if the current task has no target, and a warning if the current
 creature has no motored joint ending in `l`/`r` (so it has nothing to steer with, and will just
@@ -171,7 +175,17 @@ is available, the controller counterfactual is marked skipped. It displays the o
 and a rule-based candidate explanation, then saves a report and hash-verified packs for the
 baseline and each recorded reference or trial under the baseline run.
 Download the report and pack from Result. Evidence strength is heuristic, not a probability or
-proof of causation; a curated controller can itself be unsuitable for an edited body.
+proof of causation; a curated controller can itself be unsuitable for an edited body. When both
+tested controllers fail, the cause remains undetermined. Invalid task/profile combinations stop
+before simulation.
+
+In Run History, **Show side-by-side 3D** puts two saved recordings in the editor scene, labeled
+with their run IDs. Drag **Comparison time** to inspect the same recorded simulation time in both.
+**Return to editor preview** restores the editable scene. **Restore body, task and gait** restores
+supported, hash-checked controller snapshots; it reports the recorded backend and seed but does
+not change the current editor's backend or seed. Copying a saved sinusoid into editable motors
+can change the body artifact's hash. Other controller types remain available through the CLI and
+their saved artifacts.
 
 In **Run History**, select two saved runs and choose **Compare saved results** to see their scores,
 forward displacement, and any changed or unknown body, task, controller, or backend. Restore a

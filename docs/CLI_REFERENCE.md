@@ -128,6 +128,8 @@ uv run creature-lab run examples/quadruped.json --task examples/crawl_forward.js
 - `autopsy` runs the selected-controller baseline, a distinct curated-controller counterfactual
   when available, task-aware perturbations, and optional backend comparison. It emits
   HTML/Markdown/JSON plus verified packs for the baseline, reference, and perturbation runs.
+  Task/profile mismatches are rejected before simulation. Two failed controllers leave the
+  cause undetermined; pack verification establishes artifact integrity, not causation.
   The JSON records each trial's seed, mass and friction scales, score, and outcome. Identical
   or indistinguishable controller references are skipped and cannot support an attribution.
 - `failure list` and `failure export <id>` expose intentionally broken experiments with an

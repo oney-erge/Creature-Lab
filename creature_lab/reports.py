@@ -256,6 +256,8 @@ def build_comparison(report_a: dict[str, Any], report_b: dict[str, Any]) -> dict
         ),
         ("backend", backend_a.get("name"), backend_b.get("name")),
         ("backend version", backend_a.get("version"), backend_b.get("version")),
+        ("seed", repro_a.get("seed"), repro_b.get("seed")),
+        ("Creature Lab version", repro_a.get("lab_version"), repro_b.get("lab_version")),
         (
             "timestep",
             repro_a.get("timestep"),

@@ -219,13 +219,14 @@ def test_sim2sim_gap_is_checked_when_a_second_backend_is_given():
     assert result.primary_blocker == "Backend portability"
 
 
-def test_sim2sim_check_skipped_without_a_second_backend():
+def test_sim2sim_profile_requires_a_second_backend():
     profile = QualificationProfile(
         name="p", description="", min_score=0.0, robustness_trials=2, max_sim2sim_gap=0.1
     )
     result = qualify(_CREATURE, _task(), profile, simulate=_fixed_simulate(0.5))
 
-    assert all(c.name != "Backend portability" for c in result.checks)
+    assert result.primary_blocker == "Backend portability"
+    assert result.checks[0].passed is False
 
 
 def test_qualify_passes_through_robustness_progress_and_cancellation():

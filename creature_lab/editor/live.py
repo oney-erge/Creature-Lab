@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import time
 import webbrowser
+from bisect import bisect_right
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -57,6 +58,7 @@ class EditorPreview:
         self._handles = None
         self._editor_overlays: list[Any] = []
         self._framed_reach: float | None = None
+        self._comparison: tuple[Any, Any, EpisodeTrace, EpisodeTrace, tuple, tuple] | None = None
 
     def refresh(self) -> None:
         """Full rebuild: tear down and recreate every part, the floor, and overlays.
@@ -66,6 +68,7 @@ class EditorPreview:
         can change part count, shape, or dimensions). Not needed for a pure selection
         change - see ``refresh_overlays`` for the cheap path used there.
         """
+        self._clear_comparison()
         self._remove_overlays()
         remove_scene(self._handles)
         self._handles = build_scene(self.server, self.session.creature, self.session.task)
@@ -145,6 +148,71 @@ class EditorPreview:
         """
         if self._handles is not None:
             apply_frame(self._handles, frame)
+
+    def _clear_comparison(self) -> None:
+        if self._comparison is not None:
+            remove_scene(self._comparison[0])
+            remove_scene(self._comparison[1])
+            self._comparison = None
+
+    def compare_runs(self, left: Path, right: Path) -> None:
+        """Display two saved recordings in this editor's scene."""
+        from creature_lab.runs import load_run
+        from creature_lab.terrain import DEFAULT_CELL_SIZE, DEFAULT_COLS, is_flat
+
+        a, task_a, trace_a = load_run(left)
+        b, task_b, trace_b = load_run(right)
+
+        def width(creature: CreatureSpec, task: TaskSpec | None) -> float:
+            if task is not None and not is_flat(task.terrain):
+                return DEFAULT_COLS * DEFAULT_CELL_SIZE
+            return max(2.0, creature_reach(creature) * 8)
+
+        spacing = (width(a, task_a) + width(b, task_b)) / 2 + 0.2
+        offset_a = (0.0, spacing / 2, 0.0)
+        offset_b = (0.0, -spacing / 2, 0.0)
+        self._clear_comparison()
+        self._remove_overlays()
+        remove_scene(self._handles)
+        self._handles = None
+        handles_a = handles_b = None
+        try:
+            handles_a = build_scene(self.server, a, task_a, prefix="/comparison/a", offset=offset_a)
+            handles_b = build_scene(self.server, b, task_b, prefix="/comparison/b", offset=offset_b)
+            handles_a.extras.append(
+                self.server.scene.add_label(
+                    "/comparison/a/label",
+                    trace_a.run_id,
+                    position=(0.0, offset_a[1], creature_reach(a) * 1.2),
+                )
+            )
+            handles_b.extras.append(
+                self.server.scene.add_label(
+                    "/comparison/b/label",
+                    trace_b.run_id,
+                    position=(0.0, offset_b[1], creature_reach(b) * 1.2),
+                )
+            )
+            self._comparison = (handles_a, handles_b, trace_a, trace_b, offset_a, offset_b)
+            self.seek_comparison(0.0)
+            self.frame_camera(max(creature_reach(a), creature_reach(b), spacing * 0.7))
+        except Exception:
+            remove_scene(handles_a)
+            remove_scene(handles_b)
+            self._comparison = None
+            self.refresh()
+            raise
+
+    def seek_comparison(self, fraction: float) -> None:
+        """Seek both recordings by the same simulation time."""
+        if self._comparison is None:
+            return
+        a, b, trace_a, trace_b, offset_a, offset_b = self._comparison
+        duration = max(trace_a.frames[-1].t, trace_b.frames[-1].t)
+        t = max(0.0, min(1.0, fraction)) * duration
+        for handles, trace, offset in ((a, trace_a, offset_a), (b, trace_b, offset_b)):
+            index = max(0, bisect_right([frame.t for frame in trace.frames], t) - 1)
+            apply_frame(handles, trace.frames[index], offset=offset)
 
     def _add_editor_overlays(self, frame) -> None:
         if self._handles is None:
@@ -233,8 +301,8 @@ def run_editor(
     panel is usable; callers that already loaded a specific creature (``--project``,
     a positional path) should leave it off. ``simulate_other_backend``, when given,
     powers the Qualify panel's backend-portable check (see cli.py's ``build``
-    command); without it, that check is simply skipped, same as the CLI's `qualify`
-    without a second backend.
+    command); if the other backend is unavailable, that profile reports a missing
+    prerequisite before running simulations.
     """
     import viser
 
@@ -360,7 +428,7 @@ def run_editor(
                 return trace
 
             simulate_other_bound = None
-            if simulate_other_backend is not None:
+            if simulate_other_backend is not None and profile_spec.max_sim2sim_gap is not None:
 
                 def simulate_other_bound(c: CreatureSpec, t: TaskSpec) -> EpisodeTrace:
                     trace = simulate_other_backend(
@@ -406,7 +474,7 @@ def run_editor(
         "the packaged gait doesn't fit this edited body" moment (see
         docs/KNOWN_ISSUES.md) instead of a separate CLI step.
         """
-        creature = session.creature
+        creature = session.editable_gait_creature()
         task_for_run = session.task
 
         def work(reporter: ProgressReporter) -> CreatureSpec:
@@ -547,6 +615,8 @@ def run_editor(
         on_start_refit_gait=start_refit_gait_job,
         on_start_autopsy=start_autopsy_job,
         on_start_replay_export=start_replay_export_job,
+        on_compare_runs=preview.compare_runs,
+        on_seek_comparison=preview.seek_comparison,
         on_playback_frame=preview.apply_playback_frame,
         notify=notify,
         on_frame_camera=lambda: preview.frame_camera(),

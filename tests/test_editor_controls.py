@@ -261,6 +261,8 @@ def _make_controls(
         runs_dir=runs_dir or Path("runs"),
         show_onboarding=show_onboarding,
     )
+    # These tests inject a fake re-fit implementation without the optional package.
+    controls._has_cmaes = True
     return controls, events, job_manager, playback
 
 

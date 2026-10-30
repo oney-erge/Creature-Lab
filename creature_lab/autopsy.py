@@ -10,7 +10,12 @@ from pathlib import Path
 
 from creature_lab.diagnosis import diagnose
 from creature_lab.diagnostics import summarize_episode
-from creature_lab.qualification import BUILTIN_PROFILES, QualificationProfile, task_success
+from creature_lab.qualification import (
+    BUILTIN_PROFILES,
+    QualificationProfile,
+    task_setup_check,
+    task_success,
+)
 from creature_lab.robustness import RobustnessResult, run_trials
 from creature_lab.schema import CreatureSpec, EpisodeTrace, TaskSpec
 
@@ -150,6 +155,11 @@ def run_autopsy(
 ) -> AutopsyResult:
     """Run baseline/counterfactual/perturbation/backend evidence and attribute failure."""
     profile = profile or infer_profile(task)
+    setup = task_setup_check(profile, task)
+    if setup is not None and not setup.passed:
+        raise ValueError(f"Task/profile mismatch: {setup.detail}")
+    if profile.max_sim2sim_gap is not None and simulate_other_backend is None:
+        raise ValueError("This profile requires a second physics backend.")
     baseline = simulate(creature, task)
     baseline_summary = summarize_episode(baseline, task, creature)
     baseline_ok = task_success(profile, baseline, baseline_summary)
@@ -231,12 +241,15 @@ def run_autopsy(
             "Reduce gait amplitude/frequency or migrate the curated gait into controller.json.",
         ]
     elif not baseline_ok and not reference_ok:
-        cause = "morphology_or_task"
-        confidence = "medium"
-        summary = "Changing only the controller did not recover task success."
+        cause = "undetermined"
+        confidence = "low"
+        summary = (
+            "Both tested controllers failed. The evidence does not distinguish a controller "
+            "problem from a body or task problem."
+        )
         recommendations = [
+            "Try another controller or change one body or task variable at a time.",
             "Check task scale, target/event placement, support polygon, and center of mass.",
-            "Make one body change at a time and rerun this autopsy as a counterfactual.",
         ]
     elif not robust_ok:
         cause = "fragility"
@@ -322,8 +335,7 @@ def autopsy_to_markdown(result: AutopsyResult) -> str:
     lines = [
         f"# Creature Lab Experiment Autopsy: {result.creature}",
         "",
-        f"**Candidate explanation:** `{result.primary_cause}` "
-        f"({result.confidence} heuristic evidence strength)",
+        f"**Candidate explanation:** `{result.primary_cause}` (heuristic)",
         "",
         "This rule-based assessment is not a calibrated probability or proof of causation.",
         "",
@@ -357,9 +369,8 @@ def autopsy_to_html(result: AutopsyResult) -> str:
 .pass{{color:#176b3a}}.fail{{color:#a52b2b}}code{{background:#eef1f6;padding:.15rem .35rem}}
 </style></head><body><h1>Experiment Autopsy: {html.escape(result.creature)}</h1>
 <div class="card"><h2>Candidate explanation: <code>{html.escape(result.primary_cause)}</code></h2>
-<p>{html.escape(result.summary)}</p><p>Heuristic evidence strength:
-{html.escape(result.confidence)}.
-This rule-based assessment is not a calibrated probability or proof of causation.</p></div>
+<p>{html.escape(result.summary)}</p><p>This rule-based assessment is not a calibrated
+probability or proof of causation.</p></div>
 <h2>Evidence</h2><ul>{evidence}</ul><h2>Recommended next experiments</h2>
 <ul>{recommendations}</ul><details><summary>Machine-readable result</summary>
 <pre>{html.escape(json.dumps(payload, indent=2))}</pre></details></body></html>"""

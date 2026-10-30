@@ -174,8 +174,7 @@ class EditorSession:
         self.external_change_pending = False
         #: UI complexity level. "basic" hides advanced controls; "advanced" shows everything.
         self.mode: Literal["basic", "advanced"] = "basic"
-        #: Which controller Simulate uses; see AVAILABLE_CONTROLLERS. Not undoable
-        #: (like mode) - it's a run setting, not part of the saved design.
+        #: Which controller Simulate uses; edits that switch it are undoable.
         self.controller: str = "curated"
         self._history = EditorHistory()
         #: True when there are edits not yet written to ``out_path``/the bound project.
@@ -206,6 +205,7 @@ class EditorSession:
             "template": self.template,
             "params": dict(self.params),
             "task_preset": self.task_preset,
+            "controller": self.controller,
             "selected_part_id": self.selected_part_id,
             "selected_motor_id": self.selected_motor_id,
         }
@@ -216,6 +216,7 @@ class EditorSession:
         self.template = snap["template"]
         self.params = dict(snap["params"])
         self.task_preset = snap["task_preset"]
+        self.controller = snap.get("controller", self.controller)
         self.selected_part_id = snap["selected_part_id"]
         self.selected_motor_id = snap["selected_motor_id"]
 
@@ -320,6 +321,48 @@ class EditorSession:
             "sinusoid": "sinusoid gait",
             "target_seek": "steers toward the task target",
         }.get(resolved, resolved)
+
+    def editable_gait_creature(self) -> CreatureSpec:
+        """Return a body with the active packaged sinusoid copied to its motors."""
+        if self.controller == "curated":
+            from creature_lab.controllers.factory import curated_controller
+            from creature_lab.schema import ControllerSpec
+            from creature_lab.schema.controller import ControllerType
+
+            resolved = curated_controller(self.creature)
+            if resolved.lower().endswith(".json"):
+                spec = ControllerSpec.model_validate_json(
+                    Path(resolved).read_text(encoding="utf-8")
+                )
+                if spec.type != ControllerType.SINUSOID or not spec.motors:
+                    raise ValueError("The packaged controller cannot be edited as a gait.")
+                gait = {motor.joint: motor for motor in spec.motors}
+                data = _model_data(self.creature)
+                if set(gait) != {motor["joint"] for motor in data["motors"]}:
+                    raise ValueError(
+                        "The packaged gait drives a different set of joints. Select sinusoid "
+                        "explicitly to use the body's motor settings instead."
+                    )
+                for motor in data["motors"]:
+                    source = gait[motor["joint"]]
+                    for key in ("amplitude", "frequency", "phase", "offset"):
+                        motor[key] = getattr(source, key)
+                return CreatureSpec.model_validate(data)
+        return self.creature
+
+    def _checkpoint_editable_gait(self) -> None:
+        """Make an editable gait active as part of the next undoable edit."""
+        creature = self.editable_gait_creature()
+        self._checkpoint()
+        self.creature = creature
+        self.controller = "sinusoid"
+
+    def use_editable_gait(self) -> None:
+        """Switch explicitly to an editable sinusoid, preserving a packaged gait."""
+        if self.controller == "sinusoid":
+            return
+        self._checkpoint_editable_gait()
+        self.last_message = "Using an editable sinusoid gait for the next simulation."
 
     def reset_to_template(self) -> None:
         """Regenerate the creature from its template defaults (undoable)."""
@@ -430,11 +473,28 @@ class EditorSession:
         if self.template == "custom":
             self.last_message = "Loaded JSON is custom; use part and motor controls to edit it."
             return
+        is_gait_param = key in {"amplitude", "frequency"}
+        source = self.editable_gait_creature() if is_gait_param else self.creature
+        motors = {motor.joint: motor for motor in source.motors}
         self._checkpoint()
         self.params[key] = value
         previous_part = self.selected_part_id
         previous_motor = self.selected_motor_id
-        self.creature = presets.generate_creature(self.template, self.params)
+        generated = presets.generate_creature(self.template, self.params)
+        if self.controller == "sinusoid" or is_gait_param:
+            data = _model_data(generated)
+            for motor in data["motors"]:
+                previous = motors.get(motor["joint"])
+                if previous is not None:
+                    for field in ("amplitude", "frequency", "phase", "offset", "max_force"):
+                        if getattr(previous, field) is not None:
+                            motor[field] = getattr(previous, field)
+                if is_gait_param:
+                    motor[key] = max(0.0, value)
+            generated = CreatureSpec.model_validate(data)
+        self.creature = generated
+        if is_gait_param:
+            self.controller = "sinusoid"
         next_part = previous_part if previous_part in self.part_ids() else self.creature.parts[0].id
         self.select_part(next_part)
         if previous_motor in self.motor_ids():
@@ -603,7 +663,7 @@ class EditorSession:
         joint_id = self.selected_motor()
         if not joint_id:
             return
-        self._checkpoint()
+        self._checkpoint_editable_gait()
         data = _model_data(self.creature)
         for motor in data["motors"]:
             if motor["joint"] == joint_id:
@@ -647,6 +707,9 @@ class EditorSession:
         self.last_message = f"Moved anchor {joint.id}"
 
     def apply_gait(self, gait: str) -> None:
+        if gait not in {"still", "pace", "trot", "wave"}:
+            return
+        self._checkpoint_editable_gait()
         data = _model_data(self.creature)
         motors = data.get("motors", [])
         if gait == "still":
@@ -662,9 +725,6 @@ class EditorSession:
         elif gait == "wave":
             for index, motor in enumerate(motors):
                 motor["phase"] = -1.2 * index
-        else:
-            return
-        self._checkpoint()
         self.creature = CreatureSpec.model_validate(data)
         if self.creature.motors:
             self.selected_motor_id = self.creature.motors[0].joint
@@ -682,7 +742,7 @@ class EditorSession:
         if not self.creature.motors:
             self.last_message = "No motors to scale."
             return False
-        self._checkpoint()
+        self._checkpoint_editable_gait()
         data = _model_data(self.creature)
         for motor in data.get("motors", []):
             motor["amplitude"] = max(0.0, motor["amplitude"] * amplitude_factor)
@@ -696,7 +756,7 @@ class EditorSession:
         if not self.creature.motors:
             self.last_message = "No motors to reverse."
             return False
-        self._checkpoint()
+        self._checkpoint_editable_gait()
         data = _model_data(self.creature)
         for motor in data.get("motors", []):
             motor["phase"] = motor["phase"] + math.pi
@@ -878,6 +938,57 @@ class EditorSession:
         self.selected_motor_id = self.creature.motors[0].joint if self.creature.motors else ""
         self.last_message = f"Restored design from {creature_path.parent.name}"
 
+    def restore_experiment(self, run_dir: Path) -> None:
+        """Restore a saved body, task and supported controller snapshot atomically."""
+        from creature_lab.hashing import spec_hash
+        from creature_lab.runs import load_run
+        from creature_lab.schema import ControllerSpec, ControllerType
+
+        creature, task, trace = load_run(run_dir)
+        if task is None or trace.meta is None or trace.meta.controller_hash is None:
+            raise ValueError("This run lacks a task or a verified controller snapshot.")
+        controller = ControllerSpec.model_validate_json(
+            (run_dir / "controller.json").read_text(encoding="utf-8")
+        )
+        if spec_hash(controller) != trace.meta.controller_hash:
+            raise ValueError("The saved controller does not match the trace's controller hash.")
+        if controller.type == ControllerType.SINUSOID:
+            gait = {motor.joint: motor for motor in controller.motors or []}
+            data = _model_data(creature)
+            if set(gait) != {motor["joint"] for motor in data["motors"]}:
+                raise ValueError("This controller cannot be represented by the editor's motors.")
+            for motor in data["motors"]:
+                for key in ("amplitude", "frequency", "phase", "offset"):
+                    motor[key] = getattr(gait[motor["joint"]], key)
+            creature = CreatureSpec.model_validate(data)
+            selected = "sinusoid"
+        elif controller.type.value in {"cpg", "target_seek", "posture"}:
+            actual = controller.model_dump(mode="json", exclude_none=True, exclude={"name"})
+            default = ControllerSpec(type=controller.type).model_dump(
+                mode="json", exclude_none=True, exclude={"name"}
+            )
+            if actual != default:
+                raise ValueError("This tuned controller is not editable in the build editor.")
+            selected = controller.type.value
+        else:
+            raise ValueError("This controller type cannot be restored in the build editor.")
+
+        self._checkpoint()
+        self.creature = creature
+        self.task = task
+        self.controller = selected
+        self.template = "custom"
+        self.params = {}
+        self.task_preset = task.name
+        self.selected_part_id = creature.parts[0].id
+        self.selected_motor_id = creature.motors[0].joint if creature.motors else ""
+        self.last_message = (
+            f"Restored body, task and controller from {run_dir.name}. "
+            f"Original backend: {trace.backend}; seed: {trace.meta.seed}. "
+            "The current backend and seed have not changed; copying a gait into motors "
+            "can change the body artifact's hash."
+        )
+
     def apply_refit_gait(self, tuned: CreatureSpec) -> None:
         """Adopt a CMA-ES-retuned gait (the editor's "Re-fit gait" action, undoable).
 
@@ -888,7 +999,10 @@ class EditorSession:
         """
         self._checkpoint()
         self.creature = tuned
-        self.last_message = "Re-fitted gait: motor amplitude/frequency/phase tuned to this body."
+        self.controller = "sinusoid"
+        self.last_message = (
+            "Re-fitted gait selected: motor amplitude/frequency/phase tuned to this body."
+        )
 
     @property
     def creature_file(self) -> Path | None:
@@ -1095,8 +1209,19 @@ class EditorSession:
 
     def diagnosis_fix_label(self, pattern: str) -> str | None:
         """Human label for the bounded fix ``apply_diagnosis_fix`` would apply, if any."""
+        if pattern in _MOTOR_DIAGNOSIS_FIXES and not self._has_editable_active_gait():
+            return None
         entry = DIAGNOSIS_FIXES.get(pattern)
         return entry[0] if entry else None
+
+    def _has_editable_active_gait(self) -> bool:
+        if self.controller == "sinusoid":
+            return True
+        if self.controller == "curated":
+            from creature_lab.controllers.factory import curated_controller
+
+            return curated_controller(self.creature).lower().endswith(".json")
+        return False
 
     def diagnosis_severity(self, pattern: str) -> str:
         return DIAGNOSIS_SEVERITY.get(pattern, "warning")
@@ -1112,6 +1237,9 @@ class EditorSession:
         if entry is None:
             self.last_message = f"No automatic fix available for {pattern!r}."
             return False
+        if pattern in _MOTOR_DIAGNOSIS_FIXES and not self._has_editable_active_gait():
+            self.last_message = "Switch to an editable gait before applying this motor fix."
+            return False
         _label, fix = entry
         return fix(self)
 
@@ -1121,6 +1249,18 @@ class EditorSession:
 # Deliberately conservative: only patterns with a safe, generic, undoable edit get
 # an entry. The rest (e.g. ``no_ground_contact``, ``arm_swing_absent``) need
 # geometry-specific knowledge this can't guess, so they show suggestion text only.
+
+_MOTOR_DIAGNOSIS_FIXES = frozenset(
+    {
+        "motor_over_limit",
+        "moving_backward",
+        "high_effort_low_result",
+        "lateral_drift",
+        "single_leg_drag",
+        "com_instability",
+        "knee_hyperextension",
+    }
+)
 
 
 def _fix_reduce_amplitude(session: EditorSession) -> bool:

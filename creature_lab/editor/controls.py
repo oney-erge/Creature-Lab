@@ -20,6 +20,7 @@ file only wires widgets to it and decides what to show.
 
 from __future__ import annotations
 
+import importlib.util
 import time
 from collections import Counter
 from collections.abc import Callable
@@ -64,6 +65,8 @@ class BuildControls:
         on_start_refit_gait: Callable[[int], None] | None = None,
         on_start_autopsy: Callable[[], None] | None = None,
         on_start_replay_export: Callable[[EpisodeTrace], None] | None = None,
+        on_compare_runs: Callable[[Path, Path], None] | None = None,
+        on_seek_comparison: Callable[[float], None] | None = None,
         runs_dir: Path = DEFAULT_RUNS_DIR,
         show_onboarding: bool = False,
     ) -> None:
@@ -80,11 +83,14 @@ class BuildControls:
         self.on_start_refit_gait = on_start_refit_gait or (lambda attempts: None)
         self.on_start_autopsy = on_start_autopsy
         self.on_start_replay_export = on_start_replay_export
+        self.on_compare_runs = on_compare_runs
+        self.on_seek_comparison = on_seek_comparison
         self.on_playback_frame = on_playback_frame
         #: (title, body, color) -> None, broadcast to every connected browser tab.
         #: Optional so the fake-GUI unit tests don't need to supply one.
         self.notify = notify or (lambda title, body, color: None)
         self.runs_dir = runs_dir
+        self._has_cmaes = importlib.util.find_spec("cmaes") is not None
         # Phase containers (created once) and the rebuildable folders inside them.
         # These are explicit show/hide folders instead of browser-local tabs, so a
         # completed run can always provide a real "Back to Design" action that also
@@ -102,6 +108,8 @@ class BuildControls:
         self._robustness_folder: Any | None = None
         self._qualify_folder: Any | None = None
         self._run_history_folder: Any | None = None
+        self._comparison_slider: Any | None = None
+        self._comparing = False
         self._onboarding_folder: Any | None = None
         # Persistent handles updated in place.
         self._message: Any | None = None
@@ -232,6 +240,9 @@ class BuildControls:
                 handle.visible = name == phase
         if phase != "Test":
             self.playback.pause()
+            self._comparing = False
+            if self._comparison_slider is not None:
+                self._comparison_slider.disabled = True
             self.on_preview()
 
     def _build_project_folder(self) -> None:
@@ -368,7 +379,7 @@ class BuildControls:
                     lambda: self.session.set_controller(event.target.value),
                     rebuild_body=False,
                     rebuild_part=False,
-                    rebuild_motion=False,
+                    rebuild_motion=True,
                     rebuild_task=False,
                     preview="none",
                 )
@@ -391,7 +402,7 @@ class BuildControls:
             self.gui.add_markdown(
                 "Load a deliberately difficult case, simulate it, and change one thing. "
                 "Loading replaces the editable body/task and selects the sinusoid controller; "
-                "Undo restores the body/task."
+                "Undo restores the previous body, task, and controller."
             )
             choice = self.gui.add_dropdown("Lesson", list(lessons), initial_value="Frozen gait")
             button = self.gui.add_button("Load lesson")
@@ -417,13 +428,19 @@ class BuildControls:
             self.gui.add_markdown(
                 "Retune this body's own motor amplitude/frequency/phase with "
                 "CMA-ES (the same search behind `creature-lab optimize`) - the "
-                "body itself is never changed. Useful when a template's packaged "
-                "gait no longer fits after editing."
+                "body itself is never changed. The resulting sinusoid becomes the "
+                "active controller."
             )
+            if not self._has_cmaes:
+                self.gui.add_markdown(
+                    "Unavailable in this installation: CMA-ES is not installed. "
+                    "Use a development environment with the `evolve` extra to re-fit a gait."
+                )
             attempts_slider = self.gui.add_slider(
                 "Attempts", min=5, max=100, step=5, initial_value=20
             )
             self._refit_gait_button = self.gui.add_button("Re-fit gait", icon="wand")
+            self._refit_gait_button.disabled = not self._has_cmaes
             self._refit_gait_button.on_click(
                 lambda _event: self._start_refit_gait(int(attempts_slider.value))
             )
@@ -519,9 +536,13 @@ class BuildControls:
             self._render_robustness_result()
             self._render_qualify_result()
         if preview == "light":
+            self._comparing = False
             self.on_preview_light()
         elif preview != "none":
+            self._comparing = False
             self.on_preview()
+        if not self._comparing and self._comparison_slider is not None:
+            self._comparison_slider.disabled = True
         self._update_status()
 
     def _remove_folder(self, attr: str) -> None:
@@ -548,6 +569,8 @@ class BuildControls:
             preset = presets.CREATURE_PRESETS[self.session.template]
             self.gui.add_markdown(f"Template: **{preset.label}**")
             for param in preset.params:
+                if param.key in {"amplitude", "frequency"}:
+                    continue  # Motor trajectories are edited in Motion.
                 value = self.session.params[param.key]
                 slider = self.gui.add_slider(
                     param.label,
@@ -786,6 +809,16 @@ class BuildControls:
                 self.gui.add_markdown(
                     "No motors yet. Add a hinged limb in **Design** to create one."
                 )
+                return
+            if self.session.controller != "sinusoid":
+                self.gui.add_markdown(
+                    f"The active controller is **{self.session.describe_controller()}**. "
+                    "To edit motor trajectories, switch to an editable sinusoid. "
+                    "A packaged walking gait is copied first; other controller types are replaced "
+                    "by the body's current motor settings."
+                )
+                edit = self.gui.add_button("Use editable gait", icon="edit")
+                edit.on_click(lambda _event: self._history_action(self.session.use_editable_gait))
                 return
             gait = self.gui.add_dropdown(
                 "Gait preset",
@@ -1030,6 +1063,11 @@ class BuildControls:
             self.session.last_message = "Fix validation errors before simulating."
             self._update_status()
             return
+        if self._comparing:
+            self._comparing = False
+            self.on_preview()
+            if self._comparison_slider is not None:
+                self._comparison_slider.disabled = True
         self._pending_job_kind = "simulate"
         self._pending_signature = self._current_run_signature()
         self.on_start_simulate()
@@ -1074,6 +1112,8 @@ class BuildControls:
             self.session.last_message = "Fix validation errors before explaining the result."
             self._update_status()
             return
+        if self._comparing:
+            self._close_3d_comparison()
         self._pending_signature = self._current_run_signature()
         self._pending_job_kind = "autopsy"
         self.on_start_autopsy()
@@ -1095,6 +1135,10 @@ class BuildControls:
         self._render_job_status(self.job_manager.status())
 
     def _start_refit_gait(self, attempts: int) -> None:
+        if not self._has_cmaes:
+            self.session.last_message = "Re-fit gait requires the optional CMA-ES dependency."
+            self._update_status()
+            return
         if self.job_manager.is_running:
             self.session.last_message = "A job is already running."
             self._update_status()
@@ -1110,7 +1154,14 @@ class BuildControls:
             return
         self._pending_job_kind = "refit_gait"
         self._pending_signature = self._current_run_signature()
-        self.on_start_refit_gait(attempts)
+        try:
+            self.on_start_refit_gait(attempts)
+        except (OSError, ValueError) as exc:
+            self._pending_job_kind = None
+            self._pending_signature = None
+            self.session.last_message = f"Could not prepare gait: {exc}"
+            self._update_status()
+            return
         self._render_job_status(self.job_manager.status())
 
     # -- background job polling (called from the main loop) ---------------------
@@ -1149,7 +1200,7 @@ class BuildControls:
         if self._qualify_button is not None:
             self._qualify_button.disabled = running
         if self._refit_gait_button is not None:
-            self._refit_gait_button.disabled = running
+            self._refit_gait_button.disabled = running or not self._has_cmaes
         if self._autopsy_button is not None:
             self._autopsy_button.disabled = running
         if self._replay_export_button is not None:
@@ -1499,8 +1550,7 @@ class BuildControls:
                 if self._last_autopsy is not None and self._autopsy_report_dir is not None:
                     autopsy = self._last_autopsy
                     self.gui.add_markdown(
-                        f"**Candidate explanation:** {autopsy.primary_cause} "
-                        f"({autopsy.confidence} heuristic evidence strength).\n\n"
+                        f"**Candidate explanation:** {autopsy.primary_cause} (heuristic).\n\n"
                         f"{autopsy.summary}\n\nThis is not proof of causation.\n\n"
                         + "\n".join(f"- {item.name}: {item.detail}" for item in autopsy.evidence)
                     )
@@ -1664,6 +1714,7 @@ class BuildControls:
     # -- Test phase: run history -----------------------------------------------------
 
     def _rebuild_run_history_controls(self) -> None:
+        self._comparison_slider = None
         self._remove_folder("_run_history_folder")
         with self._test_tab:
             self._run_history_folder = self.gui.add_folder(
@@ -1680,9 +1731,11 @@ class BuildControls:
                 self._run_history_by_label[label] = run
             dropdown = self.gui.add_dropdown("Run", labels, initial_value=labels[0])
             restore_button = self.gui.add_button("Restore design", icon="download")
+            restore_experiment = self.gui.add_button("Restore body, task and gait", icon="history")
             replay_button = self.gui.add_button("Replay", icon="player-play")
 
             restore_button.on_click(lambda _event: self._restore_run(dropdown.value))
+            restore_experiment.on_click(lambda _event: self._restore_experiment(dropdown.value))
             replay_button.on_click(lambda _event: self._replay_run(dropdown.value))
             if len(labels) > 1:
                 other = self.gui.add_dropdown("Compare with", labels, initial_value=labels[1])
@@ -1691,10 +1744,54 @@ class BuildControls:
                 compare_button.on_click(
                     lambda _event: self._compare_saved_runs(dropdown.value, other.value, comparison)
                 )
+                if self.on_compare_runs is not None and self.on_seek_comparison is not None:
+                    self.gui.add_markdown(
+                        "3D comparison: each scene is labeled with its run ID. Drag time to "
+                        "inspect both recordings at the same simulation time."
+                    )
+                    self._comparison_slider = self.gui.add_slider(
+                        "Comparison time", min=0.0, max=1.0, step=0.01, initial_value=0.0
+                    )
+                    self._comparison_slider.disabled = not self._comparing
+                    self._comparison_slider.on_update(
+                        lambda event: self.on_seek_comparison(float(event.target.value))
+                    )
+                    show_3d = self.gui.add_button("Show side-by-side 3D", icon="player-play")
+                    show_3d.on_click(
+                        lambda _event: self._show_3d_comparison(dropdown.value, other.value)
+                    )
+                    back = self.gui.add_button("Return to editor preview")
+                    back.on_click(lambda _event: self._close_3d_comparison())
                 export_button = self.gui.add_button("Download comparison HTML")
                 export_button.on_click(
                     lambda event: self._download_comparison(event, dropdown.value, other.value)
                 )
+
+    def _show_3d_comparison(self, left_label: str, right_label: str) -> None:
+        left = self._run_history_by_label.get(left_label)
+        right = self._run_history_by_label.get(right_label)
+        if left is None or right is None or self.on_compare_runs is None:
+            return
+        try:
+            self.playback.pause()
+            self.on_compare_runs(left.run_dir, right.run_dir)
+            self._comparing = True
+            if self._comparison_slider is not None:
+                self._comparison_slider.disabled = False
+                self._comparison_slider.value = 0.0
+            self.session.last_message = "Showing two recorded runs at the same simulation time."
+        except Exception as exc:  # noqa: BLE001 - surface scene and loading errors in the editor
+            self._comparing = False
+            self.session.last_message = f"Could not show comparison: {exc}"
+        self._update_status()
+
+    def _close_3d_comparison(self) -> None:
+        self._comparing = False
+        if self._comparison_slider is not None:
+            self._comparison_slider.disabled = True
+        self.on_preview()
+        self.session.last_message = "Returned to the editor preview."
+        self._update_status()
 
     def _compare_saved_runs(self, left_label: str, right_label: str, output: Any) -> None:
         left = self._run_history_by_label.get(left_label)
@@ -1792,6 +1889,12 @@ class BuildControls:
             rebuild_task=True,
         )
 
+    def _restore_experiment(self, label: str) -> None:
+        run = self._run_history_by_label.get(label)
+        if run is None:
+            return
+        self._history_action(lambda: self.session.restore_experiment(run.run_dir))
+
     def _replay_run(self, label: str) -> None:
         run = self._run_history_by_label.get(label)
         if run is None:
@@ -1810,6 +1913,8 @@ class BuildControls:
             self.session.last_message = f"Could not load trace: {exc}"
             self._update_status()
             return
+        if self._comparing:
+            self._close_3d_comparison()
         self._last_trace = trace
         self._last_run_signature = self._current_run_signature()
         self._last_autopsy = None
@@ -2000,6 +2105,11 @@ class BuildControls:
         if self._controller_resolution_md is not None:
             resolved = self.session.describe_controller()
             self._controller_resolution_md.content = f"Runs: **{resolved}**"
+        if (
+            self._controller_dropdown is not None
+            and self._controller_dropdown.value != self.session.controller
+        ):
+            self._controller_dropdown.value = self.session.controller
         if self._simulate_button is not None:
             self._simulate_button.disabled = not status.ok or self.job_manager.is_running
         if self._undo_button is not None:
