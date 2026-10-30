@@ -23,8 +23,9 @@ can inspect, replay, improve, and share it.
 
 Try the [recorded quadruped replay](https://oney-physics-replays.hazycow18.chatgpt.site/creature-lab.html)
 in your browser. [Experimental portable downloads](https://github.com/oney-erge/Creature-Lab/releases/tag/preview-0.2.0)
-are available for Windows x64 and Linux x86-64; they have not yet been tested
-on clean machines.
+are available for Windows x64 and Linux x86-64 with PyBullet, and for macOS Apple
+Silicon with MuJoCo. The macOS version can behave differently and lacks PyBullet-only
+features. These previews have not yet been tested on clean machines.
 
 ```text
 Design -> simulate -> diagnose -> improve -> verify -> share
