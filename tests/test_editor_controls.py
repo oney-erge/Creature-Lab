@@ -887,10 +887,10 @@ def test_onboarding_is_inline_not_a_modal():
     assert controls.gui.modals == []
 
 
-def test_onboarding_start_applies_choice_and_removes_panel():
+def test_onboarding_runs_the_chosen_design_and_starts_replay():
     session = EditorSession()
-    controls, _, _, _ = _make_controls(session, show_onboarding=True)
-    start = next(h for h in controls.gui.handles if getattr(h, "text", None) == "Start")
+    controls, _, _, playback = _make_controls(session, show_onboarding=True)
+    start = next(h for h in controls.gui.handles if h.text == "Run first simulation")
 
     start.click()
 
@@ -898,18 +898,25 @@ def test_onboarding_start_applies_choice_and_removes_panel():
     # apply_onboarding ran: the goal-driven task preset is now active (default goal
     # is "Move forward" -> a locomotion task), and it is one undo step.
     assert session.can_undo
+    _wait_for_job_consumed(controls, lambda: playback.trace is not None)
+    assert controls._current_phase == "Results"
+    assert playback.playing and not playback.loop
+    assert "Simulation complete" in controls._activity_log.content
 
 
-def test_onboarding_skip_removes_panel_without_changing_the_design():
+def test_onboarding_edit_first_applies_choice_without_running():
     session = EditorSession(template="hexapod")
-    controls, _, _, _ = _make_controls(session, show_onboarding=True)
-    before = session.creature.name
-    skip = next(h for h in controls.gui.handles if getattr(h, "text", None) == "Skip")
+    controls, _, jobs, _ = _make_controls(session, show_onboarding=True)
+    choice = next(h for h in controls.gui.handles if h.options == presets.preset_labels())
+    choice.update("Hexapod")
+    edit = next(h for h in controls.gui.handles if h.text == "Edit first")
 
-    skip.click()
+    edit.click()
 
     assert controls._onboarding_folder is None
-    assert session.creature.name == before  # skip changed nothing
+    assert session.template == "hexapod"
+    assert jobs.status().state == "idle"
+    assert controls._simulate_button.visible
 
 
 def test_onboarding_selecting_humanoid_keeps_move_forward_goal():

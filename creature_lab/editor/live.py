@@ -313,6 +313,9 @@ def run_editor(
         show_logo=False,
         show_share_button=False,
     )
+    loading = server.gui.add_markdown(
+        "## Loading Creature Lab\nPreparing your editor and 3D preview…"
+    )
     if open_browser:
         webbrowser.open(f"http://localhost:{port}", new=2)
 
@@ -624,6 +627,7 @@ def run_editor(
         show_onboarding=show_onboarding,
     )
     preview.refresh()
+    loading.remove()
 
     last_tick = time.monotonic()
     try:

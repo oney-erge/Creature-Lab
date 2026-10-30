@@ -10,16 +10,17 @@ The panel follows the product loop instead of stacking every control in one list
 
 - A compact header sits right below the title: **Advanced mode**, **Undo**, **Redo** - always
   visible, never buried behind a scroll.
-- The phase selector is the primary navigation, directly under the header: **Design** →
-  **Motion** → **Test**.
+- The workspace selector is the primary navigation, directly under the header: **Design** →
+  **Movement** → **Results**. The current workspace and next step appear below it, alongside
+  **Run simulation**. **Back to design** returns from Movement or Results to the editable pose.
   - *Design*: pick a template, **Frame creature** (point the camera at the current body - useful
     after a template swap or if you've scrolled/zoomed away), tune body proportions, browse the
     clickable part hierarchy, and edit the selected part.
-  - *Motion*: gait preset plus the selected joint motor's range/speed (and center offset, phase,
+  - *Movement*: gait preset plus the selected joint motor's range/speed (and center offset, phase,
     and maximum torque in Advanced).
-  - *Test*: choose a **Controller** (the panel states what it actually resolves to, e.g. "Runs:
+  - *Results*: choose a **Controller** (the panel states what it actually resolves to, e.g. "Runs:
     packaged walking gait" - see [Simulate](#simulate-async-with-progress-and-cancel)),
-    **Simulate**, read the **Result** (score + diagnosis) right below it, scrub the **Playback**,
+    read the **Result** (score + diagnosis), scrub the **Playback**,
     **Re-fit gait** if the packaged gait no longer suits an edited body, run a **Robustness**
     sweep, **Qualify** against a profile, and browse **Run History**.
 - **Project** and **History** move to collapsed folders below the phases: *Project* (creature
@@ -42,12 +43,12 @@ undo step. Deleting a part that has children asks for confirmation first and lis
 will be removed; reloading a project with unsaved edits also confirms. A status line note tracks
 whether the current design has unsaved changes.
 
-**First run.** Launching `build` fresh (no path, no `--project`) shows a **Get started** panel at
-the top of the side panel — a *choose a creature × choose a goal* picker; Start applies the
-choice, Skip leaves the default quadruped/crawl-forward. Reopening an existing creature or project
-skips it. (It is an inline panel, not a pop-up modal: a Viser modal traps keyboard focus onto its
-first control, which auto-opened the creature dropdown over the Start/Skip buttons and made the
-first run unclickable — see `docs/KNOWN_ISSUES.md`.)
+**First run.** Launching `build` fresh (no path, no `--project`) shows a **Get started** panel.
+Choose a creature and goal, then select **Run first simulation** to validate, run, and play its
+replay once. Choose **Edit first** to apply the choices and explore the design before running.
+Reopening an existing creature or project skips this panel. The inline picker avoids a modal that
+previously opened a dropdown over its buttons. The expandable **Activity** folder keeps the last
+30 actions in the shared editor session; it is not a persistent project audit log.
 
 ## Start
 
@@ -105,8 +106,8 @@ point at any path.
 
 ## Simulate: Async, With Progress and Cancel
 
-The Test phase's **Run** section has a **Controller** dropdown — `curated` (default), `sinusoid`, `cpg`,
-`target_seek`, `posture`, or `hold` — before the Simulate button (a portable `controller.json` spec, see
+The Results workspace's **Run** section has a **Controller** dropdown — `curated` (default), `sinusoid`, `cpg`,
+`target_seek`, `posture`, or `hold` (a portable `controller.json` spec, see
 `docs/CLI_REFERENCE.md`'s `controller` command, is a CLI-only `--controller` option; the
 dropdown offers the stable named controllers). `curated` uses a measured packaged gait for any
 body whose joints still match it — resizing a part or changing mass/color
@@ -116,7 +117,7 @@ otherwise. Since `curated` is a placeholder resolved right before Simulate runs,
 below the dropdown states what it actually resolves to (e.g. "Runs: **packaged walking gait**" or
 "Runs: **posture (holds a standing pose, does not walk)**"), and a notification calls it out
 explicitly if a body edit ever does make the packaged gait fall back — so "nothing happened, and
-nothing said why" cannot recur silently. In Motion, choose **Use editable gait** before editing
+nothing said why" cannot recur silently. In Movement, choose **Use editable gait** before editing
 motor trajectories. A packaged sinusoid is copied into the editable motors; selecting another
 controller switches to the body's current sinusoid. This change and subsequent gait edits can be
 undone. If the packaged gait no longer fits after editing, use
@@ -138,7 +139,7 @@ When the selected task has a target, the Task panel exposes X/Y/Z/radius control
 scene shows a draggable target gizmo. Both paths update the same validated `TaskSpec` and are
 single undo steps.
 
-Clicking **Simulate** starts the episode on a background thread instead of freezing the panel: a
+Clicking **Run simulation** starts the episode on a background thread instead of freezing the panel: a
 progress bar and elapsed time appear right below the phase selector, and **Cancel** stops it
 between physics steps (the run is discarded, not saved). The **Robustness** sweep and **Re-fit
 gait** run the same way — progress reported per trial/candidate, using whichever controller is
@@ -147,7 +148,7 @@ disabled while another is in flight.
 
 ## Playback: Separate From Simulation
 
-A finished run loads into the **Playback** section instead of auto-replaying inline:
+A finished run loads into the **Playback** section and plays once when Results is open:
 **Play/Pause**, a frame scrubber, **Step -1**/**Step +1**, and **Restart** (loop and speed live in
 Advanced mode). Dragging the scrubber updates the 3D scene immediately, whether or not playback is
 running.
@@ -170,7 +171,7 @@ The **Result** section shows:
   standalone HTML viewer. It records the saved poses; it does not run physics in the browser.
 
 So the loop is: tweak a slider (or apply a suggested fix) → Simulate → read *why* it failed →
-tweak again, all in one phase. **Back to Design** pauses playback, restores the editable pose, and
+tweak again. **Back to design** pauses playback, restores the editable pose, and
 shows the body controls; it does not rely on browser-local tab state.
 
 **Explain failure** runs the selected controller, a curated reference when it is distinct,
@@ -212,7 +213,7 @@ controller before and after a body change, or label a controller-retuned compari
 ## Robustness Panel: Is This Gait Actually Robust?
 
 A single simulated score is one seed's lucky-or-unlucky roll against one exact body. The
-**Robustness** section of the Test phase (collapsed by default) re-simulates the current
+**Robustness** section of Results (collapsed by default) re-simulates the current
 creature/task under small seeded mass/friction perturbations and reports the score distribution:
 
 - Basic mode offers a **Level**: Quick (5 trials), Standard (10), or Thorough (25). Advanced mode
@@ -227,7 +228,7 @@ creature/task under small seeded mass/friction perturbations and reports the sco
 
 ## Qualify Panel: Pass/Fail Against a Profile
 
-The **Qualify** section of the Test phase (collapsed by default) runs the same check
+The **Qualify** section of Results (collapsed by default) runs the same check
 `creature-lab qualify` does — a baseline run, a robustness sweep, and (for `backend-portable`) a
 cross-backend comparison — against the in-editor creature/task, without saving a run first:
 
@@ -243,7 +244,7 @@ cross-backend comparison — against the in-editor creature/task, without saving
 
 ## Run History
 
-The Test phase's **Run History** section lists recent saved runs (creature, task, score, backend,
+The Results workspace's **Run History** section lists recent saved runs (creature, task, score, backend,
 how long ago), newest first:
 
 - **Restore design** loads that run's creature/task back into the editor as one undo step.
@@ -295,9 +296,9 @@ For the browser-didn't-open / port-busy / dependency-install fixes shared with e
 command, see [Getting Started - Troubleshooting](GETTING_STARTED.md#troubleshooting). Editor-
 specific issues:
 
-- Simulate is disabled: read the Errors section in the status line and fix validation issues.
-- "Files changed on disk" banner won't go away: click **Reload from disk**, or make any edit to
-  autosave your in-editor version back over the external change.
+- Run simulation is disabled: read the Errors section in the status line and fix validation issues.
+- "Files changed on disk" banner won't go away: choose **Reload from disk** or explicitly choose
+  **Overwrite disk with editor**. Autosave remains paused until the conflict is resolved.
 
 ## Testing The Editor (Why A Browser Is Required)
 
@@ -317,8 +318,8 @@ python scripts/browser_smoke.py           # add --headed to watch it
 ```
 
 `scripts/browser_smoke.py` launches a real `creature-lab build` server, drives it with headless
-Chromium through the exact first-run path (Humanoid → Move forward → Test → Simulate → Back to
-Design), and
+Chromium through the exact first-run path (Humanoid → Move forward → Run first simulation → Back
+to design), and
 fails if any step is unusable or the browser logs a console/page error. It is intentionally **not**
 in the default `pytest` suite (which must stay browser-free, per `AGENTS.md`). Run it whenever you
 change the editor's layout, phases, onboarding, dropdowns, or result panel — every one of those is a

@@ -36,7 +36,7 @@ What you should see:
 - A terminal progress log with the editor URL.
 - A browser tab at `http://localhost:8080` or the next free port.
 - A quadruped preset in the 3D preview, with sliders to tune it, a template picker, part/motor
-  editing, and a **Simulate** button that runs the existing physics pipeline once you're happy
+  editing, and a **Run simulation** button that runs the existing physics pipeline once you're happy
   with the setup.
 - After Simulate: a **Metrics** panel (score, displacement, root-cause failure diagnosis) and a
   **Robustness** panel (re-simulate under seeded mass/friction perturbations) right there in the
@@ -48,9 +48,9 @@ Pick a different starting preset:
 python scripts/start.py --creature humanoid
 ```
 
-For Humanoid, keep **Move forward**, click **Start**, switch the phase selector to **Test**, and
-click **Simulate**. The default curated controller is the packaged 12-DOF walking gait. After the
-result appears, **Back to Design** restores the editable standing pose instead of leaving the scene
+For a fresh launch, choose **Humanoid**, keep **Move forward**, and click **Run first simulation**.
+The default curated controller is the packaged 12-DOF walking gait. The replay starts when the run
+finishes. **Back to design** restores the editable standing pose instead of leaving the scene
 stuck on a replay frame.
 
 Presets are `quadruped`, `hexapod`, `worm`, or `humanoid`. Add `--project outputs/mydude` (via

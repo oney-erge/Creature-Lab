@@ -10,7 +10,7 @@ they check the Python that *builds* widgets, not the browser that *renders* them
 This script launches a real ``creature-lab build`` server and drives it with a
 headless Chromium (Playwright), walking the exact path a first-time user takes:
 
-    onboarding (pick creature + goal, Start) -> Test tab -> Simulate ("walk")
+    onboarding (pick creature + goal, Run first simulation) -> Results ("walk")
     -> read the result -> go back to the Design tab
 
 and asserts, at each step, that the UI is actually usable and throws no console or
@@ -108,39 +108,34 @@ def run(url: str, log) -> int:
         page.goto(url, wait_until="domcontentloaded", timeout=30000)
         page.wait_for_timeout(7000)
         body = page.inner_text("body")
-        s.check("Pick a creature" in body, "onboarding picker is visible")
+        s.check("Choose a creature" in body, "onboarding picker is visible")
         s.check(
             page.get_by_role("option").count() == 0,
-            "no dropdown auto-opened over the Start/Skip buttons",
+            "no dropdown auto-opened over the first-run buttons",
         )
-        start = page.get_by_role("button", name="Start", exact=True)
-        s.check(start.count() == 1 and not start.first.is_disabled(), "Start button is clickable")
+        start = page.get_by_role("button", name="Run first simulation", exact=True)
+        s.check(start.count() == 1 and not start.first.is_disabled(), "First run is clickable")
 
-        log("[2] pick the humanoid walking journey and click Start")
+        log("[2] pick the humanoid walking journey and start the simulation")
         s.set_select("Creature", "Humanoid")
         s.set_select("Goal", "Move forward")
-        page.get_by_role("button", name="Start", exact=True).click(timeout=6000)
+        start.click(timeout=6000)
         page.wait_for_timeout(3000)
-        dismissed = "Pick a creature" not in page.inner_text("body")
-        s.check(dismissed, "onboarding dismissed after Start")
+        dismissed = "Choose a creature and goal" not in page.inner_text("body")
+        s.check(dismissed, "onboarding dismissed after starting")
         s.check(page.locator(".mantine-Modal-overlay").count() == 0, "no leftover overlay")
 
-        log("[3] Test tab -> Simulate ('walk') -> a result appears")
-        s.click_phase("Test")
-        sim = page.get_by_role("button", name="Simulate", exact=True)
-        s.check(sim.count() == 1 and not sim.first.is_disabled(), "Simulate is available")
-        if sim.count() and not sim.first.is_disabled():
-            sim.first.click(timeout=6000)
-            page.wait_for_timeout(16000)
-            after = page.inner_text("body")
-            s.check("Net displacement" in after, "Simulate produced a result")
+        log("[3] first simulation produces a result")
+        page.wait_for_timeout(16000)
+        after = page.inner_text("body")
+        s.check("Net displacement" in after, "First run produced a result")
 
         log("[4] switch controller -> posture clears stale result without breaking the panel")
         s.set_select("Controller", "posture")
         page.wait_for_timeout(1200)
 
         log("[5] explicit Back to Design restores the editable phase")
-        page.get_by_role("button", name="Back to Design", exact=True).click(timeout=6000)
+        page.get_by_role("button", name="Back to design", exact=True).click(timeout=6000)
         page.wait_for_timeout(1200)
         d = page.inner_text("body")
         s.check("Start from" in d and "Body" in d, "Design phase shows template + body controls")

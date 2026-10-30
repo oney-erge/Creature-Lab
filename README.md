@@ -43,13 +43,14 @@ cd Creature-Lab
 ```
 
 On Windows, use `.\run.bat`. The launcher sets up the starter environment and
-opens the browser-based build editor. Pick a preset, tune its body and motors,
-click **Simulate**, then read the result. Use **Explain failure** to run a
+opens the browser-based build editor. Pick a creature and goal, then click
+**Run first simulation**. Watch the replay, inspect the result, and use **Back to
+design** to make a change. Use **Explain failure** to run a
 counterfactual analysis, compare saved runs in History, and download its report
 and experiment pack.
 
-For a guided first investigation, open **Test → Failure lessons**, load **Frozen
-gait**, simulate, change one motor's range in Motion, and simulate again. Compare
+For a guided first investigation, open **Results → Failure lessons**, load **Frozen
+gait**, simulate, change one motor's range in Movement, and simulate again. Compare
 the saved runs in History; the outcome is an experiment, not a promised fix.
 
 PyBullet's current PyPI release has no Windows or macOS wheels. On those

@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import importlib.util
 import time
-from collections import Counter
+from collections import Counter, deque
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -109,6 +109,11 @@ class BuildControls:
         # completed run can always provide a real "Back to Design" action that also
         # restores the editable pose in the 3D scene.
         self._phase_selector: Any | None = None
+        self._current_phase = "Design"
+        self._back_to_design: Any | None = None
+        self._activity_latest: Any | None = None
+        self._activity_log: Any | None = None
+        self._activity: deque[tuple[str, str]] = deque(maxlen=30)
         self._design_tab: Any | None = None
         self._motion_tab: Any | None = None
         self._test_tab: Any | None = None
@@ -180,8 +185,7 @@ class BuildControls:
 
     def _build(self, *, show_onboarding: bool = False) -> None:
         self.gui.add_markdown("## Creature Lab")
-        self.gui.add_markdown("_Design -> Move -> Test -> Improve_")
-        self.gui.add_markdown("Browser tabs connected to this editor share the same session.")
+        self.gui.add_markdown("Design a creature, run it, and see what happens.")
 
         # First-run picker, at the top of the panel so it is the first thing seen.
         # Deliberately an inline folder, NOT a modal: a Viser/Mantine modal traps
@@ -198,14 +202,29 @@ class BuildControls:
         # first thing after the title, matching how it's used (see
         # docs/KNOWN_ISSUES.md). Project/History move to collapsed folders below
         # the tabs - see ``_build_project_folder``/``_build_history_folder``.
-        self._phase_selector = self.gui.add_button_group("Phase", ["Design", "Motion", "Test"])
+        self._phase_selector = self.gui.add_button_group(
+            "Workspace", ["Design", "Movement", "Results"]
+        )
         self._phase_selector.on_click(lambda event: self._show_phase(event.target.value))
         self._message = self.gui.add_markdown("")
+        self._simulate_button = self.gui.add_button(
+            "Run simulation", icon="player-play", color="blue"
+        )
+        self._simulate_button.visible = not show_onboarding
+        self._simulate_button.on_click(lambda _event: self._run_from_workspace())
+        self._back_to_design = self.gui.add_button(
+            "Back to design", icon="arrow-left", color="blue"
+        )
+        self._back_to_design.visible = False
+        self._back_to_design.on_click(lambda _event: self._show_phase("Design"))
         self._build_job_status_widgets()
+        self._activity_latest = self.gui.add_markdown("")
 
         self._design_tab = self.gui.add_folder("1 · Design", expand_by_default=True)
-        self._motion_tab = self.gui.add_folder("2 · Motion", expand_by_default=True, visible=False)
-        self._test_tab = self.gui.add_folder("3 · Test", expand_by_default=True, visible=False)
+        self._motion_tab = self.gui.add_folder(
+            "2 · Movement", expand_by_default=True, visible=False
+        )
+        self._test_tab = self.gui.add_folder("3 · Results", expand_by_default=True, visible=False)
 
         with self._design_tab:
             self._build_template_picker()
@@ -216,8 +235,12 @@ class BuildControls:
 
         self._build_project_folder()
         self._build_history_folder()
+        with self.gui.add_folder("Activity", expand_by_default=False):
+            self.gui.add_markdown("Recent actions in this shared editor session (up to 30).")
+            self._activity_log = self.gui.add_markdown("")
 
         self._rebuild_all()
+        self._record_activity("Editor ready.", "ready")
         self._update_status()
 
     def _build_header_controls(self) -> None:
@@ -250,23 +273,54 @@ class BuildControls:
 
     def _show_phase(self, phase: str) -> None:
         """Show one workflow phase and restore design state when leaving playback."""
-        if phase not in {"Design", "Motion", "Test"}:
+        phase = {"Motion": "Movement", "Test": "Results"}.get(phase, phase)
+        if phase not in {"Design", "Movement", "Results"}:
             return
+        changed = phase != self._current_phase
+        self._current_phase = phase
         if self._phase_selector is not None and self._phase_selector.value != phase:
             self._phase_selector.value = phase
         for name, handle in (
             ("Design", self._design_tab),
-            ("Motion", self._motion_tab),
-            ("Test", self._test_tab),
+            ("Movement", self._motion_tab),
+            ("Results", self._test_tab),
         ):
             if handle is not None:
                 handle.visible = name == phase
-        if phase != "Test":
+        if self._back_to_design is not None:
+            self._back_to_design.visible = phase != "Design"
+        if phase != "Results":
             self.playback.pause()
             self._comparing = False
             if self._comparison_slider is not None:
                 self._comparison_slider.disabled = True
             self.on_preview()
+        elif self._last_trace is not None:
+            frame = self.playback.current_frame()
+            if frame is not None:
+                self.on_playback_frame(frame)
+        if changed:
+            self._record_activity(f"Opened {phase}.", "navigation")
+        self._update_status()
+
+    def _run_from_workspace(self) -> None:
+        self._show_phase("Results")
+        self._start_simulate()
+
+    def _record_activity(self, message: str, key: str = "") -> None:
+        # Keep repeated slider events together and keep the log bounded in memory.
+        safe_message = message.replace("\n", " ").replace("<", "&lt;").replace(">", "&gt;")
+        entry = (key, f"{time.strftime('%H:%M:%S')} · {safe_message}")
+        if key and self._activity and self._activity[-1][0] == key:
+            self._activity[-1] = entry
+        else:
+            self._activity.append(entry)
+        if self._activity_latest is not None:
+            self._activity_latest.content = f"Latest: {entry[1]}"
+        if self._activity_log is not None:
+            self._activity_log.content = "\n".join(
+                f"- {item}" for _, item in reversed(self._activity)
+            )
 
     def _build_project_folder(self) -> None:
         with self.gui.add_folder("Project", expand_by_default=False):
@@ -356,7 +410,11 @@ class BuildControls:
         self._job_status_md = self.gui.add_markdown("")
         self._cancel_button = self.gui.add_button("Cancel", icon="player-stop", color="red")
         self._cancel_button.visible = False
-        self._cancel_button.on_click(lambda _event: self.job_manager.cancel())
+        self._cancel_button.on_click(lambda _event: self._cancel_job())
+
+    def _cancel_job(self) -> None:
+        self.job_manager.cancel()
+        self._record_activity("Cancellation requested; waiting for the current step to stop.")
 
     def _build_template_picker(self) -> None:
         initial = (
@@ -387,8 +445,6 @@ class BuildControls:
 
     def _build_run_section(self) -> None:
         with self.gui.add_folder("Run", expand_by_default=True, order=10):
-            back_to_design = self.gui.add_button("Back to Design", icon="arrow-left")
-            back_to_design.on_click(lambda _event: self._show_phase("Design"))
             controller = self.gui.add_dropdown(
                 "Controller",
                 list(AVAILABLE_CONTROLLERS),
@@ -408,12 +464,6 @@ class BuildControls:
                 )
             )
             self._controller_resolution_md = self.gui.add_markdown("")
-            self._simulate_button = self.gui.add_button(
-                "Simulate", icon="player-play", color="blue"
-            )
-            self._simulate_button.on_click(lambda _event: self._start_simulate())
-            validate = self.gui.add_button("Validate", icon="check")
-            validate.on_click(lambda _event: self._update_status())
 
     def _build_lesson_section(self) -> None:
         lessons = {
@@ -423,8 +473,8 @@ class BuildControls:
         }
         with self.gui.add_folder("Failure lessons", expand_by_default=False, order=26):
             self.gui.add_markdown(
-                "For Frozen gait: load the lesson, Simulate, then open Motion and increase "
-                "one joint's Range. Return to Test and Simulate again; compare the two saved "
+                "For Frozen gait: load the lesson, run a simulation, then open Movement "
+                "and increase one joint's Range. Run again; compare the two saved "
                 "runs in Run History. The outcome is an experiment, not a promised fix. "
                 "Loading replaces the editable body/task and selects the sinusoid controller; "
                 "Undo restores the previous body, task, and controller."
@@ -496,6 +546,12 @@ class BuildControls:
         )
 
     def scene_changed(self) -> None:
+        self._record_activity(self._friendly_message(), "scene-edit")
+        if self._discard_stale_result():
+            self._rebuild_metrics_controls()
+            self._rebuild_playback_controls()
+            self._render_robustness_result()
+            self._render_qualify_result()
         self._update_status()
 
     def notify_external_change(self) -> None:
@@ -512,12 +568,30 @@ class BuildControls:
         rebuild_task: bool,
         after: Callable[[], None] | None = None,
         preview: str = "full",
-    ) -> None:
+    ) -> bool:
+        before = self.session._snapshot()
+        before_message = self.session.last_message
+        succeeded = False
         try:
             operation()
             self.session.autosave()
+            succeeded = True
         except Exception as exc:
             self.session.last_message = f"Error: {exc}"
+            self._record_activity(f"Action failed: {exc}", "error")
+        if succeeded:
+            after_state = self.session._snapshot()
+            if before["selected_part_id"] != after_state["selected_part_id"]:
+                part = friendly_label(after_state["selected_part_id"])
+                self._record_activity(f"Selected {part}.", "selection")
+            elif before != after_state:
+                message = self._friendly_message()
+                self._record_activity(message, f"edit:{message}")
+            elif (
+                self.session.last_message != before_message
+                and self.session.last_message.startswith(("Saved ", "Reloaded ", "Overwrote "))
+            ):
+                self._record_activity(self._friendly_message())
         self._refresh(
             rebuild_body=rebuild_body,
             rebuild_part=rebuild_part,
@@ -525,8 +599,21 @@ class BuildControls:
             rebuild_task=rebuild_task,
             preview=preview,
         )
-        if after is not None:
+        if succeeded and after is not None:
             after()
+        return succeeded
+
+    def _friendly_message(self) -> str:
+        message = self.session.last_message
+        for prefix, identifier in (
+            ("Selected", self.session.selected_part_id),
+            ("Updated", self.session.selected_part_id),
+            ("Selected motor", self.session.selected_motor_id),
+            ("Updated motor", self.session.selected_motor_id),
+        ):
+            if identifier and message == f"{prefix} {identifier}":
+                return f"{prefix} {friendly_label(identifier)}"
+        return message.replace("_", " ") if message.startswith("Updated ") else message
 
     def _history_action(self, operation: Callable[[], Any]) -> None:
         """Undo/redo/reset/apply-fix can all change any part of the design."""
@@ -588,7 +675,7 @@ class BuildControls:
         with self._body_folder:
             if self.session.template == "custom":
                 self.gui.add_markdown(
-                    "Loaded JSON is custom. Use **Selected part** and the **Motion** tab."
+                    "Loaded JSON is custom. Use **Selected part** and **Movement**."
                 )
                 return
             preset = presets.CREATURE_PRESETS[self.session.template]
@@ -624,8 +711,13 @@ class BuildControls:
         structure) with real clickable structure, one button per row.
         """
         selected_id = self.session.selected_part_id
-        for depth, part_id in hierarchy_rows(self.session.creature):
-            label = ("&nbsp;&nbsp;&nbsp;" * depth) + friendly_label(part_id)
+        rows = hierarchy_rows(self.session.creature)
+        counts = Counter(friendly_label(part_id) for _, part_id in rows)
+        for depth, part_id in rows:
+            label = friendly_label(part_id)
+            if counts[label] > 1:
+                label = f"{label} ({part_id})"
+            label = ("↳ " * depth) + label
             button = self.gui.add_button(label, color="blue" if part_id == selected_id else None)
             button.on_click(
                 lambda _event, part_id=part_id: self._safe(
@@ -645,23 +737,20 @@ class BuildControls:
         with self._part_folder:
             self._add_hierarchy_tree()
             part = self.session.selected_part()
-            part_select = self.gui.add_dropdown(
-                "Part",
-                self.session.part_ids(),
-                initial_value=part.id,
-            )
-            part_select.on_update(
-                lambda event: self._safe(
-                    lambda: self.session.select_part(event.target.value),
-                    rebuild_body=False,
-                    rebuild_part=True,
-                    rebuild_motion=False,
-                    rebuild_task=False,
-                    preview="light",
-                )
-            )
-
             if self._advanced:
+                part_select = self.gui.add_dropdown(
+                    "Part ID", self.session.part_ids(), initial_value=part.id
+                )
+                part_select.on_update(
+                    lambda event: self._safe(
+                        lambda: self.session.select_part(event.target.value),
+                        rebuild_body=False,
+                        rebuild_part=True,
+                        rebuild_motion=False,
+                        rebuild_task=False,
+                        preview="light",
+                    )
+                )
                 shape = self.gui.add_dropdown(
                     "Shape",
                     [shape.value for shape in ShapeType],
@@ -860,14 +949,27 @@ class BuildControls:
                 )
             )
             motor_id = self.session.selected_motor()
+            motor_ids = self.session.motor_ids()
+            label_counts = Counter(friendly_label(joint) for joint in motor_ids)
+            motor_labels = {
+                (
+                    f"{friendly_label(joint)} ({joint})"
+                    if label_counts[friendly_label(joint)] > 1
+                    else friendly_label(joint)
+                ): joint
+                for joint in motor_ids
+            }
+            selected_label = next(
+                label for label, joint in motor_labels.items() if joint == motor_id
+            )
             motor_select = self.gui.add_dropdown(
                 "Joint motor",
-                self.session.motor_ids(),
-                initial_value=motor_id,
+                list(motor_labels),
+                initial_value=selected_label,
             )
             motor_select.on_update(
                 lambda event: self._safe(
-                    lambda: self.session.select_motor(event.target.value),
+                    lambda: self.session.select_motor(motor_labels[event.target.value]),
                     rebuild_body=False,
                     rebuild_part=False,
                     rebuild_motion=True,
@@ -1088,6 +1190,9 @@ class BuildControls:
             self.session.last_message = "Fix validation errors before simulating."
             self._update_status()
             return
+        if self.playback.playing:
+            self.playback.pause()
+            self._sync_playback_widgets()
         if self._comparing:
             self._comparing = False
             self.on_preview()
@@ -1095,8 +1200,19 @@ class BuildControls:
                 self._comparison_slider.disabled = True
         self._pending_job_kind = "simulate"
         self._pending_signature = self._current_run_signature()
-        self.on_start_simulate()
+        try:
+            self.on_start_simulate()
+        except Exception as exc:
+            self._pending_job_kind = None
+            self._pending_signature = None
+            self.session.last_message = f"Could not start simulation: {exc}"
+            self._record_activity(self.session.last_message, "error")
+            self._update_status()
+            return
+        self.session.last_message = "Simulation started."
+        self._record_activity("Simulation started.", "run")
         self._render_job_status(self.job_manager.status())
+        self._update_status()
 
     def _start_robustness(self, trials: int, mass_jitter: float, friction_jitter: float) -> None:
         if self.job_manager.is_running:
@@ -1292,6 +1408,7 @@ class BuildControls:
                 "The design or task changed while the job ran; its result was not applied. "
                 "Completed simulation and analysis runs remain in History."
             )
+            self._record_activity("Run finished after the design changed; find it in Run History.")
             self._rebuild_run_history_controls()
             self._update_status()
             return
@@ -1316,13 +1433,17 @@ class BuildControls:
             self._autopsy_report_dir = None
             self._last_trace = trace
             self.playback.load(trace)
+            self.playback.loop = False
+            if self._current_phase == "Results":
+                self.playback.play()
             first = self.playback.current_frame()
-            if first is not None:
+            if first is not None and self._current_phase == "Results":
                 self.on_playback_frame(first)
             self.session.last_message = (
                 f"{self.session.creature.name!r} on {self.session.task.name!r}: "
                 f"score={trace.score:+.4f} — see Result below."
             )
+            self._record_activity(f"Simulation complete. Score: {trace.score:+.3f}.", "result")
             self._notify_simulate_result(trace)
             self._rebuild_playback_controls()
             self._rebuild_run_history_controls()
@@ -1392,16 +1513,21 @@ class BuildControls:
             self.session.last_message = "Cancelled."
         else:
             self.session.last_message = f"Failed: {status.error}"
+        self._record_activity(self.session.last_message, "job-ended")
         self._update_status()
 
     # -- Test phase: playback -----------------------------------------------------
 
     def _tick_playback(self, dt: float) -> None:
+        was_playing = self.playback.playing
         if self.playback.advance(dt):
             frame = self.playback.current_frame()
             if frame is not None:
                 self.on_playback_frame(frame)
             self._sync_playback_widgets()
+        if was_playing and not self.playback.playing:
+            self._record_activity("Replay finished. You can replay it or return to design.")
+            self._update_status()
 
     def _rebuild_playback_controls(self) -> None:
         self._remove_folder("_playback_folder")
@@ -1413,7 +1539,7 @@ class BuildControls:
         self._playback_play_button = None
         with self._playback_folder:
             if self.playback.trace is None:
-                self.gui.add_markdown("Run **Simulate** to get a trace to play back.")
+                self.gui.add_markdown("Choose **Run simulation** to see a replay here.")
                 return
             self._playback_play_button = self.gui.add_button(
                 "Play / Pause",
@@ -1459,6 +1585,8 @@ class BuildControls:
             )
 
     def _toggle_playback(self) -> None:
+        if not self.playback.playing and self.playback.frame_index >= self.playback.frame_count - 1:
+            self.playback.to_start()
         self.playback.toggle()
         self._sync_playback_widgets()
 
@@ -1526,7 +1654,7 @@ class BuildControls:
         with self._metrics_folder:
             if self._last_trace is None:
                 self.gui.add_markdown(
-                    "Run **Simulate** to see score, displacement, and failure diagnosis here."
+                    "Choose **Run simulation** to see score, displacement, and diagnosis here."
                 )
                 return
             trace = self._last_trace
@@ -2096,40 +2224,47 @@ class BuildControls:
     #: Reserved for presets whose curated behavior cannot yet serve a movement goal.
     #: The 12-DOF humanoid left this set after gaining its measured walking setup.
     def _build_onboarding_panel(self) -> None:
-        """First-run creature x goal picker, rendered inline (not as a modal).
-
-        See ``_build`` for why this must not be a modal. Start applies the choice
-        and removes the panel; Skip just removes it - both leave a normal editor.
-        """
+        """Choose a starting point and run it, or edit the chosen design first."""
         creature_labels = presets.preset_labels()
         goal_labels = presets.onboarding_goal_labels()
         self._onboarding_folder = self.gui.add_folder("Get started", expand_by_default=True)
         with self._onboarding_folder:
             self.gui.add_markdown(
-                "Pick a creature and a goal to get started. You can change everything "
-                "later — this just picks a reasonable starting point."
+                "Choose a creature and goal, then run your first simulation. "
+                "You can edit the design at any time."
             )
             creature_dropdown = self.gui.add_dropdown(
                 "Creature", creature_labels, initial_value=creature_labels[0]
             )
             goal_dropdown = self.gui.add_dropdown("Goal", goal_labels, initial_value=goal_labels[0])
-            start_button = self.gui.add_button("Start", icon="player-play", color="blue")
-            skip_button = self.gui.add_button("Skip")
+            start_button = self.gui.add_button(
+                "Run first simulation", icon="player-play", color="blue"
+            )
+            edit_button = self.gui.add_button("Edit first")
 
-            def _start(_event: Any) -> None:
+            def _choose(*, run: bool) -> None:
                 creature_key = presets.preset_name_from_label(creature_dropdown.value)
                 goal_key = presets.onboarding_goal_key_from_label(goal_dropdown.value)
-                self._remove_folder("_onboarding_folder")
-                self._safe(
+                success = self._safe(
                     lambda: self.session.apply_onboarding(creature_key, goal_key),
                     rebuild_body=True,
                     rebuild_part=True,
                     rebuild_motion=True,
                     rebuild_task=True,
                 )
+                if not success:
+                    return
+                self._record_activity(f"Chose {creature_dropdown.value} · {goal_dropdown.value}.")
+                self._remove_folder("_onboarding_folder")
+                if self._simulate_button is not None:
+                    self._simulate_button.visible = True
+                if run:
+                    self._run_from_workspace()
+                else:
+                    self._update_status()
 
-            start_button.on_click(_start)
-            skip_button.on_click(lambda _event: self._remove_folder("_onboarding_folder"))
+            start_button.on_click(lambda _event: _choose(run=True))
+            edit_button.on_click(lambda _event: _choose(run=False))
 
     # -- history / snapshots / destructive confirmations ------------------------
 
@@ -2233,26 +2368,42 @@ class BuildControls:
 
     def _update_status(self) -> None:
         status = self.session.status()
-        metrics = self.session.preview_metrics()
-        lines = []
+        if self.job_manager.is_running:
+            state = "Simulation or analysis in progress"
+            next_step = "Watch the progress below; you can cancel the job."
+            if self._last_trace is not None:
+                next_step += " The previous result remains visible until the new job finishes."
+        elif status.errors:
+            state = "Needs attention before running"
+            next_step = "Fix the errors below, then run the simulation."
+        elif self._last_trace is not None:
+            state = "Run complete"
+            next_step = "Watch or replay the result, or return to Design to make a change."
+        else:
+            state = "Ready to run"
+            next_step = "Run a simulation or edit the creature first."
+        lines = [f"**{self._current_phase} · {state}**", "", next_step]
         if self.session.external_change_pending:
+            lines.append("")
             lines.append(
                 "**Files changed on disk.** Reload them, or explicitly click "
                 "**Overwrite disk with editor**. Autosave is paused to prevent data loss."
             )
             lines.append("")
         dirty = " · unsaved changes" if self.session.is_dirty else ""
-        lines.extend(
-            [
-                f"**{self.session.last_message}**{dirty}",
-                "",
-                f"- Creature: `{self.session.creature.name}`",
-                "- Parts/joints/motors: "
-                f"{int(metrics['parts'])}/{int(metrics['joints'])}/{int(metrics['motors'])}",
-                f"- CoM height: {metrics['com_z']:.2f} m",
-                f"- Support width: {metrics['support_width']:.2f} m",
-            ]
-        )
+        lines.extend(["", f"{self._friendly_message()}{dirty}"])
+        if self._advanced:
+            metrics = self.session.preview_metrics()
+            lines.extend(
+                [
+                    "",
+                    f"Creature: `{self.session.creature.name}` · "
+                    f"parts/joints/motors: {int(metrics['parts'])}/"
+                    f"{int(metrics['joints'])}/{int(metrics['motors'])}",
+                    f"CoM height: {metrics['com_z']:.2f} m · "
+                    f"support width: {metrics['support_width']:.2f} m",
+                ]
+            )
         if status.errors:
             lines.append("")
             lines.append("**Errors**")
