@@ -636,8 +636,8 @@ def build(
     ] = None,
     preset: Annotated[
         str,
-        typer.Option(help="Starting preset: quadruped, hexapod, worm, or humanoid."),
-    ] = "quadruped",
+        typer.Option(help="Starting preset: humanoid, duckling, quadruped, hexapod, or worm."),
+    ] = "humanoid",
     out: Annotated[
         Path,
         typer.Option("--out", "-o", help="Where Save JSON writes the CreatureSpec."),
@@ -1887,6 +1887,8 @@ def compare(
                 trace_a=trace_a,
                 creature_b=creature_b,
                 trace_b=trace_b,
+                task_a=_task_a,
+                task_b=_task_b,
             )
         )
         console.print(f"[green]wrote[/green] comparison report -> {html_out}")
@@ -2427,7 +2429,7 @@ def export(
         )
         raise typer.Exit(code=2) from exc
 
-    frames = render_trace(creature, trace, task=task_spec, width=width, height=height)
+    frames = render_trace(creature, trace, task=task_spec, width=width, height=height, fps=fps)
     saved_path = write_animation(frames, out_path, fps=fps)
     console.print(f"[green]exported[/green] {len(frames)} frame(s) -> {saved_path}")
 
@@ -3014,7 +3016,7 @@ def zoo_list(
         table.add_row(name, ", ".join(tasks), default_task_name(name), optimized, status)
     console.print(table)
     console.print(
-        "[dim]'optimized gait' creatures also ship a CMA-ES-tuned controller.json - "
+        "[dim]'optimized gait' creatures also ship a tuned controller.json - "
         "the curated default automatically uses them; `sinusoid` remains the raw baseline.[/dim]"
     )
 
@@ -3029,7 +3031,7 @@ def zoo_run(
         str,
         typer.Option(
             help="Controller: 'curated' (default), 'sinusoid', 'cpg', 'target_seek', a path to a "
-            "controller.json, or 'optimized' for this creature's packaged CMA-ES-tuned "
+            "controller.json, or 'optimized' for this creature's packaged tuned "
             "gait if one is shipped (see `zoo list`)."
         ),
     ] = "curated",

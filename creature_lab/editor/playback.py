@@ -34,6 +34,9 @@ class EditorPlayback:
         self.frame_index = 0
         self.playing = False
         self._accum = 0.0
+        if len(trace.frames) > 1:
+            duration = trace.frames[-1].t - trace.frames[0].t
+            self.fps = (len(trace.frames) - 1) / duration if duration > 0 else DEFAULT_FPS
 
     def clear(self) -> None:
         """Drop the loaded trace, back to the empty 'nothing to play' state."""
@@ -82,9 +85,18 @@ class EditorPlayback:
         if not self.playing or self.frame_count < 2:
             return False
         self._accum += dt * self.speed
-        step_dt = 1.0 / self.fps
         changed = False
-        while self._accum >= step_dt:
+        assert self.trace is not None
+        while self.playing:
+            if self.frame_index + 1 < self.frame_count:
+                step_dt = (
+                    self.trace.frames[self.frame_index + 1].t
+                    - self.trace.frames[self.frame_index].t
+                )
+            else:
+                step_dt = 1.0 / self.fps
+            if self._accum < step_dt:
+                break
             self._accum -= step_dt
             self.frame_index += 1
             changed = True

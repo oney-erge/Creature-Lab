@@ -21,6 +21,7 @@ _PREFERRED_DEFAULTS = ("crawl_forward", "walk", "balance")
 _EXPLICIT_DEFAULT_TASKS = {
     "humanoid_minimal": "balance",
     "humanoid_12dof": "walk",
+    "duckling": "crawl_forward",
 }
 
 
@@ -36,6 +37,13 @@ class ZooShowcase:
 
 
 ZOO_SHOWCASES: dict[str, ZooShowcase] = {
+    "duckling": ZooShowcase(
+        "crawl_forward",
+        "challenge",
+        None,
+        False,
+        "Small biped with an experimental PyBullet walking gait",
+    ),
     "quadruped": ZooShowcase(
         "crawl_forward", "showcase", 1.5, True, "Fast curated four-legged crawl"
     ),
@@ -133,7 +141,7 @@ def zoo_creature(name: str, task: str | None = None) -> tuple[CreatureSpec, Task
 
 
 def zoo_optimized_controller(name: str) -> Path | None:
-    """Path to a packaged, CMA-ES-optimized ``controller.json`` for this zoo creature
+    """Path to a packaged, tuned ``controller.json`` for this zoo creature
     (see ``creature-lab optimize``), if one is shipped - ``None`` otherwise. The
     creature's own ``creature.json`` motors are left at their original, un-tuned
     values; this is an opt-in, additive artifact so baselines stay unaffected.

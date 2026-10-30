@@ -19,7 +19,7 @@ from creature_lab.editor.session import EditorSession
 from creature_lab.qualification import BUILTIN_PROFILES, QualificationResult
 from creature_lab.qualification import qualify as run_qualify
 from creature_lab.robustness import RobustnessResult, run_trials
-from creature_lab.runs import DEFAULT_RUNS_DIR, load_trace, save_run
+from creature_lab.runs import DEFAULT_RUNS_DIR, load_run, load_trace, save_run
 from creature_lab.schema import CreatureSpec, EpisodeTrace, FrameState, TaskSpec
 from creature_lab.viewers.viser_viewer import (
     DEFAULT_HOST,
@@ -58,6 +58,8 @@ class EditorPreview:
         self._handles = None
         self._editor_overlays: list[Any] = []
         self._framed_reach: float | None = None
+        self._camera_mode = "Overview"
+        self._follow_position: tuple[float, float, float] | None = None
         self._comparison: tuple[Any, Any, EpisodeTrace, EpisodeTrace, tuple, tuple] | None = None
 
     def refresh(self) -> None:
@@ -93,7 +95,7 @@ class EditorPreview:
         if previous is None or abs(reach - previous) / previous > _REFRAME_THRESHOLD:
             self.frame_camera(reach)
 
-    def frame_camera(self, reach: float | None = None) -> None:
+    def frame_camera(self, reach: float | None = None, *, view: str | None = None) -> None:
         """Point the camera at the creature from a comfortable isometric distance.
 
         Sets both ``initial_camera`` (for clients connecting after this call) and
@@ -103,14 +105,18 @@ class EditorPreview:
         """
         if reach is None:
             reach = creature_reach(self.session.creature)
+        if view is not None:
+            self._camera_mode = view
+        self._follow_position = None
         self._framed_reach = reach
         distance = reach * 2.2
         look_at = (0.0, 0.0, reach * 0.35)
-        position = (
-            look_at[0] + distance * 0.7,
-            look_at[1] - distance * 0.7,
-            look_at[2] + distance * 0.55,
-        )
+        if self._camera_mode == "Front":
+            position = (distance, 0.0, look_at[2] + distance * 0.15)
+        elif self._camera_mode == "Side":
+            position = (0.0, -distance, look_at[2] + distance * 0.15)
+        else:
+            position = (distance * 0.7, -distance * 0.7, look_at[2] + distance * 0.55)
         self.server.initial_camera.position = position
         self.server.initial_camera.look_at = look_at
         for client in self.server.get_clients().values():
@@ -148,6 +154,23 @@ class EditorPreview:
         """
         if self._handles is not None:
             apply_frame(self._handles, frame)
+        if self._camera_mode == "Follow":
+            root_id = self.session.creature.parts[0].id
+            pose = frame.parts.get(root_id)
+            if pose is not None:
+                current = pose.position
+                if self._follow_position is not None:
+                    delta = tuple(
+                        a - b for a, b in zip(current, self._follow_position, strict=True)
+                    )
+                    for client in self.server.get_clients().values():
+                        client.camera.position = tuple(
+                            a + b for a, b in zip(client.camera.position, delta, strict=True)
+                        )
+                        client.camera.look_at = tuple(
+                            a + b for a, b in zip(client.camera.look_at, delta, strict=True)
+                        )
+                self._follow_position = current
 
     def _clear_comparison(self) -> None:
         if self._comparison is not None:
@@ -219,18 +242,19 @@ class EditorPreview:
             return
         selected = frame.parts.get(self.session.selected_part_id)
         if selected is not None:
-            marker = self.server.scene.add_frame(
-                "/editor/selected",
-                axes_length=0.16,
-                axes_radius=0.008,
-                origin_radius=0.025,
-                position=selected.position,
-            )
-            self._editor_overlays.append(marker)
             has_parent_joint = any(
                 joint.child == self.session.selected_part_id
                 for joint in self.session.creature.joints
             )
+            if has_parent_joint or self.session.mode == "advanced":
+                marker = self.server.scene.add_frame(
+                    "/editor/selected",
+                    axes_length=0.16,
+                    axes_radius=0.008,
+                    origin_radius=0.025,
+                    position=selected.position,
+                )
+                self._editor_overlays.append(marker)
             if has_parent_joint:
                 gizmo = self.server.scene.add_transform_controls(
                     "/editor/anchor_gizmo",
@@ -249,6 +273,8 @@ class EditorPreview:
             )
             target_gizmo.on_drag_end(lambda event: self._move_target(tuple(event.target.position)))
             self._editor_overlays.append(target_gizmo)
+        if self.session.mode != "advanced":
+            return
         metrics = self.session.preview_metrics()
         com = self.server.scene.add_icosphere(
             "/editor/com",
@@ -605,6 +631,41 @@ def run_editor(
         if not job_manager.start(work):
             session.last_message = "A job is already running."
 
+    def start_gif_export_job(trace: EpisodeTrace) -> None:
+        def work(reporter: ProgressReporter) -> tuple[str, bytes]:
+            try:
+                from creature_lab.backends.pybullet_backend import render_trace
+                from creature_lab.viewers.video_exporter import gif_bytes
+            except ImportError as exc:
+                raise ValueError(
+                    "GIF export needs the export extra: "
+                    "uv sync --inexact --extra sim --extra viz --extra export"
+                ) from exc
+            creature, task_for_run, saved_trace = load_run(runs_dir / trace.run_id)
+            try:
+                frames = render_trace(
+                    creature,
+                    saved_trace,
+                    task=task_for_run,
+                    width=640,
+                    height=480,
+                    fps=30,
+                    on_frame=lambda done, total: reporter.report(
+                        done / total, f"Rendering {done}/{total}"
+                    ),
+                    should_stop=lambda: reporter.cancel_requested,
+                )
+            except InterruptedError:
+                raise JobCancelled from None
+            reporter.check_cancelled()
+            reporter.report(1.0, "Encoding GIF")
+            data = gif_bytes(frames, fps=30)
+            reporter.check_cancelled()
+            return trace.run_id, data
+
+        if not job_manager.start(work):
+            session.last_message = "A job is already running."
+
     controls_holder["controls"] = BuildControls(
         server.gui,
         session,
@@ -618,11 +679,13 @@ def run_editor(
         on_start_refit_gait=start_refit_gait_job,
         on_start_autopsy=start_autopsy_job,
         on_start_replay_export=start_replay_export_job,
+        on_start_gif_export=start_gif_export_job,
         on_compare_runs=preview.compare_runs,
         on_seek_comparison=preview.seek_comparison,
         on_playback_frame=preview.apply_playback_frame,
         notify=notify,
         on_frame_camera=lambda: preview.frame_camera(),
+        on_camera_view=lambda view: preview.frame_camera(view=view),
         runs_dir=runs_dir,
         show_onboarding=show_onboarding,
     )

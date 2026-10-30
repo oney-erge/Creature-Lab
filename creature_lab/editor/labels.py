@@ -18,7 +18,7 @@ _ROW_PATTERN = re.compile(r"^(leg|hip)_(\d+)([lr])$")
 _SEG_PATTERN = re.compile(r"^(?:seg|j)(\d+)$")
 _LIMB_PATTERN = re.compile(r"^limb_(\d+)$")
 _SIDED_PATTERN = re.compile(
-    r"^(upper_leg|lower_leg|foot|hip|knee|ankle|"
+    r"^(upper_leg|lower_leg|foot|hip|hip_roll|roll_link|knee|ankle|"
     r"upper_arm|lower_arm|hand|shoulder|elbow|wrist)_([lr])$"
 )
 

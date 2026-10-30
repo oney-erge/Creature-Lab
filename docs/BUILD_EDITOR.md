@@ -16,6 +16,7 @@ The panel follows the product loop instead of stacking every control in one list
   - *Design*: pick a template, **Frame creature** (point the camera at the current body - useful
     after a template swap or if you've scrolled/zoomed away), tune body proportions, browse the
     clickable part hierarchy, and edit the selected part.
+    **Camera** selects Overview, Front, Side, or Follow during playback.
   - *Movement*: gait preset plus the selected joint motor's range/speed (and center offset, phase,
     and maximum torque in Advanced).
   - *Results*: choose a **Controller** (the panel states what it actually resolves to, e.g. "Runs:
@@ -29,7 +30,8 @@ The panel follows the product loop instead of stacking every control in one list
 
 **Basic vs. Advanced.** Basic mode (the default) shows only the ~handful of controls needed for a
 first successful run. Flip **Advanced mode** in the header to reveal exact dimensions, mass,
-colours, raw motor center/phase/torque, terrain friction, and robustness jitter sliders.
+colours, raw motor center/phase/torque, terrain friction, robustness jitter sliders, and the
+center-of-mass and support-width overlays.
 
 **The camera follows the creature.** The floor grid and the initial camera distance scale to the
 current body (a ~0.4 m creature no longer renders as a barely-visible speck on a fixed 10x10 m
@@ -49,6 +51,28 @@ replay once. Choose **Edit first** to apply the choices and explore the design b
 Reopening an existing creature or project skips this panel. The inline picker avoids a modal that
 previously opened a dropdown over its buttons. The expandable **Activity** folder keeps the last
 30 actions in the shared editor session; it is not a persistent project audit log.
+
+**Guided experiment.** Open Results → Guided experiment and choose Humanoid or Duckling. The
+baseline holds motor swing at zero. Once it finishes, choose **Try walking gait and run again**;
+the first result is pinned automatically. **Compare with baseline** shows both runs in the 3D
+view with a shared simulation-time control, and **Download baseline comparison** creates an
+offline report. This compares two different gait configurations; a single pair does not establish
+robustness or causation. Duckling's packaged gait is an experimental PyBullet example.
+The showcase's two ±5% mass/±10% friction conditions informed gait selection; they are not
+independent evidence of robustness. The generated report also includes two additional conditions.
+The packaged Duckling gait came from a seeded random search (seed 127, 1,498 candidates) over
+sinusoid parameters, selecting for the weakest forward result across the nominal run and those
+two variations. The full search history is not packaged; the saved gait and showcase script
+reproduce the recorded experiments subject to backend and version differences.
+Its rounded shell, eyes, and beak are visual decorations; the physics body uses primitive shapes.
+**Try Duckling with a gentle push** loads a four-second balance task with a 10 N lateral force
+applied for one physics step at two seconds, then runs it. It is a small demonstration, not a
+hardware stability guarantee.
+
+**Record.** After a saved run, **Download GIF** renders the recorded poses at their timestamps.
+Install the optional export dependencies with `uv sync --inexact --extra sim --extra viz --extra
+export`. `uv run python scripts/create_showcase.py` records both guided examples and creates GIFs,
+MP4s, comparison reports, and measurements in a new `outputs/showcase/` directory.
 
 ## Start
 
@@ -267,7 +291,7 @@ be skipped with warnings. MJCF export is currently one-way (there is no MJCF imp
 
 ## What Else You Can Do
 
-- Start from `quadruped`, `hexapod`, `worm`, or `humanoid` (or the onboarding picker's goal).
+- Start from `humanoid`, `duckling`, `quadruped`, `hexapod`, or `worm`.
 - Tune body parameters with sliders and see the static preview update.
 - Browse the part hierarchy (friendly names, e.g. "Leg 1 (left)" instead of `leg_0l`) and select
   parts by clicking them in the scene, the tree, or the dropdown.

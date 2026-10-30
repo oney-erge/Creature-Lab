@@ -6,6 +6,7 @@ fully validated creature, so a scaffolded creature is always runnable.
 
 from __future__ import annotations
 
+from creature_lab.scaffold.duckling import generate_duckling
 from creature_lab.scaffold.humanoid import generate_humanoid
 from creature_lab.scaffold.legged import generate_hexapod, generate_quadruped
 from creature_lab.scaffold.mirror import mirror_limb
@@ -17,11 +18,13 @@ GENERATORS = {
     "quadruped": generate_quadruped,
     "hexapod": generate_hexapod,
     "humanoid": generate_humanoid,
+    "duckling": generate_duckling,
 }
 
 __all__ = [
     "GENERATORS",
     "generate_hexapod",
+    "generate_duckling",
     "generate_humanoid",
     "generate_quadruped",
     "generate_worm",

@@ -21,8 +21,8 @@ _STYLE = """
 :root { color-scheme: light dark; }
 body {
   font-family: -apple-system, Segoe UI, Helvetica, Arial, sans-serif;
-  max-width: 860px; margin: 2rem auto; padding: 0 1rem;
-  color: #1a1a1a; background: #ffffff;
+  max-width: 960px; margin: 2rem auto; padding: 0 1rem;
+  line-height: 1.55; color: #172033; background: #f5f7fb;
 }
 @media (prefers-color-scheme: dark) {
   body { color: #e6e6e6; background: #14161a; }
@@ -35,7 +35,11 @@ h2 {
   font-size: 1.05rem; margin-top: 2rem;
   border-bottom: 1px solid currentColor; padding-bottom: 0.25rem;
 }
-.card { border: 1px solid #d0d0d0; border-radius: 8px; padding: 1rem; margin: 0.75rem 0; }
+.card { background: #fff; border: 1px solid #d6deea; border-radius: 14px;
+  padding: 1.2rem; margin: 0.75rem 0; }
+.hero { background: #203a65; color: white; border-radius: 18px; padding: 1.4rem; }
+.replays { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem; }
+.replays img, .card img { max-width: 100%; height: auto; border-radius: 8px; }
 .meta { opacity: 0.75; font-size: 0.9rem; }
 .bar-row { display: flex; align-items: center; gap: 0.5rem; margin: 0.3rem 0; }
 .bar-label { width: 11rem; font-size: 0.85rem; flex-shrink: 0; }
@@ -54,6 +58,13 @@ code { font-size: 0.85rem; }
 .warn { color: #b45309; }
 .pattern { color: #b91c1c; }
 .ok { color: #15803d; }
+@media (prefers-color-scheme: dark) {
+  .card { background: #1d2026; border-color: #445167; }
+  .bar-track { background: #394352; }
+  .warn { color: #f5c46f; }
+  .pattern { color: #ff9b9b; }
+  .ok { color: #86dba1; }
+}
 """
 
 
@@ -151,6 +162,8 @@ def _gif_data_uri(
     task: TaskSpec | None = None,
     width: int,
     height: int,
+    camera_distance: float | None = None,
+    camera_center_xy: tuple[float, float] | None = None,
 ) -> str | None:
     """Best-effort inline GIF preview; returns None if the sim/export extras are absent."""
     try:
@@ -158,7 +171,16 @@ def _gif_data_uri(
         from creature_lab.viewers.video_exporter import write_animation
     except ImportError:
         return None
-    frames = render_trace(creature, trace, task=task, width=width, height=height)
+    frames = render_trace(
+        creature,
+        trace,
+        task=task,
+        width=width,
+        height=height,
+        fps=30.0,
+        camera_distance=camera_distance,
+        camera_center_xy=camera_center_xy,
+    )
     with tempfile.TemporaryDirectory() as tmp:
         gif_path = write_animation(frames, Path(tmp) / "preview.gif")
         encoded = base64.b64encode(gif_path.read_bytes()).decode("ascii")
@@ -308,7 +330,7 @@ baseline spec.</p>
 <style>{_STYLE}</style>
 </head>
 <body>
-<h1>Creature Lab Run Report</h1>
+<div class="hero"><h1>Creature Lab Run Report</h1>
 <p class="meta">
   Creature <strong>{_escape(creature_info["name"])}</strong>
   (<code>{_escape(creature_info["hash"])}</code>) on task
@@ -316,9 +338,12 @@ baseline spec.</p>
   &middot; terrain: {_escape(task_info.get("terrain"))}
   &middot; backend {_escape(backend["name"])} {_escape(backend["version"])}
 </p>
+</div>
 <div class="card">
   <strong>Score: {_fmt(report["score"])}</strong>
   &middot; {summary["frame_count"]} frames over {_fmt(summary["duration"])}s
+  <p>Forward: {_fmt(summary["forward_displacement"])} m &middot;
+  Fell: {_fmt(summary.get("fell"))}</p>
 </div>
 {gif_html}
 <h2>Score breakdown</h2>
@@ -412,6 +437,9 @@ def comparison_to_html(
     trace_a: EpisodeTrace | None = None,
     creature_b: CreatureSpec | None = None,
     trace_b: EpisodeTrace | None = None,
+    task_a: TaskSpec | None = None,
+    task_b: TaskSpec | None = None,
+    embed_media: bool = True,
 ) -> str:
     """Render a before/after comparison between two reports built by ``build_report``."""
     path_svg = "<p class='meta'>No creature.json available for one or both runs.</p>"
@@ -440,6 +468,85 @@ def comparison_to_html(
     delta_class = "meta" if differences else "ok" if delta >= 0 else "pattern"
     conditions = _escape(", ".join(differences) if differences else "none detected")
     title = f"{comparison['run_a']} vs {comparison['run_b']}"
+    changes_html = ""
+    if creature_a is not None and creature_b is not None:
+        motors_a = {motor.joint: motor for motor in creature_a.motors}
+        motors_b = {motor.joint: motor for motor in creature_b.motors}
+        rows = []
+        for joint in sorted(motors_a.keys() & motors_b.keys()):
+            left, right = motors_a[joint], motors_b[joint]
+            if (left.amplitude, left.frequency, left.phase, left.offset) == (
+                right.amplitude,
+                right.frequency,
+                right.phase,
+                right.offset,
+            ):
+                continue
+            rows.append(
+                f"<tr><td>{_escape(joint)}</td><td>{_fmt(left.amplitude)} → "
+                f"{_fmt(right.amplitude)}</td><td>{_fmt(left.frequency)} → "
+                f"{_fmt(right.frequency)}</td><td>{_fmt(left.phase)} → {_fmt(right.phase)}</td>"
+                f"<td>{_fmt(left.offset)} → {_fmt(right.offset)}</td></tr>"
+            )
+        if rows:
+            changes_html = (
+                "<h2>What changed in the body files</h2><p>Embedded motor settings are shown; "
+                "an external controller may override them. Inspect the saved controller snapshots."
+                "</p><table><tr><th>joint</th><th>range</th><th>frequency</th>"
+                "<th>phase</th><th>offset</th></tr>" + "".join(rows) + "</table>"
+            )
+    trials = comparison.get("exploratory_trials") or []
+    trials_html = ""
+    if trials:
+        trial_rows = "".join(
+            f"<tr><td>{_escape(row['variant'])}</td>"
+            f"<td>{_escape(row.get('purpose', 'additional'))}</td>"
+            f"<td>{_fmt(row['mass_scale'])}</td>"
+            f"<td>{_fmt(row['friction_scale'])}</td><td>{_fmt(row['forward_m'])}</td>"
+            f"<td>{_fmt(row['fell'])}</td><td>{_escape(row['run_id'])}</td></tr>"
+            for row in trials
+        )
+        trials_html = (
+            "<h2>Additional conditions</h2><p>Exploratory reruns with changed mass and friction; "
+            "these are not a statistical reliability estimate.</p><table>"
+            "<tr><th>variant</th><th>condition</th><th>mass scale</th><th>friction scale</th>"
+            "<th>forward (m)</th><th>fell</th><th>run</th></tr>"
+            f"{trial_rows}</table>"
+        )
+    replay_html = ""
+    if embed_media and creature_a and trace_a and creature_b and trace_b:
+        from creature_lab.viewers.appearance import comparison_camera
+
+        distance, center = comparison_camera(trace_a, trace_b)
+        gif_a = _gif_data_uri(
+            creature_a,
+            trace_a,
+            task=task_a,
+            width=400,
+            height=300,
+            camera_distance=distance,
+            camera_center_xy=center,
+        )
+        gif_b = _gif_data_uri(
+            creature_b,
+            trace_b,
+            task=task_b,
+            width=400,
+            height=300,
+            camera_distance=distance,
+            camera_center_xy=center,
+        )
+        if gif_a and gif_b:
+            replay_html = (
+                "<h2>Watch the runs</h2><div class='replays'>"
+                "<div class='card'><strong>A · Baseline</strong>"
+                f"<img src='{gif_a}' alt='Run A replay'></div>"
+                "<div class='card'><strong>B · Comparison</strong>"
+                f"<img src='{gif_b}' alt='Run B replay'></div>"
+                "</div><p class='meta'>Both use the same scale and horizontal camera; "
+                "the camera follows height. These previews loop independently. "
+                "Use the editor's side-by-side view for a synchronized timeline.</p>"
+            )
 
     return f"""<!doctype html>
 <html lang="en">
@@ -449,17 +556,29 @@ def comparison_to_html(
 <style>{_STYLE}</style>
 </head>
 <body>
-<h1>Run Comparison</h1>
+<div class="hero"><h1>Run Comparison</h1>
 <p class="meta">
   <span style="color:#3b82f6">&#9632;</span> A: {_escape(comparison["run_a"])}
   (score {_fmt(comparison["score_a"])}) &nbsp;vs&nbsp;
   <span style="color:#ef4444">&#9632;</span> B: {_escape(comparison["run_b"])}
   (score {_fmt(comparison["score_b"])})
 </p>
+</div>
 <div class="card">
   <strong class="{delta_class}">Score delta: {"+" if delta >= 0 else ""}{_fmt(delta)}</strong>
   <p>Changed or unknown: {conditions}. Compare scores only when task, backend, and evaluation
   conditions are compatible.</p>
+</div>
+{replay_html}
+{changes_html}
+
+<h2>Diagnosis</h2>
+<p>These rule-based signals suggest what to inspect; they do not establish causation.</p>
+<div class="replays">
+  <div class="card"><strong>A · Baseline</strong>
+    {_diagnosis_html(report_a.get("diagnosis") or {})}</div>
+  <div class="card"><strong>B · Comparison</strong>
+    {_diagnosis_html(report_b.get("diagnosis") or {})}</div>
 </div>
 
 <h2>Root path (top-down, overlaid)</h2>
@@ -470,6 +589,7 @@ def comparison_to_html(
 <tr><th>signal</th><th>A</th><th>B</th><th>delta</th></tr>
 {signal_rows}
 </table>
+{trials_html}
 </body>
 </html>
 """

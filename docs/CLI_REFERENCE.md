@@ -76,7 +76,8 @@ uv run creature-lab controller extract examples/quadruped.json --out gait.json
 uv run creature-lab run examples/quadruped.json --task examples/crawl_forward.json --controller gait.json
 ```
 
-- `build` edits a CreatureSpec (or URDF) in a Viser browser UI: tune it, drag task targets in
+- `build` opens the humanoid by default and edits a CreatureSpec (or URDF) in a Viser browser UI:
+  choose `--preset duckling` for the experimental biped, tune it, drag task targets in
   3D, read live metrics, a
   robustness sweep, and a qualification pass/fail after Simulate, then save. `--project <dir>`
   binds it to `creature.json`, `task.json`, and `editor-state.json` in that directory, autosaving
@@ -167,7 +168,7 @@ uv run creature-lab verify-pack outputs/my_design_pack
   reproducibility block. `--html` also writes a self-contained HTML run card (score
   breakdown, signal sparklines, root-path plot, and an optional embedded GIF preview).
 - `view` replays recorded poses in the browser viewer.
-- `export` renders a recorded trace to GIF or MP4.
+- `export` renders a recorded trace to GIF or MP4, sampling the trace at the requested output FPS.
 - `export-pack` bundles a run into one portable, shareable directory: `creature.json`,
   `task.json` (if any), `controller.json`, `trace.json`, and a `manifest.json` with
   reproducibility hashes — no dependency on `runs/` or anything else on the machine that

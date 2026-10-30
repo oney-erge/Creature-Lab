@@ -13,7 +13,7 @@
 </p>
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/oney-erge/Creature-Lab/main/docs/assets/demo.gif" width="480" alt="Creature Lab demo: a blue quadruped robot walking on a checkered floor in simulation" />
+  <img src="docs/assets/showcase.webp" width="720" alt="Side-by-side recorded comparisons of Duckling and a humanoid before and after a gait change" />
 </p>
 
 Creature Lab is a local workbench for designing modular robot bodies and exploring
@@ -22,7 +22,7 @@ experiment so you can inspect, replay, improve, and share the evidence.
 
 Try the [recorded quadruped replay](https://oney-physics-replays.hazycow18.chatgpt.site/creature-lab.html)
 in your browser. An [experimental Windows x64 preview](https://github.com/oney-erge/Creature-Lab/releases/tag/preview-windows-2026-10-30)
-contains the latest editor changes and uses PyBullet. [Older previews](https://github.com/oney-erge/Creature-Lab/releases/tag/preview-0.2.0)
+contains an earlier editor snapshot and uses PyBullet. [Older previews](https://github.com/oney-erge/Creature-Lab/releases/tag/preview-0.2.0)
 are available for Linux with PyBullet and macOS with MuJoCo. The macOS previews
 can behave differently and lack PyBullet-only features; Intel uses an older MuJoCo
 version. These archives are unsigned and have not been run on clean machines.
@@ -49,9 +49,20 @@ design** to make a change. Use **Explain failure** to run a
 counterfactual analysis, compare saved runs in History, and download its report
 and experiment pack.
 
-For a guided first investigation, open **Results → Failure lessons**, load **Frozen
-gait**, simulate, change one motor's range in Movement, and simulate again. Compare
-the saved runs in History; the outcome is an experiment, not a promised fix.
+For a guided investigation, open **Results → Guided experiment**, choose **Humanoid**
+or **Duckling**, and run the no-swing baseline. Select **Try walking gait and run again**,
+then **Compare with baseline** to see both recorded runs together. Duckling's gait is an
+experimental, PyBullet-tuned starting point; changes and other backends can behave differently.
+
+The animation above comes from saved simulation traces. To create your own GIFs,
+MP4s and offline comparison reports after setup:
+
+```bash
+uv sync --inexact --extra sim --extra viz --extra export
+uv run python scripts/create_showcase.py
+```
+
+The output path and measured results are printed when recording finishes.
 
 PyBullet's current PyPI release has no Windows or macOS wheels. On those
 platforms its first installation builds from source and requires a working C++

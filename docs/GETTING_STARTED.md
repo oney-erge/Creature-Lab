@@ -35,7 +35,7 @@ What you should see:
 
 - A terminal progress log with the editor URL.
 - A browser tab at `http://localhost:8080` or the next free port.
-- A quadruped preset in the 3D preview, with sliders to tune it, a template picker, part/motor
+- A humanoid preset in the 3D preview, with sliders to tune it, a template picker, part/motor
   editing, and a **Run simulation** button that runs the existing physics pipeline once you're happy
   with the setup.
 - After Simulate: a **Metrics** panel (score, displacement, root-cause failure diagnosis) and a
@@ -45,7 +45,7 @@ What you should see:
 Pick a different starting preset:
 
 ```bash
-python scripts/start.py --creature humanoid
+python scripts/start.py --creature duckling
 ```
 
 For a fresh launch, choose **Humanoid**, keep **Move forward**, and click **Run first simulation**.
@@ -53,7 +53,14 @@ The default curated controller is the packaged 12-DOF walking gait. The replay s
 finishes. **Back to design** restores the editable standing pose instead of leaving the scene
 stuck on a replay frame.
 
-Presets are `quadruped`, `hexapod`, `worm`, or `humanoid`. Add `--project outputs/mydude` (via
+For a guided comparison, open **Results → Guided experiment**, choose a creature, and run the
+baseline. Then click **Try walking gait and run again**, followed by **Compare with baseline**.
+The duck gait is an experimental PyBullet baseline, and its behavior varies with edits and backend.
+
+Use **Download GIF** after a saved run; GIF export requires `uv sync --inexact --extra sim --extra
+viz --extra export`. GIFs and MP4s can also be created from the CLI's `export` command.
+
+Presets are `humanoid`, `duckling`, `quadruped`, `hexapod`, or `worm`. Add `--project outputs/mydude` (via
 `uv run creature-lab build --project outputs/mydude`) to bind the editor to a directory whose
 `creature.json`/`task.json` and `editor-state.json` autosave edits and detect external changes. See
 [`docs/BUILD_EDITOR.md`](BUILD_EDITOR.md) for the full editor walkthrough.

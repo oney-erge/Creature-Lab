@@ -1,0 +1,457 @@
+{
+  "name": "duckling",
+  "parts": [
+    {
+      "id": "torso",
+      "shape": "box",
+      "mass": 3.3962264150943398,
+      "color": [
+        0.97,
+        0.79,
+        0.28
+      ],
+      "size": [
+        0.2,
+        0.22400000000000003,
+        0.2
+      ],
+      "radius": null,
+      "length": null
+    },
+    {
+      "id": "head",
+      "shape": "sphere",
+      "mass": 0.6037735849056604,
+      "color": [
+        1.0,
+        0.88,
+        0.46
+      ],
+      "size": null,
+      "radius": 0.11200000000000002,
+      "length": null
+    },
+    {
+      "id": "upper_leg_l",
+      "shape": "capsule",
+      "mass": 0.9056603773584905,
+      "color": [
+        0.29,
+        0.34,
+        0.4
+      ],
+      "size": null,
+      "radius": 0.028000000000000004,
+      "length": 0.16000000000000003
+    },
+    {
+      "id": "lower_leg_l",
+      "shape": "capsule",
+      "mass": 0.6339622641509433,
+      "color": [
+        0.29,
+        0.34,
+        0.4
+      ],
+      "size": null,
+      "radius": 0.028000000000000004,
+      "length": 0.16000000000000003
+    },
+    {
+      "id": "foot_l",
+      "shape": "box",
+      "mass": 0.2716981132075471,
+      "color": [
+        0.94,
+        0.42,
+        0.16
+      ],
+      "size": [
+        0.17600000000000002,
+        0.09000000000000001,
+        0.04000000000000001
+      ],
+      "radius": null,
+      "length": null
+    },
+    {
+      "id": "upper_leg_r",
+      "shape": "capsule",
+      "mass": 0.9056603773584905,
+      "color": [
+        0.29,
+        0.34,
+        0.4
+      ],
+      "size": null,
+      "radius": 0.028000000000000004,
+      "length": 0.16000000000000003
+    },
+    {
+      "id": "lower_leg_r",
+      "shape": "capsule",
+      "mass": 0.6339622641509433,
+      "color": [
+        0.29,
+        0.34,
+        0.4
+      ],
+      "size": null,
+      "radius": 0.028000000000000004,
+      "length": 0.16000000000000003
+    },
+    {
+      "id": "foot_r",
+      "shape": "box",
+      "mass": 0.2716981132075471,
+      "color": [
+        0.94,
+        0.42,
+        0.16
+      ],
+      "size": [
+        0.17600000000000002,
+        0.09000000000000001,
+        0.04000000000000001
+      ],
+      "radius": null,
+      "length": null
+    },
+    {
+      "id": "roll_link_l",
+      "shape": "sphere",
+      "mass": 0.18867924528301885,
+      "color": [
+        0.29,
+        0.34,
+        0.4
+      ],
+      "size": null,
+      "radius": 0.020000000000000004,
+      "length": null
+    },
+    {
+      "id": "roll_link_r",
+      "shape": "sphere",
+      "mass": 0.18867924528301885,
+      "color": [
+        0.29,
+        0.34,
+        0.4
+      ],
+      "size": null,
+      "radius": 0.020000000000000004,
+      "length": null
+    }
+  ],
+  "joints": [
+    {
+      "id": "neck",
+      "parent": "torso",
+      "child": "head",
+      "type": "fixed",
+      "anchor": [
+        0.0,
+        0.0,
+        0.164
+      ],
+      "axis": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "rest_orientation": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "limit": null
+    },
+    {
+      "id": "hip_l",
+      "parent": "roll_link_l",
+      "child": "upper_leg_l",
+      "type": "hinge",
+      "anchor": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "axis": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "rest_orientation": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "limit": [
+        -1.2,
+        1.2
+      ]
+    },
+    {
+      "id": "knee_l",
+      "parent": "upper_leg_l",
+      "child": "lower_leg_l",
+      "type": "hinge",
+      "anchor": [
+        0.0,
+        0.0,
+        -0.16000000000000003
+      ],
+      "axis": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "rest_orientation": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "limit": [
+        -1.2,
+        1.2
+      ]
+    },
+    {
+      "id": "ankle_l",
+      "parent": "lower_leg_l",
+      "child": "foot_l",
+      "type": "hinge",
+      "anchor": [
+        0.0,
+        0.0,
+        -0.16000000000000003
+      ],
+      "axis": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "rest_orientation": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "limit": [
+        -1.2,
+        1.2
+      ]
+    },
+    {
+      "id": "hip_r",
+      "parent": "roll_link_r",
+      "child": "upper_leg_r",
+      "type": "hinge",
+      "anchor": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "axis": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "rest_orientation": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "limit": [
+        -1.2,
+        1.2
+      ]
+    },
+    {
+      "id": "knee_r",
+      "parent": "upper_leg_r",
+      "child": "lower_leg_r",
+      "type": "hinge",
+      "anchor": [
+        0.0,
+        0.0,
+        -0.16000000000000003
+      ],
+      "axis": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "rest_orientation": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "limit": [
+        -1.2,
+        1.2
+      ]
+    },
+    {
+      "id": "ankle_r",
+      "parent": "lower_leg_r",
+      "child": "foot_r",
+      "type": "hinge",
+      "anchor": [
+        0.0,
+        0.0,
+        -0.16000000000000003
+      ],
+      "axis": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "rest_orientation": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "limit": [
+        -1.2,
+        1.2
+      ]
+    },
+    {
+      "id": "hip_roll_l",
+      "parent": "torso",
+      "child": "roll_link_l",
+      "type": "hinge",
+      "anchor": [
+        0.0,
+        0.072,
+        -0.1
+      ],
+      "axis": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "rest_orientation": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "limit": [
+        -0.5,
+        0.5
+      ]
+    },
+    {
+      "id": "hip_roll_r",
+      "parent": "torso",
+      "child": "roll_link_r",
+      "type": "hinge",
+      "anchor": [
+        0.0,
+        -0.072,
+        -0.1
+      ],
+      "axis": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "rest_orientation": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "limit": [
+        -0.5,
+        0.5
+      ]
+    }
+  ],
+  "motors": [
+    {
+      "joint": "hip_l",
+      "type": "sinusoid",
+      "amplitude": 0.4,
+      "frequency": 1.0,
+      "phase": 0.0,
+      "offset": 0.0,
+      "max_force": 21.333333333333332
+    },
+    {
+      "joint": "knee_l",
+      "type": "sinusoid",
+      "amplitude": 0.4,
+      "frequency": 1.0,
+      "phase": 0.0,
+      "offset": 0.0,
+      "max_force": 21.333333333333332
+    },
+    {
+      "joint": "ankle_l",
+      "type": "sinusoid",
+      "amplitude": 0.4,
+      "frequency": 1.0,
+      "phase": 0.0,
+      "offset": 0.0,
+      "max_force": 21.333333333333332
+    },
+    {
+      "joint": "hip_r",
+      "type": "sinusoid",
+      "amplitude": 0.4,
+      "frequency": 1.0,
+      "phase": 3.141592653589793,
+      "offset": 0.0,
+      "max_force": 21.333333333333332
+    },
+    {
+      "joint": "knee_r",
+      "type": "sinusoid",
+      "amplitude": 0.4,
+      "frequency": 1.0,
+      "phase": 3.141592653589793,
+      "offset": 0.0,
+      "max_force": 21.333333333333332
+    },
+    {
+      "joint": "ankle_r",
+      "type": "sinusoid",
+      "amplitude": 0.4,
+      "frequency": 1.0,
+      "phase": 3.141592653589793,
+      "offset": 0.0,
+      "max_force": 21.333333333333332
+    },
+    {
+      "joint": "hip_roll_l",
+      "type": "sinusoid",
+      "amplitude": 0.0,
+      "frequency": 1.0,
+      "phase": 0.0,
+      "offset": 0.0,
+      "max_force": 21.333333333333332
+    },
+    {
+      "joint": "hip_roll_r",
+      "type": "sinusoid",
+      "amplitude": 0.0,
+      "frequency": 1.0,
+      "phase": 0.0,
+      "offset": 0.0,
+      "max_force": 21.333333333333332
+    }
+  ],
+  "metadata": {
+    "appearance": "duckling"
+  }
+}

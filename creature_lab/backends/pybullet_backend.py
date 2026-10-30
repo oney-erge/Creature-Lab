@@ -9,6 +9,7 @@ axis-aligned).
 from __future__ import annotations
 
 import math
+from collections.abc import Callable
 
 import pybullet
 import pybullet_data
@@ -494,9 +495,14 @@ def render_trace(
     width: int = 640,
     height: int = 480,
     fov: float = 60.0,
-    camera_distance: float = 2.0,
+    camera_distance: float | None = None,
     camera_yaw: float = 50.0,
     camera_pitch: float = -30.0,
+    camera_follow: bool = False,
+    camera_center_xy: tuple[float, float] | None = None,
+    fps: float | None = None,
+    on_frame: Callable[[int, int], None] | None = None,
+    should_stop: Callable[[], bool] | None = None,
 ) -> list:
     """Render a trace to a list of RGB frames (no physics step).
 
@@ -523,12 +529,51 @@ def render_trace(
         if task is not None and not is_flat(task.terrain):
             _build_ground(task, client)  # visual ground reference (matches the real terrain)
         else:
-            pybullet.loadURDF("plane.urdf", physicsClientId=client)  # visual ground reference
+            floor = pybullet.createVisualShape(
+                pybullet.GEOM_BOX,
+                halfExtents=[50.0, 50.0, 0.01],
+                rgbaColor=[0.73, 0.78, 0.83, 1.0],
+                physicsClientId=client,
+            )
+            pybullet.createMultiBody(
+                baseMass=0.0,
+                baseVisualShapeIndex=floor,
+                basePosition=[0.0, 0.0, -0.01],
+                physicsClientId=client,
+            )
+            tick = pybullet.createVisualShape(
+                pybullet.GEOM_BOX,
+                halfExtents=[0.008, 0.035, 0.002],
+                rgbaColor=[0.36, 0.49, 0.59, 1.0],
+                physicsClientId=client,
+            )
+            for index in range(-4, 9):
+                pybullet.createMultiBody(
+                    baseMass=0.0,
+                    baseVisualShapeIndex=tick,
+                    basePosition=[index * 0.25, -0.35, 0.002],
+                    physicsClientId=client,
+                )
+        if task is not None and task.target is not None:
+            target_shape = pybullet.createVisualShape(
+                pybullet.GEOM_SPHERE,
+                radius=task.target.radius,
+                rgbaColor=[1.0, 0.65, 0.12, 1.0],
+                physicsClientId=client,
+            )
+            pybullet.createMultiBody(
+                baseMass=0.0,
+                baseVisualShapeIndex=target_shape,
+                basePosition=task.target.position,
+                physicsClientId=client,
+            )
 
         # One static (mass-0) visual body per part; we just move them each frame.
+        from creature_lab.viewers.appearance import decorations, visual_part
+
         part_bodies: dict[str, int] = {}
         for part in creature.parts:
-            geom, kwargs = _visual_geometry(part)
+            geom, kwargs = _visual_geometry(visual_part(creature, part))
             visual = pybullet.createVisualShape(
                 geom,
                 rgbaColor=[*(part.color or _DEFAULT_COLOR), 1.0],
@@ -539,10 +584,65 @@ def render_trace(
                 baseMass=0.0, baseVisualShapeIndex=visual, physicsClientId=client
             )
 
+        details = []
+        for detail in decorations(creature):
+            if detail.shape == "box":
+                geom = pybullet.GEOM_BOX
+                kwargs = {"halfExtents": [size / 2 for size in detail.size]}
+            else:
+                geom = pybullet.GEOM_SPHERE
+                kwargs = {"radius": detail.size[0]}
+            shape = pybullet.createVisualShape(
+                geom, rgbaColor=[*detail.color, 1.0], physicsClientId=client, **kwargs
+            )
+            body = pybullet.createMultiBody(
+                baseMass=0.0, baseVisualShapeIndex=shape, physicsClientId=client
+            )
+            details.append((detail, body))
+
         projection = pybullet.computeProjectionMatrixFOV(
             fov, width / height, 0.1, 100.0, physicsClientId=client
         )
+        frames_to_render = trace.frames
+        if fps is not None:
+            if not math.isfinite(fps) or fps <= 0:
+                raise ValueError("fps must be a positive finite number")
+            from bisect import bisect_right
+
+            start, end = trace.frames[0].t, trace.frames[-1].t
+            times = [frame.t for frame in trace.frames]
+            count = max(1, round((end - start) * fps) + 1)
+            frames_to_render = [
+                trace.frames[max(0, bisect_right(times, min(end, start + i / fps)) - 1)]
+                for i in range(count)
+            ]
+        parts_by_id = {part.id: part for part in creature.parts}
+        lows = [float("inf")] * 3
+        highs = [float("-inf")] * 3
         for frame in trace.frames:
+            for part_id, pose in frame.parts.items():
+                part = parts_by_id.get(part_id)
+                if part is None:
+                    continue
+                # Conservative bound for rotated primitives.
+                extent = (
+                    max(part.size) / 2
+                    if part.size
+                    else (part.radius or 0.0) + (part.length or 0.0) / 2
+                )
+                for axis in range(3):
+                    lows[axis] = min(lows[axis], pose.position[axis] - extent)
+                    highs[axis] = max(highs[axis], pose.position[axis] + extent)
+        if not all(math.isfinite(value) for value in (*lows, *highs)):
+            raise ValueError("recorded frames contain no parts from this creature")
+        initial_center = [(low + high) / 2 for low, high in zip(lows, highs, strict=True)]
+        if camera_distance is None:
+            first_heights = [pose.position[2] for pose in trace.frames[0].parts.values()]
+            body_height = max(first_heights) - min(first_heights)
+            camera_distance = max(0.8, body_height * 2.5)
+        for frame_index, frame in enumerate(frames_to_render):
+            if should_stop is not None and should_stop():
+                raise InterruptedError("Recording cancelled")
             centroid = [0.0, 0.0, 0.0]
             for part_id, pose in frame.parts.items():
                 body = part_bodies.get(part_id)
@@ -554,7 +654,21 @@ def render_trace(
                 )
                 for axis in range(3):
                     centroid[axis] += pose.position[axis]
+            for detail, body in details:
+                pose = frame.parts.get(detail.part)
+                if pose is None:
+                    continue
+                w, x, y, z = pose.orientation
+                position, orientation = pybullet.multiplyTransforms(
+                    pose.position, (x, y, z, w), detail.position, (0, 0, 0, 1)
+                )
+                pybullet.resetBasePositionAndOrientation(
+                    body, position, orientation, physicsClientId=client
+                )
             centroid = [value / len(frame.parts) for value in centroid]
+            if not camera_follow:
+                center_xy = camera_center_xy or (initial_center[0], initial_center[1])
+                centroid = [center_xy[0], center_xy[1], centroid[2]]
             view = pybullet.computeViewMatrixFromYawPitchRoll(
                 centroid, camera_distance, camera_yaw, camera_pitch, 0, 2, physicsClientId=client
             )
@@ -568,6 +682,8 @@ def render_trace(
             )
             rgb = np.reshape(np.asarray(rgba, dtype=np.uint8), (height, width, 4))[:, :, :3]
             frames.append(rgb)
+            if on_frame is not None:
+                on_frame(frame_index + 1, len(frames_to_render))
     finally:
         pybullet.disconnect(physicsClientId=client)
     return frames

@@ -135,7 +135,19 @@ def _add_floor(
 
     if task is None or is_flat(task.terrain):
         size = 10.0 if creature is None else max(2.0, creature_reach(creature) * 8)
-        return server.scene.add_grid(f"{prefix}/floor", width=size, height=size, plane="xy")
+        return server.scene.add_grid(
+            f"{prefix}/floor",
+            width=size,
+            height=size,
+            plane="xy",
+            cell_color=(193, 202, 215),
+            section_color=(165, 178, 194),
+            plane_color=(231, 236, 243),
+            plane_opacity=0.85,
+            cell_size=max(0.1, size / 20),
+            section_size=max(0.5, size / 4),
+            shadow_opacity=0.25,
+        )
 
     import numpy as np
     import trimesh
@@ -191,10 +203,21 @@ def build_scene(
         )
         target.position = tuple(task.target.position[i] + offset[i] for i in range(3))
         extras.append(target)
+    from creature_lab.viewers.appearance import decorations, visual_part
+
     parts = {
-        part.id: _add_part(server.scene, f"{prefix}/parts/{part.id}", part)
+        part.id: _add_part(server.scene, f"{prefix}/parts/{part.id}", visual_part(creature, part))
         for part in creature.parts
     }
+    for detail in decorations(creature):
+        name = f"{prefix}/parts/{detail.part}/{detail.name}"
+        color = tuple(round(channel * 255) for channel in detail.color)
+        if detail.shape == "box":
+            handle = server.scene.add_box(name, dimensions=detail.size, color=color)
+        else:
+            handle = server.scene.add_icosphere(name, radius=detail.size[0], color=color)
+        handle.position = detail.position
+        extras.append(handle)
     # A fixed pool of contact dots, shown/hidden per frame as contacts come and go.
     contacts = []
     for index in range(max_contacts):

@@ -39,6 +39,27 @@ def test_load_resets_to_first_frame_paused():
     assert playback.current_frame().t == 0.0
 
 
+def test_load_uses_recorded_frame_timestamps_for_playback_speed():
+    playback = EditorPlayback()
+    playback.load(_trace(5))  # frames are 0.1 seconds apart
+    playback.play()
+    playback.advance(0.2)
+    assert playback.frame_index == 2
+
+
+def test_playback_respects_irregular_frame_times():
+    trace = _trace(3)
+    trace.frames[1].t = 0.05
+    trace.frames[2].t = 0.4
+    playback = EditorPlayback(loop=False)
+    playback.load(trace)
+    playback.play()
+    playback.advance(0.1)
+    assert playback.frame_index == 1
+    playback.advance(0.31)
+    assert playback.frame_index == 2
+
+
 def test_play_pause_toggle():
     playback = EditorPlayback()
     playback.load(_trace(5))

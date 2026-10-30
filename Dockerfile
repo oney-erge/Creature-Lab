@@ -20,4 +20,4 @@ EXPOSE 8080
 VOLUME ["/app/runs", "/app/outputs"]
 HEALTHCHECK --interval=10s --timeout=3s --start-period=20s --retries=12 \
   CMD ["python", "-c", "import socket; s=socket.create_connection(('127.0.0.1',8080),2); s.close()"]
-CMD ["creature-lab", "build", "--preset", "quadruped", "--port", "8080", "--no-open-browser"]
+CMD ["creature-lab", "build", "--port", "8080", "--no-open-browser"]

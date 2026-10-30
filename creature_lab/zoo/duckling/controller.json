@@ -1,0 +1,79 @@
+{
+  "name": "duckling_experimental_walk",
+  "type": "sinusoid",
+  "motors": [
+    {
+      "joint": "hip_l",
+      "amplitude": 0.11290450950903004,
+      "frequency": 1.7253445126089444,
+      "phase": 0.0,
+      "offset": 0.04009948044748529
+    },
+    {
+      "joint": "knee_l",
+      "amplitude": 0.04708456852564189,
+      "frequency": 1.7253445126089444,
+      "phase": 2.109944285715719,
+      "offset": -0.012662358861631723
+    },
+    {
+      "joint": "ankle_l",
+      "amplitude": 0.16048438486403557,
+      "frequency": 1.7253445126089444,
+      "phase": 3.9051129376586484,
+      "offset": -0.015922753096498155
+    },
+    {
+      "joint": "hip_r",
+      "amplitude": 0.11290450950903004,
+      "frequency": 1.7253445126089444,
+      "phase": 3.141592653589793,
+      "offset": 0.04009948044748529
+    },
+    {
+      "joint": "knee_r",
+      "amplitude": 0.04708456852564189,
+      "frequency": 1.7253445126089444,
+      "phase": 5.251536939305512,
+      "offset": -0.012662358861631723
+    },
+    {
+      "joint": "ankle_r",
+      "amplitude": 0.16048438486403557,
+      "frequency": 1.7253445126089444,
+      "phase": 7.0467055912484415,
+      "offset": -0.015922753096498155
+    },
+    {
+      "joint": "hip_roll_l",
+      "amplitude": 0.01305957163790699,
+      "frequency": 1.7253445126089444,
+      "phase": -0.9818464497327728,
+      "offset": 0.0
+    },
+    {
+      "joint": "hip_roll_r",
+      "amplitude": 0.01305957163790699,
+      "frequency": 1.7253445126089444,
+      "phase": 2.1597462038570203,
+      "offset": 0.0
+    }
+  ],
+  "amplitude": null,
+  "frequency": null,
+  "phase_lag": null,
+  "coupling": null,
+  "turn_gain": null,
+  "max_turn_scale": null,
+  "slow_radius": null,
+  "stop_radius": null,
+  "kp": null,
+  "kd": null,
+  "policy_file": null,
+  "observation": null,
+  "action": null,
+  "creature_hash": null,
+  "task_hash": null,
+  "policy_format": null,
+  "runtime_versions": null
+}
