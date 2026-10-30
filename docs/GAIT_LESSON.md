@@ -29,3 +29,8 @@ One Windows test with Python 3.12, PyBullet 3.2.7, and seed 7 produced scores
 of 1.9703 for the curated gait and 0.5736 for the sinusoid. These are scores
 for this task and backend, not a promise of identical physics across machines
 or a claim about physical robots.
+
+An [older recorded comparison report](https://github.com/oney-erge/Creature-Lab/releases/download/preview-windows-2026-10-30/gait-comparison-example.html)
+shows the two scores and root paths. It was produced with an earlier local 0.2.0
+candidate; its original run directories are not included. The current preview
+has not been run to verify that it reproduces those results.
