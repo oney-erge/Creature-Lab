@@ -3,6 +3,25 @@
 Public publication is intentionally separate from implementation. The release workflow builds
 and uploads distributions for inspection; it does not publish to PyPI automatically.
 
+## Experimental Windows preview
+
+The [Windows preview](https://github.com/oney-erge/Creature-Lab/releases/tag/preview-windows-2026-10-30)
+contains its source commit, wheel, checksums, and `refresh_archive.py`. The script substitutes
+the wheel into the earlier `preview-0.2.0` Windows archive; it does not construct that runtime
+from scratch or verify startup. Download those inputs and run:
+
+```powershell
+python refresh_archive.py --base creature-lab-windows-x64-portable-unverified.zip `
+  --base-sha256 f809e61a11dd4c290b7757d43ce079d681c70c034a507b90a3afdf27276b8fa5 `
+  --wheel creature_lab-0.2.0-py3-none-any.whl --output refreshed.zip `
+  --root creature-lab --commit 0c2e0c1572abfb439a9ade6b4ec2911d34d356a0
+```
+
+The script rejects a mismatched base and checks the wheel members in its output. The source
+lock and project metadata must match the base's dependency inputs; the script does not verify
+that itself. The base includes a locally compiled PyBullet wheel. A complete from-scratch
+runtime recipe and clean-machine verification remain outstanding.
+
 ## 1. Freeze And Verify
 
 ```bash

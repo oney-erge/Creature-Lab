@@ -9,7 +9,8 @@ file, this file wins. Keep **one** active roadmap.
 
 1. Provide a supported compiler-free starter runtime on each platform actually offered; measure
    full download size and first use before making delivery claims.
-2. Verify project controller/backend/seed persistence, replay, the editor's active gait, restored controller, failure lessons, counterfactual analysis,
+2. Verify project controller/backend/seed persistence, replay, the editor's active gait, restored
+   controller, failure lessons, counterfactual analysis,
    comparison, and experimental standalone replay with real browser and clean-machine journeys
    when permitted.
 3. Expand the failure lessons with recorded, reproducible outcomes and a controlled-perturbation
@@ -21,7 +22,8 @@ The autopsy skips indistinguishable controller counterfactuals and saves recorde
 in individual packs. Both failing controllers leave the cause undetermined. The editor can copy
 a packaged gait for editing, restore supported controller snapshots, and display time-aligned 3D
 comparisons. Project mode also saves the selected controller, backend, and seed; saved recordings
-can be replayed after a gait-only body conversion. These changes require direct runtime verification when permitted.
+can be replayed after a gait-only body conversion. These changes require direct runtime verification
+when permitted. The updated Windows preview is unverified; Linux and macOS previews are older.
 
 ## Historical 0.2 delivery summary
 

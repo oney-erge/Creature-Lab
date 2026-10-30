@@ -4,7 +4,7 @@
 
 <h1 align="center">Creature Lab</h1>
 
-<p align="center"><strong>Build a robot, see why it fails, and compare what fixed it.</strong></p>
+<p align="center"><strong>Build a robot, investigate a failure, and compare changes.</strong></p>
 
 <p align="center">
   <a href="https://github.com/oney-erge/Creature-Lab/actions/workflows/ci.yml"><img src="https://github.com/oney-erge/Creature-Lab/actions/workflows/ci.yml/badge.svg" alt="CI status" /></a>
@@ -16,19 +16,16 @@
   <img src="https://raw.githubusercontent.com/oney-erge/Creature-Lab/main/docs/assets/demo.gif" width="480" alt="Creature Lab demo: a blue quadruped robot walking on a checkered floor in simulation" />
 </p>
 
-Creature Lab is a local workbench for designing modular robot bodies, running
-them in physics, and finding out whether a result came from the body,
-controller, task, fragility, or simulator. It saves the exact experiment so you
-can inspect, replay, improve, and share it.
+Creature Lab is a local workbench for designing modular robot bodies and exploring
+how the body, controller, task, and simulator affect their behavior. It saves the
+experiment so you can inspect, replay, improve, and share the evidence.
 
 Try the [recorded quadruped replay](https://oney-physics-replays.hazycow18.chatgpt.site/creature-lab.html)
-in your browser. [Experimental portable downloads](https://github.com/oney-erge/Creature-Lab/releases/tag/preview-0.2.0)
-are available for Windows x64 and Linux x86-64 with PyBullet, and for macOS Intel
-and Apple Silicon with MuJoCo. The macOS previews can behave differently and lack
-PyBullet-only features; the Intel preview uses an older MuJoCo version. These
-previews have not yet been tested on clean machines.
-The previews contain the earlier release snapshot; use a current checkout for the latest
-editor and analysis changes.
+in your browser. An [experimental Windows x64 preview](https://github.com/oney-erge/Creature-Lab/releases/tag/preview-windows-2026-10-30)
+contains the latest editor changes and uses PyBullet. [Older previews](https://github.com/oney-erge/Creature-Lab/releases/tag/preview-0.2.0)
+are available for Linux with PyBullet and macOS with MuJoCo. The macOS previews
+can behave differently and lack PyBullet-only features; Intel uses an older MuJoCo
+version. These archives are unsigned and have not been run on clean machines.
 
 ```text
 Design -> simulate -> diagnose -> improve -> verify -> share
