@@ -583,6 +583,34 @@ def test_build_rejects_a_controller_json_path():
     assert "unknown controller" in result.stdout.lower()
 
 
+def test_build_project_resumes_explicit_runtime_settings(tmp_path, monkeypatch):
+    import creature_lab.editor.live as live
+
+    seen = []
+    monkeypatch.setattr(live, "run_editor", lambda session, **kwargs: seen.append(session))
+    monkeypatch.setattr("creature_lab.cli.importlib.util.find_spec", lambda _name: None)
+    project = tmp_path / "project"
+    first = runner.invoke(
+        app,
+        [
+            "build",
+            "--project",
+            str(project),
+            "--controller",
+            "sinusoid",
+            "--backend",
+            "mujoco",
+            "--seed",
+            "17",
+            "--no-open-browser",
+        ],
+    )
+    assert first.exit_code == 0, first.stdout
+    second = runner.invoke(app, ["build", "--project", str(project), "--no-open-browser"])
+    assert second.exit_code == 0, second.stdout
+    assert (seen[-1].controller, seen[-1].backend, seen[-1].seed) == ("sinusoid", "mujoco", 17)
+
+
 def test_controller_scaffold_cpg_writes_defaults_to_stdout():
     result = runner.invoke(app, ["controller", "scaffold", "cpg"])
     assert result.exit_code == 0, result.stdout

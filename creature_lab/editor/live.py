@@ -182,14 +182,14 @@ class EditorPreview:
             handles_a.extras.append(
                 self.server.scene.add_label(
                     "/comparison/a/label",
-                    trace_a.run_id,
+                    f"A · {trace_a.run_id}",
                     position=(0.0, offset_a[1], creature_reach(a) * 1.2),
                 )
             )
             handles_b.extras.append(
                 self.server.scene.add_label(
                     "/comparison/b/label",
-                    trace_b.run_id,
+                    f"B · {trace_b.run_id}",
                     position=(0.0, offset_b[1], creature_reach(b) * 1.2),
                 )
             )
@@ -629,7 +629,7 @@ def run_editor(
     try:
         while True:
             controls = controls_holder["controls"]
-            active = job_manager.is_running or playback.playing
+            active = job_manager.is_running or playback.playing or controls.comparison_playing
             time.sleep(1.0 / 30 if active else 0.25)
             now = time.monotonic()
             dt, last_tick = now - last_tick, now

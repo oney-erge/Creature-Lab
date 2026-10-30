@@ -38,10 +38,23 @@ from creature_lab.hashing import spec_hash
 from creature_lab.qualification import BUILTIN_PROFILES, QualificationResult
 from creature_lab.robustness import ROBUSTNESS_LEVELS, RobustnessResult, plain_language_verdict
 from creature_lab.runs import DEFAULT_RUNS_DIR, RunSummary, list_recent_runs, load_run
-from creature_lab.schema import EpisodeSummary, EpisodeTrace, FrameState, TaskSpec
+from creature_lab.schema import CreatureSpec, EpisodeSummary, EpisodeTrace, FrameState, TaskSpec
 from creature_lab.schema.creature import ShapeType
 
 _SEVERITY_TAG = {"critical": "**[CRITICAL]**", "warning": "**[WARNING]**", "info": "**[INFO]**"}
+
+
+def _same_replay_scene(left: CreatureSpec, right: CreatureSpec) -> bool:
+    """A saved trace can use the same geometry even after its gait is materialized."""
+
+    def scene_data(creature: CreatureSpec) -> dict[str, Any]:
+        data = creature.model_dump(mode="json", exclude_none=True)
+        for motor in data["motors"]:
+            for field in ("amplitude", "frequency", "phase", "offset"):
+                motor.pop(field, None)
+        return data
+
+    return scene_data(left) == scene_data(right)
 
 
 class BuildControls:
@@ -109,7 +122,11 @@ class BuildControls:
         self._qualify_folder: Any | None = None
         self._run_history_folder: Any | None = None
         self._comparison_slider: Any | None = None
+        self._comparison_play_button: Any | None = None
         self._comparing = False
+        self._comparison_playing = False
+        self._comparison_duration = 0.0
+        self._comparison_fraction = 0.0
         self._onboarding_folder: Any | None = None
         # Persistent handles updated in place.
         self._message: Any | None = None
@@ -137,6 +154,8 @@ class BuildControls:
         self._autopsy_report_dir: Path | None = None
         self._pending_signature: tuple[str, str, str] | None = None
         self._last_trace: EpisodeTrace | None = None
+        self._showing_saved_replay = False
+        self._baseline_run_id: str | None = None
         self._last_robustness: RobustnessResult | None = None
         self._last_qualification: QualificationResult | None = None
         #: (creature_hash, task_hash, controller) that produced the currently shown
@@ -152,6 +171,10 @@ class BuildControls:
     @property
     def _advanced(self) -> bool:
         return self.session.mode == "advanced"
+
+    @property
+    def comparison_playing(self) -> bool:
+        return self._comparing and self._comparison_playing
 
     # -- top-level layout -------------------------------------------------------
 
@@ -253,7 +276,7 @@ class BuildControls:
                     lambda: self.session.set_name(event.target.value),
                     rebuild_body=False,
                     rebuild_part=False,
-                    rebuild_motion=False,
+                    rebuild_motion=True,
                     rebuild_task=False,
                 )
             )
@@ -400,7 +423,9 @@ class BuildControls:
         }
         with self.gui.add_folder("Failure lessons", expand_by_default=False, order=26):
             self.gui.add_markdown(
-                "Load a deliberately difficult case, simulate it, and change one thing. "
+                "For Frozen gait: load the lesson, Simulate, then open Motion and increase "
+                "one joint's Range. Return to Test and Simulate again; compare the two saved "
+                "runs in Run History. The outcome is an experiment, not a promised fix. "
                 "Loading replaces the editable body/task and selects the sinusoid controller; "
                 "Undo restores the previous body, task, and controller."
             )
@@ -1170,6 +1195,15 @@ class BuildControls:
         """Poll the running job and advance playback. Call once per main-loop iteration."""
         self._tick_job()
         self._tick_playback(dt)
+        if self.comparison_playing and self._comparison_duration > 0:
+            fraction = min(1.0, self._comparison_fraction + dt / self._comparison_duration)
+            self._seek_comparison(fraction)
+            if self._comparison_slider is not None:
+                self._comparison_slider.value = fraction
+            if fraction >= 1.0:
+                self._comparison_playing = False
+                if self._comparison_play_button is not None:
+                    self._comparison_play_button.icon = "player-play"
 
     def _tick_job(self) -> None:
         status = self.job_manager.status()
@@ -1226,6 +1260,7 @@ class BuildControls:
         if self._last_run_signature == self._current_run_signature():
             return False
         self._last_trace = None
+        self._showing_saved_replay = False
         self._last_robustness = None
         self._last_qualification = None
         self._last_autopsy = None
@@ -1276,6 +1311,7 @@ class BuildControls:
         self._last_run_signature = self._current_run_signature()
         if kind == "simulate":
             trace, run_dir = status.result
+            self._showing_saved_replay = False
             self._last_autopsy = None
             self._autopsy_report_dir = None
             self._last_trace = trace
@@ -1299,6 +1335,7 @@ class BuildControls:
             self.session.last_message = f"Qualification: {verdict} ({status.result.profile})"
         elif kind == "autopsy":
             result, report_dir, trace = status.result
+            self._showing_saved_replay = False
             self._last_autopsy = result
             self._autopsy_report_dir = report_dir
             self._last_trace = trace
@@ -1493,6 +1530,11 @@ class BuildControls:
                 )
                 return
             trace = self._last_trace
+            if self._showing_saved_replay:
+                self.gui.add_markdown(
+                    "**Saved recording.** The result reflects the controller used in that run; "
+                    "the current editor controller or motor settings may differ."
+                )
             summary = summarize_episode(trace, self.session.task, self.session.creature)
             result = diagnose(trace, self.session.creature, self.session.task)
 
@@ -1512,6 +1554,22 @@ class BuildControls:
                 )
                 lines.append(f"- Score breakdown: {breakdown}")
             self.gui.add_markdown("\n".join(lines))
+
+            pin = self.gui.add_button("Pin this run as baseline", icon="history")
+            pin.on_click(lambda _event: self._pin_baseline(trace.run_id))
+            if self._baseline_run_id is not None:
+                self.gui.add_markdown(f"**Baseline for this session:** `{self._baseline_run_id}`")
+            if self._baseline_run_id != trace.run_id and self._baseline_run_id is not None:
+                comparison = self.gui.add_markdown("")
+                compare = self.gui.add_button("Compare with baseline", icon="player-play")
+                compare.on_click(lambda _event: self._compare_to_baseline(trace.run_id, comparison))
+                download = self.gui.add_button("Download baseline comparison", icon="download")
+                download.on_click(
+                    lambda event: self._download_baseline_comparison(event, trace.run_id)
+                )
+                if self.on_compare_runs is not None and self.on_seek_comparison is not None:
+                    pause = self.gui.add_button("Play / pause comparison", icon="player-play")
+                    pause.on_click(lambda _event: self._toggle_comparison())
 
             if result.patterns:
                 self.gui.add_markdown("**Diagnosis**")
@@ -1679,7 +1737,8 @@ class BuildControls:
             self.gui.add_markdown(
                 "Combine a baseline run, a robustness sweep, and (for **backend-portable**) "
                 "a cross-backend comparison into one pass/fail result with a named blocker "
-                "and a recommended next test."
+                "and a recommended next test. **target-reach** checks positive progress "
+                "toward the target, not whether the creature arrived."
             )
             profile_dropdown = self.gui.add_dropdown(
                 "Profile", list(BUILTIN_PROFILES), initial_value="basic-locomotion"
@@ -1702,6 +1761,8 @@ class BuildControls:
             return
         verdict = "**PASS**" if result.passed else "**FAIL**"
         lines = [f"### Qualification: {verdict} ({result.profile})"]
+        if result.profile == "target-reach":
+            lines.append("This profile checks target progress; it does not establish arrival.")
         for check in result.checks:
             mark = "PASS" if check.passed else "FAIL"
             lines.append(f"- `{mark}` **{check.name}**: {check.detail}")
@@ -1715,13 +1776,18 @@ class BuildControls:
 
     def _rebuild_run_history_controls(self) -> None:
         self._comparison_slider = None
+        self._comparison_play_button = None
         self._remove_folder("_run_history_folder")
         with self._test_tab:
             self._run_history_folder = self.gui.add_folder(
                 "Run History", expand_by_default=False, order=70
             )
         with self._run_history_folder:
-            runs = list_recent_runs(self.runs_dir, limit=8)
+            all_runs = list_recent_runs(self.runs_dir, limit=1_000_000)
+            runs = all_runs[:8]
+            baseline = next((run for run in all_runs if run.run_id == self._baseline_run_id), None)
+            if baseline is not None and baseline not in runs:
+                runs.append(baseline)
             self._run_history_by_label = {}
             if not runs:
                 self.gui.add_markdown("No saved runs yet. Simulate to create one.")
@@ -1729,7 +1795,15 @@ class BuildControls:
             labels = self._unique_run_history_labels(runs)
             for label, run in zip(labels, runs, strict=True):
                 self._run_history_by_label[label] = run
-            dropdown = self.gui.add_dropdown("Run", labels, initial_value=labels[0])
+            baseline_label = next(
+                (
+                    label
+                    for label, run in self._run_history_by_label.items()
+                    if run.run_id == self._baseline_run_id
+                ),
+                labels[0],
+            )
+            dropdown = self.gui.add_dropdown("Run (A)", labels, initial_value=baseline_label)
             restore_button = self.gui.add_button("Restore design", icon="download")
             restore_experiment = self.gui.add_button("Restore body, task and gait", icon="history")
             replay_button = self.gui.add_button("Replay", icon="player-play")
@@ -1738,7 +1812,8 @@ class BuildControls:
             restore_experiment.on_click(lambda _event: self._restore_experiment(dropdown.value))
             replay_button.on_click(lambda _event: self._replay_run(dropdown.value))
             if len(labels) > 1:
-                other = self.gui.add_dropdown("Compare with", labels, initial_value=labels[1])
+                other_label = next(label for label in labels if label != baseline_label)
+                other = self.gui.add_dropdown("Compare with (B)", labels, initial_value=other_label)
                 comparison = self.gui.add_markdown("")
                 compare_button = self.gui.add_button("Compare saved results")
                 compare_button.on_click(
@@ -1754,11 +1829,18 @@ class BuildControls:
                     )
                     self._comparison_slider.disabled = not self._comparing
                     self._comparison_slider.on_update(
-                        lambda event: self.on_seek_comparison(float(event.target.value))
+                        lambda event: self._seek_comparison(float(event.target.value))
                     )
+                    self._comparison_play_button = self.gui.add_button(
+                        "Play / pause comparison", icon="player-play"
+                    )
+                    self._comparison_play_button.on_click(lambda _event: self._toggle_comparison())
                     show_3d = self.gui.add_button("Show side-by-side 3D", icon="player-play")
                     show_3d.on_click(
-                        lambda _event: self._show_3d_comparison(dropdown.value, other.value)
+                        lambda _event: (
+                            self._compare_saved_runs(dropdown.value, other.value, comparison),
+                            self._show_3d_comparison(dropdown.value, other.value),
+                        )
                     )
                     back = self.gui.add_button("Return to editor preview")
                     back.on_click(lambda _event: self._close_3d_comparison())
@@ -1767,15 +1849,66 @@ class BuildControls:
                     lambda event: self._download_comparison(event, dropdown.value, other.value)
                 )
 
+    def _pin_baseline(self, run_id: str) -> None:
+        if not (self.runs_dir / run_id / "trace.json").is_file():
+            self.session.last_message = "This result has no saved run to pin."
+        else:
+            self._baseline_run_id = run_id
+            self.session.last_message = f"Pinned {run_id} as the baseline for this session."
+            self._rebuild_run_history_controls()
+            self._rebuild_metrics_controls()
+        self._update_status()
+
+    def _compare_to_baseline(self, run_id: str, output: Any) -> None:
+        baseline, current = self._baseline_labels(run_id)
+        if baseline is None or current is None:
+            output.content = "A saved run is unavailable; choose runs in Run History."
+            return
+        self._compare_saved_runs(baseline, current, output)
+        if self.on_compare_runs is not None and self.on_seek_comparison is not None:
+            self._show_3d_comparison(baseline, current)
+            if self._comparing:
+                self._toggle_comparison()
+
+    def _baseline_labels(self, run_id: str) -> tuple[str | None, str | None]:
+        baseline = next(
+            (
+                label
+                for label, run in self._run_history_by_label.items()
+                if run.run_id == self._baseline_run_id
+            ),
+            None,
+        )
+        current = next(
+            (label for label, run in self._run_history_by_label.items() if run.run_id == run_id),
+            None,
+        )
+        return baseline, current
+
+    def _download_baseline_comparison(self, event: Any, run_id: str) -> None:
+        baseline, current = self._baseline_labels(run_id)
+        if baseline is None or current is None:
+            self.session.last_message = "A saved run is unavailable; choose runs in Run History."
+            self._update_status()
+            return
+        self._download_comparison(event, baseline, current)
+
     def _show_3d_comparison(self, left_label: str, right_label: str) -> None:
         left = self._run_history_by_label.get(left_label)
         right = self._run_history_by_label.get(right_label)
         if left is None or right is None or self.on_compare_runs is None:
             return
         try:
+            _, _, trace_a = load_run(left.run_dir)
+            _, _, trace_b = load_run(right.run_dir)
             self.playback.pause()
             self.on_compare_runs(left.run_dir, right.run_dir)
             self._comparing = True
+            self._comparison_playing = False
+            self._comparison_duration = max(trace_a.frames[-1].t, trace_b.frames[-1].t)
+            self._comparison_fraction = 0.0
+            if self._comparison_play_button is not None:
+                self._comparison_play_button.icon = "player-play"
             if self._comparison_slider is not None:
                 self._comparison_slider.disabled = False
                 self._comparison_slider.value = 0.0
@@ -1787,11 +1920,31 @@ class BuildControls:
 
     def _close_3d_comparison(self) -> None:
         self._comparing = False
+        self._comparison_playing = False
         if self._comparison_slider is not None:
             self._comparison_slider.disabled = True
         self.on_preview()
         self.session.last_message = "Returned to the editor preview."
         self._update_status()
+
+    def _seek_comparison(self, fraction: float) -> None:
+        if not self._comparing or self.on_seek_comparison is None:
+            return
+        self._comparison_fraction = max(0.0, min(1.0, fraction))
+        self.on_seek_comparison(self._comparison_fraction)
+
+    def _toggle_comparison(self) -> None:
+        if not self._comparing or self._comparison_duration <= 0:
+            return
+        if self._comparison_fraction >= 1.0:
+            self._seek_comparison(0.0)
+            if self._comparison_slider is not None:
+                self._comparison_slider.value = 0.0
+        self._comparison_playing = not self._comparison_playing
+        if self._comparison_play_button is not None:
+            self._comparison_play_button.icon = (
+                "player-pause" if self._comparison_playing else "player-play"
+            )
 
     def _compare_saved_runs(self, left_label: str, right_label: str, output: Any) -> None:
         left = self._run_history_by_label.get(left_label)
@@ -1805,17 +1958,22 @@ class BuildControls:
             b = build_report(right.run_dir)
             differences = build_comparison(a, b)["conditions_changed_or_unknown"]
             conditions = ", ".join(differences) if differences else "none detected"
+            forward_delta = (
+                b["summary"]["forward_displacement"] - a["summary"]["forward_displacement"]
+            )
 
             def fall_label(fell: bool | None) -> str:
                 return "fall unknown" if fell is None else "fell" if fell else "no fall detected"
 
             output.content = (
-                f"**{left.run_id}**: score {a['score']:+.3f}, "
+                f"**A · {left.run_id}**: score {a['score']:+.3f}, "
                 f"forward {a['summary']['forward_displacement']:+.3f} m, "
                 f"{fall_label(a['summary']['fell'])}\n\n"
-                f"**{right.run_id}**: score {b['score']:+.3f}, "
+                f"**B · {right.run_id}**: score {b['score']:+.3f}, "
                 f"forward {b['summary']['forward_displacement']:+.3f} m, "
                 f"{fall_label(b['summary']['fell'])}\n\n"
+                f"**B − A:** score {b['score'] - a['score']:+.3f}, "
+                f"forward {forward_delta:+.3f} m\n\n"
                 f"**Changed or unknown:** {conditions}. Compare scores only when task, "
                 "backend, and evaluation conditions are compatible."
             )
@@ -1901,7 +2059,7 @@ class BuildControls:
             return
         try:
             creature, task, trace = load_run(run.run_dir)
-            if spec_hash(creature) != spec_hash(self.session.creature) or (
+            if not _same_replay_scene(creature, self.session.creature) or (
                 task is not None and spec_hash(task) != spec_hash(self.session.task)
             ):
                 self.session.last_message = (
@@ -1916,6 +2074,7 @@ class BuildControls:
         if self._comparing:
             self._close_3d_comparison()
         self._last_trace = trace
+        self._showing_saved_replay = True
         self._last_run_signature = self._current_run_signature()
         self._last_autopsy = None
         self._autopsy_report_dir = None
@@ -1925,7 +2084,9 @@ class BuildControls:
         first = self.playback.current_frame()
         if first is not None:
             self.on_playback_frame(first)
-        self.session.last_message = f"Loaded replay of run {run.run_id}"
+        self.session.last_message = (
+            f"Loaded recorded run {run.run_id}; its controller may differ from the current editor."
+        )
         self._rebuild_playback_controls()
         self._rebuild_metrics_controls()
         self._update_status()

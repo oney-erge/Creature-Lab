@@ -655,22 +655,28 @@ def build(
         typer.Option(
             "--project",
             help=(
-                "Bind to a project directory: creature.json/task.json there are loaded on "
+                "Bind to a project directory: creature.json/task.json and editor-state.json "
+                "are loaded on "
                 "start and kept live-synced with the editor (autosave on edit, external "
                 "edits detected with a Reload prompt). Overrides --preset/creature_path/--task."
             ),
         ),
     ] = None,
     controller: Annotated[
-        str,
+        str | None,
         typer.Option(
             help="Controller for Simulate: 'curated' (best first-run behavior), "
-            "'sinusoid', 'cpg', 'target_seek' (needs a target), or 'posture'."
+            "'sinusoid', 'cpg', 'target_seek', 'posture', or 'hold'. "
+            "Defaults to the saved project controller or curated."
         ),
-    ] = "curated",
+    ] = None,
     backend: Annotated[
-        str, typer.Option(help="Physics backend for Simulate: 'pybullet' or 'mujoco'.")
-    ] = "pybullet",
+        str | None,
+        typer.Option(
+            help="Physics backend: 'pybullet' or 'mujoco'; defaults to the saved "
+            "project backend or pybullet."
+        ),
+    ] = None,
     seed: Annotated[int | None, typer.Option(help="Seed recorded in simulated traces.")] = None,
     host: HostOption = DEFAULT_HOST,
     port: Annotated[int, typer.Option(help="Port for the Viser build editor.")] = 8080,
@@ -700,7 +706,7 @@ def build(
             f"[red]error:[/red] unknown task preset {task_preset!r}; choose one of: {available}"
         )
         raise typer.Exit(code=2)
-    if controller not in AVAILABLE_CONTROLLERS:
+    if controller is not None and controller not in AVAILABLE_CONTROLLERS:
         # The editor dropdown intentionally offers stable named controllers, so
         # a bad --controller here would otherwise silently break the dropdown's
         # initial value instead of failing at launch.
@@ -710,6 +716,9 @@ def build(
             f"{available}"
         )
         raise typer.Exit(code=2)
+    if backend is not None and backend not in {"pybullet", "mujoco"}:
+        console.print("[red]error:[/red] backend must be 'pybullet' or 'mujoco'")
+        raise typer.Exit(code=2)
 
     task_spec = (
         _load_spec(task, TaskSpec)
@@ -718,6 +727,9 @@ def build(
     )
     if project is not None:
         session = EditorSession(template=preset, task=task_spec, out_path=out)
+        session.controller = controller or session.controller
+        session.backend = backend or session.backend
+        session.seed = seed
         session.bind_project(project)
     elif creature_path is not None:
         session = EditorSession.from_path(creature_path, task=task_spec, out_path=out)
@@ -727,8 +739,30 @@ def build(
             task=task_spec,
             out_path=out,
         )
-    session.task_preset = task_preset if task is None else task_spec.name
-    session.controller = controller
+    session.task_preset = (
+        session.task.name
+        if project is not None
+        else (task_preset if task is None else task_spec.name)
+    )
+    # Explicit CLI options override saved settings. Persist them so a subsequent
+    # project launch without overrides resumes the same experiment.
+    chosen_controller = controller if controller is not None else session.controller
+    chosen_backend = backend if backend is not None else session.backend
+    chosen_seed = seed if seed is not None else session.seed
+    if (chosen_controller, chosen_backend, chosen_seed) != (
+        session.controller,
+        session.backend,
+        session.seed,
+    ):
+        session.controller, session.backend, session.seed = (
+            chosen_controller,
+            chosen_backend,
+            chosen_seed,
+        )
+        if session.project_dir is not None:
+            session._dirty = True
+            session.autosave()
+    backend, seed = session.backend, session.seed
 
     def simulate_current(
         creature: CreatureSpec,

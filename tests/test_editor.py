@@ -127,6 +127,45 @@ def test_bind_project_loads_existing_files(tmp_path):
     assert session.template == "custom"
 
 
+def test_project_reopens_selected_controller_backend_and_seed(tmp_path):
+    project = tmp_path / "experiment"
+    session = EditorSession()
+    session.backend = "mujoco"
+    session.seed = 17
+    session.bind_project(project)
+    session.set_controller("sinusoid")
+    session.autosave()
+
+    reopened = EditorSession(project_dir=project)
+    assert (reopened.controller, reopened.backend, reopened.seed) == ("sinusoid", "mujoco", 17)
+    assert reopened.creature == session.creature
+    assert reopened.task == session.task
+
+
+def test_project_state_external_edit_is_detected_and_requires_restart_for_backend(tmp_path):
+    project = tmp_path / "experiment"
+    session = EditorSession(project_dir=project)
+    state_path = project / "editor-state.json"
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    state["backend"] = "mujoco"
+    state_path.write_text(json.dumps(state), encoding="utf-8")
+    assert session.poll_external_changes()
+    with pytest.raises(ValueError, match="Restart the editor"):
+        session.reload_project()
+    assert session.backend == "pybullet"
+    assert session.external_change_pending
+
+
+def test_controller_change_is_undoable_and_autosaved(tmp_path):
+    session = EditorSession(project_dir=tmp_path / "experiment")
+    session.set_controller("cpg")
+    session.autosave()
+    assert EditorSession(project_dir=session.project_dir).controller == "cpg"
+    assert session.undo()
+    session.autosave()
+    assert EditorSession(project_dir=session.project_dir).controller == "curated"
+
+
 def test_autosave_writes_edits_back_to_project_files(tmp_path):
     project_dir = tmp_path / "mydude"
     session = EditorSession(template="quadruped")

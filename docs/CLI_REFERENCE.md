@@ -79,8 +79,9 @@ uv run creature-lab run examples/quadruped.json --task examples/crawl_forward.js
 - `build` edits a CreatureSpec (or URDF) in a Viser browser UI: tune it, drag task targets in
   3D, read live metrics, a
   robustness sweep, and a qualification pass/fail after Simulate, then save. `--project <dir>`
-  binds it to `creature.json`/`task.json` in that directory, autosaving edits and detecting
-  external changes with a Reload prompt (see `docs/BUILD_EDITOR.md`).
+  binds it to `creature.json`, `task.json`, and `editor-state.json` in that directory, autosaving
+  edits and detecting external changes. The state file records the selected controller, backend,
+  and seed; explicit launch options override saved values (see `docs/BUILD_EDITOR.md`).
 - `run` simulates one creature/task pair. `--controller` chooses `sinusoid` (default),
   `cpg` (coupled-oscillator gait), `target_seek` (steers the gait toward `task.target` —
   needs a task with one), `posture` (closed-loop PD balance — corrects forward/backward
@@ -122,7 +123,8 @@ uv run creature-lab run examples/quadruped.json --task examples/crawl_forward.js
   and a recommended next test. Built-in profiles: `basic-locomotion`, `target-reach`,
   `push-recovery`, `backend-portable`; `target-reach` and `push-recovery` fail fast with a
   clear "Task setup" check if the task doesn't have what the profile needs (a target, or a
-  damage/impulse event) rather than running physics first. `--json` prints a machine-readable
+  damage/impulse event) rather than running physics first. `target-reach` checks positive
+  progress toward the target, not arrival. `--json` prints a machine-readable
   result. Also available as a **Qualify** panel in `creature-lab build`'s Test phase (see
   `docs/BUILD_EDITOR.md`).
 - `autopsy` runs the selected-controller baseline, a distinct curated-controller counterfactual

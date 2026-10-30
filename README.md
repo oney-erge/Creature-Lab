@@ -51,6 +51,10 @@ click **Simulate**, then read the result. Use **Explain failure** to run a
 counterfactual analysis, compare saved runs in History, and download its report
 and experiment pack.
 
+For a guided first investigation, open **Test → Failure lessons**, load **Frozen
+gait**, simulate, change one motor's range in Motion, and simulate again. Compare
+the saved runs in History; the outcome is an experiment, not a promised fix.
+
 PyBullet's current PyPI release has no Windows or macOS wheels. On those
 platforms its first installation builds from source and requires a working C++
 toolchain; it may take several minutes. Linux x86-64 has a Python 3.11 wheel.

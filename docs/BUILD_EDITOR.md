@@ -84,17 +84,21 @@ for a genuinely independent second session.
 uv run creature-lab build --project outputs/mydude
 ```
 
-Binds the editor to a directory holding `creature.json` + `task.json`:
+Binds the editor to a directory holding `creature.json`, `task.json`, and `editor-state.json`:
 
 - **First run**: if the files don't exist yet, they're created from `--preset`/`--task-preset`.
-- **UI → disk**: every accepted edit (slider, part/motor change, gizmo drag, gait, mirror) writes
-  straight back to `creature.json`/`task.json` — no separate Save step, and the files are always
-  a valid, current snapshot you can `git diff`.
+- **UI → disk**: accepted body, task, and controller edits autosave. `editor-state.json` records
+  the selected controller, backend, and seed. Existing projects without that file acquire it on
+  first open; explicit `--controller`, `--backend`, and `--seed` options override saved values.
+- A selected `curated` controller still resolves against the installed packaged gait. Renaming
+  converts a compatible packaged sinusoid into editable motors before changing its name, so the
+  selected gait does not silently change. Reopen a saved run for its exact controller snapshot.
 - **Disk → UI**: edit `creature.json` by hand, restore it with Git, or have another
   tool write it — the editor detects the change and shows a banner with a **Reload from disk**
   button. Autosave pauses during a conflict. Choose **Reload from disk** or explicitly
   **Overwrite disk with editor**; selecting a part or changing a run setting cannot destroy the
-  external edit. File deletion and same-timestamp content changes are detected too.
+  external edit. File deletion and same-timestamp content changes are detected too. Restart the
+  editor to apply an externally changed backend or seed; those settings are fixed per process.
 
 Without `--project`, the editor works exactly as before: a one-shot **Open**/**Save** pair you
 point at any path.
@@ -102,7 +106,7 @@ point at any path.
 ## Simulate: Async, With Progress and Cancel
 
 The Test phase's **Run** section has a **Controller** dropdown — `curated` (default), `sinusoid`, `cpg`,
-`target_seek`, or `posture` — before the Simulate button (a portable `controller.json` spec, see
+`target_seek`, `posture`, or `hold` — before the Simulate button (a portable `controller.json` spec, see
 `docs/CLI_REFERENCE.md`'s `controller` command, is a CLI-only `--controller` option; the
 dropdown offers the stable named controllers). `curated` uses a measured packaged gait for any
 body whose joints still match it — resizing a part or changing mass/color
@@ -179,13 +183,19 @@ proof of causation; a curated controller can itself be unsuitable for an edited 
 tested controllers fail, the cause remains undetermined. Invalid task/profile combinations stop
 before simulation.
 
+In Result, **Pin this run as baseline** remembers it for the current session. After editing and
+simulating again, **Compare with baseline** shows the results and opens the 3D comparison.
+The pinned run remains on disk after closing the editor, but the pin itself is not saved.
+
 In Run History, **Show side-by-side 3D** puts two saved recordings in the editor scene, labeled
-with their run IDs. Drag **Comparison time** to inspect the same recorded simulation time in both.
+with A/B run IDs and the changed or unknown conditions. Drag **Comparison time** or use
+**Play / pause comparison** to inspect the same recorded simulation time in both.
 **Return to editor preview** restores the editable scene. **Restore body, task and gait** restores
 supported, hash-checked controller snapshots; it reports the recorded backend and seed but does
 not change the current editor's backend or seed. Copying a saved sinusoid into editable motors
-can change the body artifact's hash. Other controller types remain available through the CLI and
-their saved artifacts.
+can change the body artifact's hash. Replay accepts that gait-only difference when the saved
+scene and task otherwise match, and labels the result as a saved recording. Other controller types
+remain available through the CLI and their saved artifacts.
 
 In **Run History**, select two saved runs and choose **Compare saved results** to see their scores,
 forward displacement, and any changed or unknown body, task, controller, or backend. Restore a
@@ -193,8 +203,8 @@ run's design and task before replaying it. Browser tabs connected to the same ed
 session, so edits and playback controls are visible across tabs.
 
 **Failure lessons** loads the packaged frozen-gait, overdriven-gait, or ice-rink case into the
-editor and selects its sinusoid controller. Loading a lesson is undoable for the body and task;
-controller selection is a separate run setting. In Task, friction and lateral push are editable.
+editor and selects its sinusoid controller. Loading a lesson is undoable for the body, task, and
+controller. In Task, friction and lateral push are editable.
 The push is a force in newtons applied for one timestep at mid-episode, recorded in the task;
 changing it replaces any previous push event, and zero removes it. Compare the same task and
 controller before and after a body change, or label a controller-retuned comparison separately.

@@ -38,6 +38,27 @@ def test_editable_packaged_gait_is_used_and_undo_restores_controller():
     assert spec_hash(session.creature) == original
 
 
+def test_renaming_a_curated_creature_preserves_the_packaged_gait_and_undo():
+    session = EditorSession()
+    original = spec_hash(session.creature)
+    packaged = ControllerSpec.model_validate_json(
+        Path(curated_controller(session.creature)).read_text(encoding="utf-8")
+    )
+    session.set_name("my quadruped")
+    assert session.controller == "sinusoid"
+    motors = {motor.joint: motor for motor in session.creature.motors}
+    for motor in packaged.motors or []:
+        assert (
+            motors[motor.joint].amplitude,
+            motors[motor.joint].frequency,
+            motors[motor.joint].phase,
+            motors[motor.joint].offset,
+        ) == (motor.amplitude, motor.frequency, motor.phase, motor.offset)
+    assert session.undo()
+    assert session.controller == "curated"
+    assert spec_hash(session.creature) == original
+
+
 def test_refit_selects_its_sinusoid_and_undo_restores_curated():
     session = EditorSession()
     tuned = session.creature.model_copy(deep=True)

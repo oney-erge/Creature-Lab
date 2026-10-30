@@ -72,7 +72,7 @@ BUILTIN_PROFILES: dict[str, QualificationProfile] = {
     ),
     "target-reach": QualificationProfile(
         name="target-reach",
-        description="Makes real progress toward the task's target, robustly.",
+        description="Makes positive progress toward the target; does not require arrival.",
         require_target_progress=True,
         robustness_trials=10,
         max_fail_rate=0.2,

@@ -55,7 +55,7 @@ stuck on a replay frame.
 
 Presets are `quadruped`, `hexapod`, `worm`, or `humanoid`. Add `--project outputs/mydude` (via
 `uv run creature-lab build --project outputs/mydude`) to bind the editor to a directory whose
-`creature.json`/`task.json` autosave on every edit and stay in sync if you edit them by hand. See
+`creature.json`/`task.json` and `editor-state.json` autosave edits and detect external changes. See
 [`docs/BUILD_EDITOR.md`](BUILD_EDITOR.md) for the full editor walkthrough.
 
 ## 2. Just Want The Old Playback Demo?

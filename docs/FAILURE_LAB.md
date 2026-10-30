@@ -23,7 +23,7 @@ qualification. Record nominal score, task success rate under perturbations, and 
 change improves the failure rate without simply lowering the task threshold.
 
 ```bash
-creature-lab qualify creature.json --task task.json --profile basic-locomotion
+creature-lab qualify creature.json --task task.json --controller controller.json --profile basic-locomotion
 ```
 
 ## Lesson 3: Portable Artifact, Different Physics

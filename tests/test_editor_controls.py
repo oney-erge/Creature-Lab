@@ -17,7 +17,7 @@ from typing import Any
 import pytest
 
 from creature_lab.editor import presets
-from creature_lab.editor.controls import BuildControls
+from creature_lab.editor.controls import BuildControls, _same_replay_scene
 from creature_lab.editor.jobs import EditorJobManager, JobCancelled
 from creature_lab.editor.playback import EditorPlayback
 from creature_lab.editor.session import AVAILABLE_CONTROLLERS, EditorSession, SessionStatus
@@ -25,6 +25,31 @@ from creature_lab.qualification import QualificationCheck, QualificationResult
 from creature_lab.robustness import RobustnessResult, RobustnessTrial
 from creature_lab.runs import RunSummary, save_run
 from creature_lab.schema import EpisodeSummary, EpisodeTrace, TaskSpec
+
+
+def test_replay_scene_accepts_gait_edits_but_rejects_body_edits():
+    session = EditorSession()
+    original = session.creature
+    session.use_editable_gait()
+    session.update_selected_motor(amplitude=0.1)
+    assert _same_replay_scene(original, session.creature)
+    session.update_selected_part(mass=10.0)
+    assert not _same_replay_scene(original, session.creature)
+
+
+def test_comparison_playback_advances_and_stops_at_end():
+    controls, _, _, _ = _make_controls(EditorSession())
+    seeks = []
+    controls.on_seek_comparison = seeks.append
+    controls._comparing = True
+    controls._comparison_duration = 2.0
+    controls._toggle_comparison()
+    controls.tick(1.0)
+    assert seeks[-1] == pytest.approx(0.5)
+    assert controls.comparison_playing
+    controls.tick(1.0)
+    assert seeks[-1] == 1.0
+    assert not controls.comparison_playing
 
 
 def _fake_trace(creature_name: str = "quadruped", score: float = 0.5) -> EpisodeTrace:

@@ -20,6 +20,7 @@ from creature_lab.editor.labels import friendly_label, hierarchy_markdown
 from creature_lab.io_utils import atomic_write_text
 from creature_lab.scaffold import mirror_limb
 from creature_lab.schema import CreatureSpec, FrameState, PartSpec, TaskSpec
+from creature_lab.schema.base import StrictModel
 from creature_lab.schema.creature import MotorType, ShapeType
 from creature_lab.validation import EpisodeInputError, validate_episode_inputs
 
@@ -137,7 +138,17 @@ AVAILABLE_CONTROLLERS: tuple[str, ...] = (
     "cpg",
     "target_seek",
     "posture",
+    "hold",
 )
+
+
+class EditorProjectState(StrictModel):
+    """Settings needed to resume a project, alongside its existing spec files."""
+
+    version: Literal[1] = 1
+    controller: Literal["curated", "sinusoid", "cpg", "target_seek", "posture", "hold"]
+    backend: Literal["pybullet", "mujoco"]
+    seed: int | None = None
 
 
 class EditorSession:
@@ -171,11 +182,15 @@ class EditorSession:
         self.project_dir: Path | None = None
         self._creature_fingerprint: tuple[int, int, str] | None = None
         self._task_fingerprint: tuple[int, int, str] | None = None
+        self._project_state_fingerprint: tuple[int, int, str] | None = None
         self.external_change_pending = False
         #: UI complexity level. "basic" hides advanced controls; "advanced" shows everything.
         self.mode: Literal["basic", "advanced"] = "basic"
         #: Which controller Simulate uses; edits that switch it are undoable.
         self.controller: str = "curated"
+        # Backend and seed are fixed for an editor process and restored on restart.
+        self.backend: str = "pybullet"
+        self.seed: int | None = None
         self._history = EditorHistory()
         #: True when there are edits not yet written to ``out_path``/the bound project.
         self._dirty = False
@@ -295,6 +310,9 @@ class EditorSession:
         if name not in AVAILABLE_CONTROLLERS:
             self.last_message = f"Unknown controller {name!r}"
             return
+        if name == self.controller:
+            return
+        self._checkpoint()
         self.controller = name
         self.last_message = f"Controller set to {name}"
 
@@ -506,10 +524,25 @@ class EditorSession:
         self.last_message = f"Updated {key}"
 
     def set_name(self, name: str) -> None:
+        name = name.strip() or self.creature.name
+        if name == self.creature.name:
+            return
+        creature = self.creature
+        controller = self.controller
+        if controller == "curated":
+            from creature_lab.controllers.factory import curated_controller
+
+            resolved = curated_controller(creature)
+            if resolved.lower().endswith(".json"):
+                creature = self.editable_gait_creature()
+                controller = "sinusoid"
+            else:
+                controller = resolved
         self._checkpoint()
-        data = _model_data(self.creature)
-        data["name"] = name.strip() or self.creature.name
+        data = _model_data(creature)
+        data["name"] = name
         self.creature = CreatureSpec.model_validate(data)
+        self.controller = controller
         self.last_message = f"Renamed to {self.creature.name}"
 
     def set_task_preset(self, name: str) -> None:
@@ -1012,8 +1045,15 @@ class EditorSession:
     def task_file(self) -> Path | None:
         return self.project_dir / "task.json" if self.project_dir is not None else None
 
+    @property
+    def project_state_file(self) -> Path | None:
+        return self.project_dir / "editor-state.json" if self.project_dir is not None else None
+
+    def _project_state(self) -> EditorProjectState:
+        return EditorProjectState(controller=self.controller, backend=self.backend, seed=self.seed)
+
     def bind_project(self, project_dir: Path) -> None:
-        """Bind this session to a directory, loading creature.json/task.json if present.
+        """Bind to a directory, loading creature, task, and editor state when present.
 
         Once bound, every edit autosaves back to those files (see ``autosave``) and
         external edits to them are detected (see ``poll_external_changes``), so the
@@ -1023,6 +1063,7 @@ class EditorSession:
         project_dir.mkdir(parents=True, exist_ok=True)
         creature_path = project_dir / "creature.json"
         task_path = project_dir / "task.json"
+        state_path = project_dir / "editor-state.json"
         loaded_creature = self.creature
         loaded_task = self.task
         if creature_path.exists():
@@ -1031,13 +1072,21 @@ class EditorSession:
             )
         if task_path.exists():
             loaded_task = TaskSpec.model_validate(json.loads(task_path.read_text(encoding="utf-8")))
-        # Only mutate the in-memory document after both artifacts validate.
+        loaded_state = (
+            EditorProjectState.model_validate_json(state_path.read_text(encoding="utf-8"))
+            if state_path.exists()
+            else self._project_state()
+        )
+        # Only mutate the in-memory document after all present artifacts validate.
         self.project_dir = project_dir
         if creature_path.exists():
             self.creature = loaded_creature
             self.template = "custom"
             self.params = {}
         self.task = loaded_task
+        self.controller = loaded_state.controller
+        self.backend = loaded_state.backend
+        self.seed = loaded_state.seed
         self.out_path = creature_path
         self.source_path = creature_path if creature_path.exists() else None
         self.selected_part_id = self.creature.parts[0].id
@@ -1051,18 +1100,25 @@ class EditorSession:
     def _write_project_files(self) -> None:
         if self.project_dir is None:
             return
-        creature_path, task_path = self.creature_file, self.task_file
-        if creature_path is None or task_path is None:
+        creature_path, task_path, state_path = (
+            self.creature_file,
+            self.task_file,
+            self.project_state_file,
+        )
+        if creature_path is None or task_path is None or state_path is None:
             raise RuntimeError("project paths are unavailable")
+        state = self._project_state()
         atomic_write_text(creature_path, self.creature.model_dump_json(indent=2, exclude_none=True))
         atomic_write_text(task_path, self.task.model_dump_json(indent=2, exclude_none=True))
+        atomic_write_text(state_path, state.model_dump_json(indent=2))
         self._creature_fingerprint = _file_fingerprint(creature_path)
         self._task_fingerprint = _file_fingerprint(task_path)
+        self._project_state_fingerprint = _file_fingerprint(state_path)
         self._dirty = False
         self.external_change_pending = False
 
     def autosave(self) -> None:
-        """Write the current creature/task to the bound project files, if any.
+        """Write the current creature, task, and settings to a bound project, if any.
 
         No-op when no project is bound, so it is safe to call unconditionally after
         every edit (see ``BuildControls._safe``) without changing behaviour for the
@@ -1092,40 +1148,58 @@ class EditorSession:
         """
         if self.project_dir is None or self.external_change_pending:
             return False
-        creature_path, task_path = self.creature_file, self.task_file
-        if creature_path is None or task_path is None:
+        creature_path, task_path, state_path = (
+            self.creature_file,
+            self.task_file,
+            self.project_state_file,
+        )
+        if creature_path is None or task_path is None or state_path is None:
             raise RuntimeError("project paths are unavailable")
         creature_changed = _file_fingerprint(creature_path) != self._creature_fingerprint
         task_changed = _file_fingerprint(task_path) != self._task_fingerprint
-        changed = creature_changed or task_changed
+        state_changed = _file_fingerprint(state_path) != self._project_state_fingerprint
+        changed = creature_changed or task_changed or state_changed
         if changed:
             self.external_change_pending = True
         return changed
 
     def reload_project(self) -> None:
-        """Reload creature/task from the bound project files, discarding in-memory edits."""
+        """Reload the bound project files, discarding in-memory edits."""
         if self.project_dir is None:
             self.last_message = "No project bound; nothing to reload."
             return
-        creature_path, task_path = self.creature_file, self.task_file
-        if creature_path is None or task_path is None:
+        creature_path, task_path, state_path = (
+            self.creature_file,
+            self.task_file,
+            self.project_state_file,
+        )
+        if creature_path is None or task_path is None or state_path is None:
             raise RuntimeError("project paths are unavailable")
-        if not creature_path.is_file() or not task_path.is_file():
-            missing = [path.name for path in (creature_path, task_path) if not path.is_file()]
+        if not creature_path.is_file() or not task_path.is_file() or not state_path.is_file():
+            missing = [
+                path.name for path in (creature_path, task_path, state_path) if not path.is_file()
+            ]
             raise FileNotFoundError(f"project artifact deleted: {', '.join(missing)}")
         loaded_creature = CreatureSpec.model_validate(
             json.loads(creature_path.read_text(encoding="utf-8"))
         )
         loaded_task = TaskSpec.model_validate(json.loads(task_path.read_text(encoding="utf-8")))
-        # Transactional reload: neither artifact is applied unless both validate.
+        loaded_state = EditorProjectState.model_validate_json(
+            state_path.read_text(encoding="utf-8")
+        )
+        if (loaded_state.backend, loaded_state.seed) != (self.backend, self.seed):
+            raise ValueError("Restart the editor to apply the project's changed backend or seed.")
+        # Transactional reload: no artifact is applied unless all validate.
         self.creature = loaded_creature
         self.task = loaded_task
+        self.controller = loaded_state.controller
         self.template = "custom"
         self.params = {}
         self.selected_part_id = self.creature.parts[0].id
         self.selected_motor_id = self.creature.motors[0].joint if self.creature.motors else ""
         self._creature_fingerprint = _file_fingerprint(creature_path)
         self._task_fingerprint = _file_fingerprint(task_path)
+        self._project_state_fingerprint = _file_fingerprint(state_path)
         self.external_change_pending = False
         self._history.clear()
         self._dirty = False
