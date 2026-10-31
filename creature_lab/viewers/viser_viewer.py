@@ -11,6 +11,7 @@ Viser is an optional dependency (the ``viz`` extra); import this module lazily.
 from __future__ import annotations
 
 import math
+import socket
 import time
 import webbrowser
 from bisect import bisect_right
@@ -25,6 +26,27 @@ from creature_lab.schema.creature import ShapeType
 # Viser listens on every network interface unless told otherwise; this server has no sign-in,
 # so bind to this computer only by default. Pass host="0.0.0.0" to share it on purpose.
 DEFAULT_HOST = "127.0.0.1"
+
+
+def find_free_port(host: str, preferred: int, tries: int = 100) -> int:
+    """``preferred`` if nothing is listening there, else the next free port.
+
+    Viser moves to another port on its own when the requested one is busy, but the CLI would
+    still print and open the requested one, which belongs to some other program (often an
+    older editor). Port 0 means "any free port" and is returned unchanged.
+    """
+    if preferred == 0:
+        return 0
+    for port in range(preferred, preferred + tries):
+        with socket.socket(socket.AF_INET6 if ":" in host else socket.AF_INET) as probe:
+            try:
+                probe.bind((host, port))
+            except OSError:
+                continue
+            return port
+    raise OSError(f"no free port between {preferred} and {preferred + tries - 1}")
+
+
 _DEFAULT_COLOR = (0.6, 0.6, 0.6)
 _CONTACT_COLOR = (255, 60, 40)
 _MAX_CONTACT_MARKERS = 16

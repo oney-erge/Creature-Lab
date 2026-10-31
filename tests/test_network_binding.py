@@ -157,3 +157,44 @@ def test_view_forwards_the_host(monkeypatch, tmp_path):
     assert result.exit_code == 0, result.stdout
     assert seen["host"] == "0.0.0.0"
     assert "no sign-in" in result.stdout
+
+
+def test_find_free_port_keeps_a_free_port():
+    from creature_lab.viewers.viser_viewer import find_free_port
+
+    with socket.socket() as probe:
+        probe.bind((DEFAULT_HOST, 0))
+        free = probe.getsockname()[1]
+    assert find_free_port(DEFAULT_HOST, free) == free
+
+
+def test_find_free_port_moves_past_a_port_that_something_else_holds():
+    """Viser would silently pick another port, leaving the CLI to open the wrong server."""
+    from creature_lab.viewers.viser_viewer import find_free_port
+
+    holder = socket.socket()
+    holder.bind((DEFAULT_HOST, 0))
+    holder.listen()
+    busy = holder.getsockname()[1]
+    try:
+        found = find_free_port(DEFAULT_HOST, busy)
+        assert found > busy
+        with socket.socket() as probe:
+            probe.bind((DEFAULT_HOST, found))  # really free
+    finally:
+        holder.close()
+
+
+def test_find_free_port_leaves_port_zero_alone():
+    from creature_lab.viewers.viser_viewer import find_free_port
+
+    assert find_free_port(DEFAULT_HOST, 0) == 0
+
+
+def test_claiming_a_busy_port_says_so_and_returns_the_port_to_use(monkeypatch):
+    from creature_lab import cli
+
+    monkeypatch.setattr(cli, "find_free_port", lambda host, port: port + 2)
+    with cli.console.capture() as captured:
+        assert cli._claim_port(DEFAULT_HOST, 8080) == 8082
+    assert "port 8080 is already in use; using 8082" in captured.get()

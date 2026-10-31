@@ -54,7 +54,7 @@ from creature_lab.schema import (
 )
 from creature_lab.schema.trace import TRACE_SCHEMA_VERSION
 from creature_lab.validation import EpisodeInputError, validate_episode_inputs
-from creature_lab.viewers.viser_viewer import DEFAULT_HOST
+from creature_lab.viewers.viser_viewer import DEFAULT_HOST, find_free_port
 
 app = typer.Typer(
     help=(
@@ -411,6 +411,14 @@ def _warn_if_network_exposed(host: str) -> None:
     )
 
 
+def _claim_port(host: str, port: int) -> int:
+    """The port to serve on: the requested one, or the next free one (said out loud)."""
+    free = find_free_port(host, port)
+    if free != port:
+        console.print(f"[yellow]note:[/yellow] port {port} is already in use; using {free}.")
+    return free
+
+
 @app.command(rich_help_panel="Start Here")
 def demo(
     creature_path: Annotated[
@@ -496,6 +504,7 @@ def demo(
             backend.close()
 
     _warn_if_network_exposed(host)
+    port = _claim_port(host, port)
     console.print(
         f"[green]serving[/green] {creature.name!r} on http://localhost:{port} (Ctrl+C to stop)"
     )
@@ -808,6 +817,7 @@ def build(
         )
 
     _warn_if_network_exposed(host)
+    port = _claim_port(host, port)
     console.print(
         f"[green]serving[/green] build editor on http://localhost:{port} (Ctrl+C to stop)"
     )
@@ -1826,6 +1836,7 @@ def view(
         raise typer.Exit(code=2) from exc
 
     _warn_if_network_exposed(host)
+    port = _claim_port(host, port)
     console.print(
         f"[green]serving[/green] {trace.run_id!r} on http://localhost:{port} (Ctrl+C to stop)"
     )
@@ -1907,6 +1918,7 @@ def compare(
         raise typer.Exit(code=2) from exc
 
     _warn_if_network_exposed(host)
+    port = _claim_port(host, port)
     console.print(
         f"[green]serving[/green] {trace_a.run_id!r} vs {trace_b.run_id!r} "
         f"on http://localhost:{port} (Ctrl+C to stop)"
