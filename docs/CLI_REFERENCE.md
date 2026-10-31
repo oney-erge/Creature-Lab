@@ -12,6 +12,7 @@ uv run creature-lab zoo list
 uv run creature-lab zoo run quadruped
 uv run creature-lab zoo check-showcases
 uv run creature-lab report latest
+uv run creature-lab robots checkup microduck
 ```
 
 - `demo` runs a built-in creature in the live browser viewer.
@@ -21,6 +22,9 @@ uv run creature-lab report latest
   controller snapshot. Use `--controller sinusoid` for the raw teaching baseline.
 - `zoo check-showcases` runs every promoted example against score and fall thresholds.
 - `report latest` summarizes the last saved run.
+- `robots checkup <robot>` shoves a published robot with its trained policy and writes an HTML
+  report that explains each fall (`robots list`, `robots fetch`, `robots film` and
+  `robots loop` are its companions). See [Robot check-up](ROBOT_CHECKUP.md).
 
 ## Launcher Scripts
 
@@ -238,4 +242,5 @@ needs structured output instead of Rich tables.
 | `evolve` | `evolve --strategy cmaes` and `optimize` (both CMA-ES-based) |
 | `rl` | `train` (PPO over `CreatureEnv` via Stable-Baselines3) and loading a trained `policy` controller |
 | `mujoco` | MuJoCo backend and MJCF loading tests |
+| `robots` | `robots checkup`, `film` and `loop`: MuJoCo, onnxruntime, MP4/WebP writing |
 | `llm` | Online `ask` mode through LiteLLM |

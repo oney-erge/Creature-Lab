@@ -5,15 +5,16 @@ the topic docs below when you need more detail.
 
 ## Reading Order
 
-1. [Getting Started](GETTING_STARTED.md) - first run, zoo, improvement, and troubleshooting.
-2. [Build Editor](BUILD_EDITOR.md) - browser setup screen for creating CreatureSpec JSON.
-3. [Concepts](CONCEPTS.md) - the mental model behind specs, tasks, traces, and backends.
-4. [CLI Reference](CLI_REFERENCE.md) - commands grouped by workflow.
-5. [Creature Spec](CREATURE_SPEC.md) and [Task Spec](TASK_SPEC.md) - JSON authoring.
-6. [Run Artifacts](RUN_ARTIFACTS.md) - saved traces, reports, and reproducibility.
-7. [Zoo](ZOO.md) - packaged creatures, tasks, baselines, benchmarks, and gallery.
-8. [Failure Lab](FAILURE_LAB.md) - three reproducible education exercises.
-9. [Known Issues](KNOWN_ISSUES.md) - latent gaps and deliberate limitations found in review.
+1. [Robot check-up](ROBOT_CHECKUP.md) - shove real robots and get their falls explained.
+2. [Getting Started](GETTING_STARTED.md) - first run, zoo, improvement, and troubleshooting.
+3. [Build Editor](BUILD_EDITOR.md) - browser setup screen for creating CreatureSpec JSON.
+4. [Concepts](CONCEPTS.md) - the mental model behind specs, tasks, traces, and backends.
+5. [CLI Reference](CLI_REFERENCE.md) - commands grouped by workflow.
+6. [Creature Spec](CREATURE_SPEC.md) and [Task Spec](TASK_SPEC.md) - JSON authoring.
+7. [Run Artifacts](RUN_ARTIFACTS.md) - saved traces, reports, and reproducibility.
+8. [Zoo](ZOO.md) - packaged creatures, tasks, baselines, benchmarks, and gallery.
+9. [Failure Lab](FAILURE_LAB.md) - three reproducible education exercises.
+10. [Known Issues](KNOWN_ISSUES.md) - latent gaps and deliberate limitations found in review.
 
 ## Project And Release
 

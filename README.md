@@ -4,7 +4,7 @@
 
 <h1 align="center">Creature Lab</h1>
 
-<p align="center"><strong>Build a robot, investigate a failure, and compare changes.</strong></p>
+<p align="center"><strong>Shove a real robot, see exactly why it fell, and prove the fix.</strong></p>
 
 <p align="center">
   <a href="https://github.com/oney-erge/Creature-Lab/actions/workflows/ci.yml"><img src="https://github.com/oney-erge/Creature-Lab/actions/workflows/ci.yml/badge.svg" alt="CI status" /></a>
@@ -13,12 +13,30 @@
 </p>
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/oney-erge/Creature-Lab/main/docs/assets/demo.gif" width="480" alt="Creature Lab demo: a blue quadruped robot walking on a checkered floor in simulation" />
+  <img src="docs/assets/checkup-microduck.webp" width="800" alt="Two simulated Microduck robots take the same 3 N sideways shove. The one with the walk-only policy stays on the floor; the one with the newer walk-and-get-up policy falls and stands back up." />
 </p>
 
-Creature Lab is a local workbench for designing modular robot bodies and exploring
-how the body, controller, task, and simulator affect their behavior. It saves the
-experiment so you can inspect, replay, improve, and share the evidence.
+<p align="center"><sub>The same shove, the same instant, two policies for the same robot (simulation). Microduck model by Pollen Robotics, CC BY-NC-SA 4.0.</sub></p>
+
+Creature Lab is a local workbench for robot experiments. Run a published robot with its real
+trained policy, shove it, make the floor slippery, and get an explanation of every fall backed
+by the recorded evidence. Or design your own modular robot, then explore how its body,
+controller, task, and simulator affect its behavior. Every experiment is saved so you can
+inspect, replay, improve, and share it.
+
+## Robot check-up
+
+```bash
+uv sync --inexact --extra robots
+uv run creature-lab robots checkup microduck      # or: unitree-g1
+```
+
+It downloads the robot after showing you its license, runs about fifty simulated walks on the
+CPU, and writes an HTML report (add `--film` for a 1080p film). On the Microduck, the older
+walk-only policy is left on the floor by most shoves from 2 N up. Pollen's newer policy falls a
+little more often but always gets back up. On a very slippery floor, neither does, and the
+report says that no policy swap fixes that. See [Robot check-up](docs/ROBOT_CHECKUP.md) for the
+tests, how falls are explained, licenses, and limits. It is a simulation, not the hardware.
 
 Try the [recorded quadruped replay](https://oney-physics-replays.hazycow18.chatgpt.site/creature-lab.html)
 in your browser. An [experimental Windows x64 preview](https://github.com/oney-erge/Creature-Lab/releases/tag/preview-windows-2026-10-30)
@@ -94,6 +112,8 @@ command.
 
 ## What it includes
 
+- Robot check-ups for published robots (Microduck, Unitree G1): shoves, slippery floors,
+  weak batteries, explained falls, an HTML report and a film.
 - A Creature Zoo with working and deliberately broken examples.
 - A browser editor for presets, parts, motors, validation, simulation, and
   URDF import/export.
@@ -108,6 +128,7 @@ portable, but exact physics behavior can differ by backend.
 
 | Guide | Use it for |
 |---|---|
+| [Robot check-up](docs/ROBOT_CHECKUP.md) | Shoving real robots and explaining their falls |
 | [Getting Started](docs/GETTING_STARTED.md) | A complete first experiment |
 | [Build Editor](docs/BUILD_EDITOR.md) | Creating and editing creatures in the browser |
 | [Concepts](docs/CONCEPTS.md) | Creatures, tasks, traces, simulators, and improvement |

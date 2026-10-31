@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Add the robot check-up (`creature-lab robots ...`, `robots` extra): run Pollen Robotics'
+  Microduck and the Unitree G1 with their published policies in CPU MuJoCo, shove them at eight
+  points of the stride, vary grip, battery and load, and explain each fall from the recorded
+  evidence. Writes an HTML report and an optional 1080p film. Robot files are downloaded on
+  demand against pinned SHA-256 hashes; Microduck's CC BY-NC-SA meshes are never bundled.
+- Revert the toy duckling, its PyBullet "showcase" renderer and guided experiment; the check-up
+  replaces them. The editor opens on the quadruped again.
+- Fix a stale editor test that called the simulate job without opening the Results phase.
+
 - Skip indistinguishable controller counterfactuals, preserve reference and perturbation
   recordings in verified evidence packs, and report individual trial conditions.
 - Align side-by-side 3D playback by recorded time and render each task's own terrain and target.

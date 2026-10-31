@@ -75,6 +75,12 @@ uv run creature-lab validate examples/tripod.json --task examples/crawl_forward.
   `session.py` pure and testable without GUI or physics imports.
 - `creature_lab/agents/` uses validated tools and must not access backend internals directly.
 - `creature_lab/zoo/` contains packaged creatures, tasks, and baselines.
+- `creature_lab/robots/` runs published robots with their trained policies (optional
+  `robots` extra). It is separate from the `CreatureSpec` contracts, downloads robot files
+  on demand against pinned hashes, and must never bundle files under a license stricter than
+  Apache-2.0 (Microduck's meshes are CC BY-NC-SA). `actuator.py`, `analysis.py`, `types.py`,
+  `report.py` and `catalog.py` are numpy-only; MuJoCo stays in `rollout.py`, `render.py` and
+  the per-robot modules.
 - `docs/` explains user workflows, architecture, and roadmap.
 - `scripts/` contains repo automation that should run before package dependencies are installed.
 
