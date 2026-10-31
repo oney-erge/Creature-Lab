@@ -116,3 +116,9 @@ Add a `RobotInfo` to `robots/catalog.py` with a pinned manifest in `robots/data/
 (`url` pinned to a commit, `sha256`, `bytes` for every file), a `MujocoRobot` subclass that wires
 observations and actuators, and a test that the manifest is pinned. Prefer permissive licenses;
 never bundle files whose license is more restrictive than this repository's.
+
+Hash the upstream bytes (`git show <commit>:<path>`), not a Windows checkout: a checkout may
+convert line endings in text files, and the downloader will then refuse the genuine file.
+Read the policy's training configuration for its observation layout (Microduck's policies take
+projected gravity, not the raw accelerometer) and compare a short run against the authors' own
+reference script before trusting results.
