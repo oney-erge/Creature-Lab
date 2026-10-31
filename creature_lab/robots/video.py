@@ -230,3 +230,48 @@ def write_webp(
         method=6,
     )
     return path
+
+
+def write_gif(
+    path: Path, frame_iter: Iterator[np.ndarray], fps: int = FPS, width: int = 720, step: int = 2
+) -> Path:
+    """Animated GIF with a per-clip palette (ffmpeg ``palettegen``), so gradients don't band."""
+    import subprocess
+
+    import imageio_ffmpeg
+
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    images = [image for index, image in enumerate(frame_iter) if index % step == 0]
+    height, source_width = images[0].shape[:2]
+    command = [
+        imageio_ffmpeg.get_ffmpeg_exe(),
+        "-y",
+        "-loglevel",
+        "error",
+        "-f",
+        "rawvideo",
+        "-pix_fmt",
+        "rgb24",
+        "-s",
+        f"{source_width}x{height}",
+        "-r",
+        f"{fps / step:g}",
+        "-i",
+        "-",
+        "-vf",
+        f"scale={width}:-2:flags=lanczos,split[a][b];[a]palettegen=stats_mode=diff[p];"
+        "[b][p]paletteuse=dither=bayer:bayer_scale=4:diff_mode=rectangle",
+        "-loop",
+        "0",
+        str(path),
+    ]
+    subprocess.run(command, input=np.stack(images).tobytes(), check=True)  # noqa: S603
+    return path
+
+
+def write_loop(path: Path, frame_iter: Iterator[np.ndarray], width: int = 960) -> Path:
+    """A README loop as animated WebP or GIF, chosen by the file suffix."""
+    if Path(path).suffix.lower() == ".gif":
+        return write_gif(path, frame_iter, width=min(width, 720))
+    return write_webp(path, frame_iter, width=width)

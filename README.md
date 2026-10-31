@@ -38,6 +38,15 @@ little more often but always gets back up. On a very slippery floor, neither doe
 report says that no policy swap fixes that. See [Robot check-up](docs/ROBOT_CHECKUP.md) for the
 tests, how falls are explained, licenses, and limits. It is a simulation, not the hardware.
 
+<p align="center">
+  <img src="docs/assets/checkup-unitree-g1.webp" width="640" alt="A simulated Unitree G1 humanoid walking with Unitree's own policy takes a 100 N sideways shove and falls, shown in slow motion." />
+</p>
+
+Watch the films: [Microduck check-up (1 min)](docs/assets/checkup-microduck.mp4) and
+[Unitree G1 check-up (35 s)](docs/assets/checkup-unitree-g1.mp4). GIF versions of both loops are in
+[docs/assets](docs/assets/MEDIA_LICENSES.md). In the build editor, both robots are the first
+choices in the creature picker.
+
 Try the [recorded quadruped replay](https://oney-physics-replays.hazycow18.chatgpt.site/creature-lab.html)
 in your browser. An [experimental Windows x64 preview](https://github.com/oney-erge/Creature-Lab/releases/tag/preview-windows-2026-10-30)
 contains the latest editor changes and uses PyBullet. [Older previews](https://github.com/oney-erge/Creature-Lab/releases/tag/preview-0.2.0)

@@ -21,6 +21,7 @@ outputs/
 !docs/assets/*.gif
 !docs/assets/**/
 !docs/assets/**/*.gif
+!docs/assets/*.mp4
 *.webm
 .DS_Store
 .idea/

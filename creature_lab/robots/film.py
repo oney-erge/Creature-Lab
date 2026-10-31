@@ -12,6 +12,7 @@ from creature_lab.robots.story import (
     comparison_story,
     find_pair,
     readme_loop,
+    shove_loop,
     single_story,
 )
 
@@ -55,12 +56,23 @@ def make_film(out_dir: Path, progress: Callable[[str], None] | None = None) -> P
 
 
 def make_loop(out_dir: Path, destination: Path) -> Path:
-    """The short README loop (animated WebP): the same shove, one stays down, one gets up."""
-    from creature_lab.robots.video import frames, write_webp
+    """The short README loop (animated WebP or GIF, by suffix).
+
+    With a stays-down and a gets-up policy: the same shove on both, side by side. Otherwise:
+    the first shove that topples the robot.
+    """
+    from creature_lab.robots.types import RobotRun
+    from creature_lab.robots.video import frames, write_loop
 
     robot, folders = output_robot(Path(out_dir))
     pair = policy_pair(robot)
-    if not pair or not all(key in folders for key in pair):
-        raise ValueError(f"{robot} needs check-ups for both {pair} to make the comparison loop")
-    run_a, run_b = find_pair(robot, pair[0], pair[1], _STORY_FORCE_N)
-    return write_webp(destination, frames([readme_loop(run_a, run_b, robot)]), width=960, step=2)
+    if pair and all(key in folders for key in pair):
+        run_a, run_b = find_pair(robot, pair[0], pair[1], _STORY_FORCE_N)
+        scene = readme_loop(run_a, run_b, robot)
+    else:
+        folder = next(iter(folders.values()))
+        row = next((r for r in read_checkup(folder).shoves if r.example_fall_run), None)
+        if row is None:
+            raise ValueError(f"no shove made {robot} fall, so there is nothing to loop")
+        scene = shove_loop(RobotRun.read(folder / "runs" / row.example_fall_run))
+    return write_loop(destination, frames([scene]))

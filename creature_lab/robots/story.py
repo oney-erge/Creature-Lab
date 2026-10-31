@@ -259,8 +259,9 @@ def comparison_story(
             ],
             top,
             footer=[
-                f"Left on the floor: {down_a} of {total} with {title_a.lower()}, {down_b} of "
-                f"{total} with {title_b.lower()}.",
+                f"Left on the floor: {down_a} of {total} with the "
+                f"{info.policy(a.policy).in_sentence}, {down_b} of {total} with the "
+                f"{info.policy(b.policy).in_sentence}.",
                 f"It falls slightly more often ({falls_b} vs {falls_a} falls of {total}), but "
                 "gets back up every time.",
             ],
@@ -459,3 +460,26 @@ def readme_loop(pair_a: RobotRun, pair_b: RobotRun, robot: str = "microduck") ->
         ],
     )
     return SplitClip(left, right)
+
+
+def shove_loop(run: RobotRun) -> Clip:
+    """A short README loop of one robot taking one shove (for robots with a single policy)."""
+    info = robot_info(run.scenario.robot)
+    analysis = analyze(run)
+    push_at = run.scenario.push_at_s
+    fall = analysis.fall_time_s or push_at + 0.6
+    tags = [(push_at, _shove_label(run), overlay.ORANGE)]
+    if analysis.fell:
+        tags.append((fall, "FELL", overlay.RED))
+    return Clip(
+        Studio(run.scenario.robot, 1280, 720),
+        run,
+        push_at - 1.2,
+        min(push_at + 3.0, run.scenario.seconds - 0.05),
+        info.title,
+        info.policy(run.scenario.policy).title,
+        _credit(run.scenario.robot),
+        slow=[(push_at - 0.05, fall + 0.4, 0.3)],
+        timeline=False,
+        tags=tags,
+    )

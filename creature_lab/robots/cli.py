@@ -167,12 +167,16 @@ def film_command(
 @robots_app.command("loop")
 def loop_command(
     results: Annotated[Path, typer.Argument(help="A folder written by `robots checkup`.")],
-    output: Annotated[Path, typer.Option("--output", help="Animated WebP to write.")] = Path(
-        "docs/assets/checkup-microduck.webp"
-    ),
+    output: Annotated[
+        Path | None,
+        typer.Option("--output", help="Animated .webp or .gif to write."),
+    ] = None,
 ) -> None:
-    """Write the short side-by-side README loop (animated WebP)."""
+    """Write the short README loop (animated WebP or GIF)."""
     _require_extra()
-    from creature_lab.robots.film import make_loop
+    from creature_lab.robots.film import make_loop, output_robot
 
+    if output is None:
+        robot, _ = output_robot(results)
+        output = Path("docs/assets") / f"checkup-{robot.replace('_', '-')}.webp"
     console.print(f"Loop: [bold]{make_loop(results, output)}[/bold]")
