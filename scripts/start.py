@@ -306,11 +306,11 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--creature",
-        default=None,
+        default="quadruped",
         help=(
-            "Starting point. In --mode build: humanoid, duckling, quadruped, hexapod, "
-            "or worm. In --mode demo: quadruped, worm, or tripod. "
-            "Defaults to humanoid in build and quadruped in demo."
+            "Starting point. In --mode build: a preset (quadruped, hexapod, worm, "
+            "humanoid). In --mode demo: a built-in creature (quadruped, worm, tripod). "
+            "Default: quadruped."
         ),
     )
     parser.add_argument(
@@ -373,10 +373,8 @@ def parse_args() -> argparse.Namespace:
     )
 
     args = parser.parse_args()
-    if args.creature_path and args.creature is not None:
+    if args.creature_path and args.creature != "quadruped":
         parser.error("--creature-path cannot be combined with --creature")
-    if args.creature is None:
-        args.creature = "humanoid" if args.mode == "build" else "quadruped"
     if args.creature_path and not args.creature_path.exists():
         parser.error(f"--creature-path does not exist: {args.creature_path}")
     if args.task and not args.task.exists():
