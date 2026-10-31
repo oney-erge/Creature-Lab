@@ -33,6 +33,7 @@ from creature_lab.editor import presets
 from creature_lab.editor.jobs import EditorJobManager, JobStatus
 from creature_lab.editor.labels import friendly_label, hierarchy_rows
 from creature_lab.editor.playback import EditorPlayback
+from creature_lab.editor.robot_panel import RobotCheckupPanel
 from creature_lab.editor.session import AVAILABLE_CONTROLLERS, EditorSession
 from creature_lab.hashing import spec_hash
 from creature_lab.qualification import BUILTIN_PROFILES, QualificationResult
@@ -235,6 +236,7 @@ class BuildControls:
 
         self._build_project_folder()
         self._build_history_folder()
+        self._robot_panel = RobotCheckupPanel(self.gui)
         with self.gui.add_folder("Activity", expand_by_default=False):
             self.gui.add_markdown("Recent actions in this shared editor session (up to 30).")
             self._activity_log = self.gui.add_markdown("")
@@ -1311,6 +1313,7 @@ class BuildControls:
         """Poll the running job and advance playback. Call once per main-loop iteration."""
         self._tick_job()
         self._tick_playback(dt)
+        self._robot_panel.tick()
         if self.comparison_playing and self._comparison_duration > 0:
             fraction = min(1.0, self._comparison_fraction + dt / self._comparison_duration)
             self._seek_comparison(fraction)
