@@ -52,6 +52,15 @@ llm = [
 evolve = [
     "cmaes>=0.10",  # CMA-ES strategy for `creature-lab evolve --strategy cmaes`
 ]
+robots = [
+    # `creature-lab robots checkup`: published robot models and policies, rendered to video.
+    "mujoco>=3.0",
+    "onnxruntime>=1.18",  # runs the Microduck ONNX policies
+    "numpy>=1.26",
+    "imageio>=2.31",
+    "imageio-ffmpeg>=0.4",  # MP4 film
+    "pillow>=10.0",  # overlays and animated WebP
+]
 mujoco = [
     "mujoco>=3.0",  # MuJoCo backend + MJCF export round-trip (`run --backend mujoco`)
 ]

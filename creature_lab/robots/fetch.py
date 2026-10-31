@@ -1,0 +1,115 @@
+"""Download robot files into a per-user cache, verifying each against a pinned SHA-256."""
+
+from __future__ import annotations
+
+import hashlib
+import importlib.util
+import os
+import sys
+import urllib.request
+from collections.abc import Callable
+from pathlib import Path
+
+from creature_lab.robots.catalog import RobotInfo, load_manifest, robot_info
+
+_CHUNK = 1 << 20
+_TIMEOUT_S = 60
+
+
+class FetchError(RuntimeError):
+    """A robot file could not be downloaded or did not match its pinned hash."""
+
+
+#: Import name -> package name for what the check-up needs beyond the core install.
+_EXTRA_PACKAGES = {
+    "mujoco": "mujoco",
+    "onnxruntime": "onnxruntime",
+    "imageio": "imageio",
+    "PIL": "pillow",
+}
+
+
+def missing_extra() -> list[str]:
+    """Packages from the ``robots`` extra that are not installed."""
+    return [
+        package
+        for module, package in _EXTRA_PACKAGES.items()
+        if importlib.util.find_spec(module) is None
+    ]
+
+
+def cache_root() -> Path:
+    """Per-user folder for downloaded robots (never inside the temp directory)."""
+    override = os.environ.get("CREATURE_LAB_ROBOTS_DIR")
+    if override:
+        return Path(override).expanduser()
+    if sys.platform == "win32":
+        base = Path(os.environ.get("LOCALAPPDATA") or Path.home() / "AppData" / "Local")
+    elif sys.platform == "darwin":
+        base = Path.home() / "Library" / "Caches"
+    else:
+        base = Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache")
+    return base / "creature-lab" / "robots"
+
+
+def robot_dir(key: str) -> Path:
+    return cache_root() / key
+
+
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        while chunk := handle.read(_CHUNK):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def missing_files(info: RobotInfo) -> list[dict]:
+    """Manifest entries that are absent or fail their hash check."""
+    folder = robot_dir(info.key)
+    bad = []
+    for entry in load_manifest(info)["files"]:
+        path = folder / entry["path"]
+        if (
+            not path.is_file()
+            or path.stat().st_size != entry["bytes"]
+            or _sha256(path) != entry["sha256"]
+        ):
+            bad.append(entry)
+    return bad
+
+
+def is_installed(key: str) -> bool:
+    return not missing_files(robot_info(key))
+
+
+def _download(url: str, target: Path, expected_sha: str) -> None:
+    target.parent.mkdir(parents=True, exist_ok=True)
+    partial = target.with_name(target.name + ".part")
+    request = urllib.request.Request(url, headers={"User-Agent": "creature-lab"})
+    digest = hashlib.sha256()
+    try:
+        with urllib.request.urlopen(request, timeout=_TIMEOUT_S) as response:  # noqa: S310
+            with partial.open("wb") as handle:
+                while chunk := response.read(_CHUNK):
+                    digest.update(chunk)
+                    handle.write(chunk)
+    except OSError as error:
+        partial.unlink(missing_ok=True)
+        raise FetchError(f"could not download {url}: {error}") from error
+    if digest.hexdigest() != expected_sha:
+        partial.unlink(missing_ok=True)
+        raise FetchError(f"{url} does not match its pinned SHA-256; refusing to use it")
+    partial.replace(target)
+
+
+def ensure_robot(key: str, progress: Callable[[str], None] | None = None) -> Path:
+    """Download whatever is missing for ``key`` and return its folder."""
+    info = robot_info(key)
+    folder = robot_dir(key)
+    todo = missing_files(info)
+    for index, entry in enumerate(todo, start=1):
+        if progress:
+            progress(f"[{index}/{len(todo)}] {entry['path']}")
+        _download(entry["url"], folder / entry["path"], entry["sha256"])
+    return folder

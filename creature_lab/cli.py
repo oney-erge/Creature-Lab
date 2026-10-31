@@ -36,6 +36,7 @@ from creature_lab.library import (
     default_creature,
     default_task,
 )
+from creature_lab.robots.cli import robots_app
 from creature_lab.runs import (
     DEFAULT_RUNS_DIR,
     new_run_id,
@@ -2895,6 +2896,8 @@ def mirror_limb_cmd(
 
 zoo_app = typer.Typer(help="Browse and run the curated Creature Zoo.")
 app.add_typer(zoo_app, name="zoo", rich_help_panel="Start Here")
+
+app.add_typer(robots_app, name="robots", rich_help_panel="Start Here")
 
 failure_app = typer.Typer(
     help="Explore intentionally broken experiments and their expected causes."
