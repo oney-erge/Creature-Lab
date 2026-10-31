@@ -397,7 +397,7 @@ def test_custom_loaded_creature_renders_body_placeholder(tmp_path):
 
 def test_tick_consumes_completed_simulate_job_and_loads_playback():
     controls, events, job_manager, playback = _make_controls(EditorSession())
-    controls._start_simulate()
+    controls._run_from_workspace()  # what the Run button does: open Results, then simulate
     assert controls._pending_job_kind == "simulate"
 
     _wait_for_job_consumed(controls, lambda: playback.trace is not None)
