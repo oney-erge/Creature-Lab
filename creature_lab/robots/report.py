@@ -134,8 +134,8 @@ def _headline(results: list[PolicyResult]) -> tuple[str, str]:
         total = sum(r.total for r in first.shoves)
         down_first = sum(r.stayed_down for r in first.shoves)
         down_second = sum(r.stayed_down for r in second.shoves)
-        title_first = info.policy(first.policy).title.lower()
-        title_second = info.policy(second.policy).title.lower()
+        title_first = info.policy(first.policy).in_sentence
+        title_second = info.policy(second.policy).in_sentence
         return (
             f"{info.title}: {down_first} of {total} shoves leave it on the floor with the "
             f"{title_first}, {down_second} with the {title_second}.",

@@ -228,7 +228,7 @@ def analyze(run: RobotRun) -> RunAnalysis:
     else:
         outcome = "fell"
         if not policy.gets_up:
-            stay = f" The {policy.title.lower()} has no get-up behaviour in our tests."
+            stay = f" The {policy.in_sentence} has no get-up behaviour in our tests."
         elif cause == "slipped":
             stay = " This policy can get up on a normal floor, but the feet had no grip."
         else:

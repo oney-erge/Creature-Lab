@@ -16,6 +16,13 @@ class PolicyInfo:
     file: str | None = None
     #: True if, in our simulation, the policy stands back up after falling.
     gets_up: bool = False
+    #: True when the title starts with a name ("Unitree ...") that keeps its capital mid-sentence.
+    starts_with_name: bool = False
+
+    @property
+    def in_sentence(self) -> str:
+        """The title as it reads mid-sentence: "walk-only policy", "Unitree walking policy"."""
+        return self.title if self.starts_with_name else self.title[0].lower() + self.title[1:]
 
 
 @dataclass(frozen=True)
@@ -115,6 +122,7 @@ ROBOTS: dict[str, RobotInfo] = {
                 "motion",
                 "Unitree walking policy",
                 "Unitree's pretrained forward-walking policy. It has no fall recovery.",
+                starts_with_name=True,
             ),
         ),
         default_policy="motion",

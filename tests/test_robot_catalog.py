@@ -60,3 +60,8 @@ def test_bundled_g1_policy_ships_with_its_license():
     data = resources.files("creature_lab.robots").joinpath("data")
     assert data.joinpath("unitree_g1_policy.npz").is_file()
     assert "BSD 3-Clause" in data.joinpath("UNITREE_RL_GYM_LICENSE.txt").read_text("utf-8")
+
+
+def test_policy_titles_read_naturally_mid_sentence():
+    assert robot_info("microduck").policy("alpha_walking").in_sentence == "walk-only policy"
+    assert robot_info("unitree_g1").policy("motion").in_sentence == "Unitree walking policy"
