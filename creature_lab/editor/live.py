@@ -649,6 +649,7 @@ def run_editor(
         robot_stage=robot_stage,
     )
     preview.refresh()
+    controls_holder["controls"].show_first_choice()
     loading.remove()
 
     last_tick = time.monotonic()

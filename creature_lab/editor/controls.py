@@ -33,7 +33,7 @@ from creature_lab.editor import presets
 from creature_lab.editor.jobs import EditorJobManager, JobStatus
 from creature_lab.editor.labels import friendly_label, hierarchy_rows
 from creature_lab.editor.playback import EditorPlayback
-from creature_lab.editor.robot_panel import RobotCheckupPanel
+from creature_lab.editor.robot_panel import PICKER_LABELS, RobotCheckupPanel
 from creature_lab.editor.session import AVAILABLE_CONTROLLERS, EditorSession
 from creature_lab.hashing import spec_hash
 from creature_lab.qualification import BUILTIN_PROFILES, QualificationResult
@@ -136,6 +136,7 @@ class BuildControls:
         self._comparison_duration = 0.0
         self._comparison_fraction = 0.0
         self._onboarding_folder: Any | None = None
+        self._onboarding_creature: Any | None = None
         # Persistent handles updated in place.
         self._message: Any | None = None
         self._controller_resolution_md: Any | None = None
@@ -429,25 +430,54 @@ class BuildControls:
             else presets.preset_label("quadruped")
         )
         template = self.gui.add_dropdown(
-            "Start from", presets.preset_labels(), initial_value=initial
+            "Start from", [*PICKER_LABELS, *presets.preset_labels()], initial_value=initial
         )
-        template.on_update(
-            lambda event: self._safe(
-                lambda: self.session.apply_template(
-                    presets.preset_name_from_label(event.target.value)
-                ),
-                rebuild_body=True,
-                rebuild_part=True,
-                rebuild_motion=True,
-                rebuild_task=False,
-            )
-        )
+        template.on_update(lambda event: self._pick_start(event.target.value))
         frame_button = self.gui.add_button(
             "Frame creature",
             icon="focus-2",
             hint="Point the camera at the creature - lost it off-screen or zoomed too far?",
         )
         frame_button.on_click(lambda _event: self.on_frame_camera())
+
+    def _pick_start(self, label: str) -> None:
+        """A creature picker choice: a real robot goes on the 3D stage, a preset is designed."""
+        if label in PICKER_LABELS:
+            self.session.last_message = self._robot_panel.open_robot(PICKER_LABELS[label])
+            self._record_activity(f"Opened {label}.")
+            self._update_status()
+            return
+        if self._robot_panel.showing:
+            self._robot_panel.back()
+        self._safe(
+            lambda: self.session.apply_template(presets.preset_name_from_label(label)),
+            rebuild_body=True,
+            rebuild_part=True,
+            rebuild_motion=True,
+            rebuild_task=False,
+        )
+
+    def _preview_onboarding_choice(self, label: str) -> None:
+        """Show what the Get started picker points at: the real robot, or the creature."""
+        if label in PICKER_LABELS:
+            self.session.last_message = self._robot_panel.open_robot(PICKER_LABELS[label])
+            self._update_status()
+        elif self._robot_panel.showing:
+            self._robot_panel.back()
+            self._update_status()
+
+    def show_first_choice(self) -> None:
+        """At startup, put the default real robot on stage so it is the first thing seen."""
+        dropdown = self._onboarding_creature
+        if self._onboarding_folder is not None and dropdown is not None:
+            if dropdown.value in PICKER_LABELS:
+                self._preview_onboarding_choice(dropdown.value)
+
+    def _robot_ready(self, key: str) -> bool:
+        """Whether a real robot can be shown right away (so it can be the first choice)."""
+        from creature_lab.robots.fetch import is_installed, missing_extra
+
+        return self._robot_stage is not None and not missing_extra() and is_installed(key)
 
     def _build_run_section(self) -> None:
         with self.gui.add_folder("Run", expand_by_default=True, order=10):
@@ -2232,7 +2262,13 @@ class BuildControls:
     #: The 12-DOF humanoid left this set after gaining its measured walking setup.
     def _build_onboarding_panel(self) -> None:
         """Choose a starting point and run it, or edit the chosen design first."""
-        creature_labels = presets.preset_labels()
+        creature_labels = [*PICKER_LABELS, *presets.preset_labels()]
+        first_robot = next(iter(PICKER_LABELS))
+        initial_creature = (
+            first_robot
+            if self._robot_ready(PICKER_LABELS[first_robot])
+            else presets.preset_labels()[0]
+        )
         goal_labels = presets.onboarding_goal_labels()
         self._onboarding_folder = self.gui.add_folder("Get started", expand_by_default=True)
         with self._onboarding_folder:
@@ -2241,7 +2277,11 @@ class BuildControls:
                 "You can edit the design at any time."
             )
             creature_dropdown = self.gui.add_dropdown(
-                "Creature", creature_labels, initial_value=creature_labels[0]
+                "Creature", creature_labels, initial_value=initial_creature
+            )
+            self._onboarding_creature = creature_dropdown
+            creature_dropdown.on_update(
+                lambda event: self._preview_onboarding_choice(event.target.value)
             )
             goal_dropdown = self.gui.add_dropdown("Goal", goal_labels, initial_value=goal_labels[0])
             start_button = self.gui.add_button(
@@ -2250,6 +2290,15 @@ class BuildControls:
             edit_button = self.gui.add_button("Edit first")
 
             def _choose(*, run: bool) -> None:
+                if creature_dropdown.value in PICKER_LABELS:
+                    self._pick_start(creature_dropdown.value)
+                    if self._robot_panel.showing:
+                        self._remove_folder("_onboarding_folder")
+                        if self._simulate_button is not None:
+                            self._simulate_button.visible = True
+                    return
+                if self._robot_panel.showing:
+                    self._robot_panel.back()
                 creature_key = presets.preset_name_from_label(creature_dropdown.value)
                 goal_key = presets.onboarding_goal_key_from_label(goal_dropdown.value)
                 success = self._safe(

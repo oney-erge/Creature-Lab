@@ -236,3 +236,31 @@ def test_only_the_newest_check_up_of_a_robot_is_offered(tmp_path):
     synthetic_run().save(newer / "velstand" / "runs" / "shove_2N_fall")
     paths = list(find_replays(tmp_path).values())
     assert [p.name for p in paths] == ["shove_2N_fall"]
+
+
+def test_opening_a_robot_from_a_picker_plays_its_baseline_walk(tmp_path):
+    stage = _Stage()
+    _save_checkup(tmp_path, name="baseline")
+    _save_checkup(tmp_path, name="shove_3N_fall", push_n=3.0, fall_at=4.6)
+    panel, _, _ = _panel(tmp_path, stage=stage)
+    message = panel.open_robot("microduck")
+    ((key, run),) = stage.shown
+    assert key == "microduck" and run is not None and run.scenario.push_n == 0
+    assert "walking with its trained policy" in message
+    assert panel.showing and panel._back_button.visible
+
+
+def test_opening_a_robot_without_saved_runs_says_how_to_see_it_move(tmp_path):
+    stage = _Stage()
+    panel, _, _ = _panel(tmp_path, stage=stage)
+    message = panel.open_robot("unitree_g1")
+    assert stage.shown == [("unitree_g1", None)]
+    assert "Run robot check-up" in message
+
+
+def test_opening_a_robot_that_is_not_downloaded_shows_nothing(tmp_path):
+    stage = _Stage()
+    panel, _, _ = _panel(tmp_path, stage=stage, installed=lambda key: False)
+    assert not panel.can_open("microduck")
+    assert "creature-lab robots fetch microduck" in panel.open_robot("microduck")
+    assert stage.shown == [] and not panel.showing

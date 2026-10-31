@@ -21,6 +21,11 @@ from creature_lab.robots.fetch import is_installed, missing_extra
 
 _RUNNER = "from creature_lab.cli import app; app()"
 _NO_REPLAYS = "(run a check-up first)"
+#: How the real robots are listed in the editor's creature pickers (shown first).
+PICKER_LABELS = {
+    "Microduck · real robot": "microduck",
+    "Unitree G1 humanoid · real robot": "unitree_g1",
+}
 #: Run folders worth replaying, in the order they are listed.
 _ORDER = ("baseline", "shove", "grip", "battery", "payload")
 
@@ -195,6 +200,54 @@ class RobotCheckupPanel:
             self._stage.hide()
         self._back_button.visible = False
         self._status.content = "Back to your creature."
+
+    # ---- entry point from the creature pickers -------------------------------------------
+    @property
+    def showing(self) -> bool:
+        return self._stage is not None and self._stage.active
+
+    def can_open(self, key: str) -> bool:
+        """True when ``key`` is downloaded and the extra is installed (no message side effects)."""
+        return self._stage is not None and not self._missing() and self._installed(key)
+
+    def open_robot(self, key: str) -> str:
+        """Show ``key`` and play its newest saved baseline walk; returns a one-line status."""
+        title = ROBOTS[key].title
+        if self._stage is None:
+            return "The 3D robot view is not available in this editor."
+        if not self._ready(key, title):
+            return self._status.content
+        from creature_lab.robots.types import RobotRun
+
+        baseline = next(
+            (
+                path
+                for path in find_replays(self._out_root, key).values()
+                if path.name == "baseline"
+            ),
+            None,
+        )
+        try:
+            self._stage.show(key, RobotRun.read(baseline) if baseline else None)
+        except Exception as error:  # a model that fails to load must not break the editor
+            self._status.content = f"Could not show {title}: {error}"
+            return self._status.content
+        self._choice.value = title
+        self._set_follow()
+        self._back_button.visible = True
+        self._refresh_replays()
+        if baseline is None:
+            message = (
+                f"Showing {title}. Open Real robots and click Run robot check-up to see it walk, "
+                "get shoved, and fall."
+            )
+        else:
+            message = (
+                f"{title} walking with its trained policy. Open Real robots to replay the shoves "
+                "and falls, or pick a creature in Start from to design your own."
+            )
+        self._status.content = message
+        return message
 
     # ---- check-up subprocess -------------------------------------------------------------
     def start(self) -> None:

@@ -918,10 +918,50 @@ def test_onboarding_runs_the_chosen_design_and_starts_replay():
     assert "Simulation complete" in controls._activity_log.content
 
 
+def _creature_labels() -> list[str]:
+    """What both creature pickers list: the real robots first, then the presets."""
+    from creature_lab.editor.robot_panel import PICKER_LABELS
+
+    return [*PICKER_LABELS, *presets.preset_labels()]
+
+
+def test_creature_pickers_list_the_real_robots_first():
+    controls, _, _, _ = _make_controls(EditorSession(), show_onboarding=True)
+    pickers = [h for h in controls.gui.handles if h.options == _creature_labels()]
+    assert len(pickers) == 2  # Get started's Creature and Design's Start from
+    assert pickers[0].options[0] == "Microduck · real robot"
+    assert "Unitree G1 humanoid · real robot" in pickers[0].options
+    # Without a 3D robot stage (or a downloaded robot) the first run still starts on a preset.
+    assert pickers[0].value == presets.preset_labels()[0]
+
+
+def test_picking_a_real_robot_without_a_stage_explains_and_keeps_the_design():
+    session = EditorSession(template="quadruped")
+    controls, _, _, _ = _make_controls(session)
+    start_from = next(h for h in controls.gui.handles if h.options == _creature_labels())
+    before = session.creature.model_dump_json()
+
+    start_from.update("Microduck · real robot")
+
+    assert "3D robot view is not available" in session.last_message
+    assert session.creature.model_dump_json() == before
+    assert not session.can_undo
+
+
+def test_onboarding_with_a_real_robot_unavailable_keeps_the_picker_open():
+    controls, _, jobs, _ = _make_controls(EditorSession(), show_onboarding=True)
+    creature = next(h for h in controls.gui.handles if h.options == _creature_labels())
+    creature.update("Unitree G1 humanoid · real robot")
+    next(h for h in controls.gui.handles if h.text == "Run first simulation").click()
+
+    assert controls._onboarding_folder is not None  # nothing was shown, so stay on Get started
+    assert jobs.status().state == "idle"
+
+
 def test_onboarding_edit_first_applies_choice_without_running():
     session = EditorSession(template="hexapod")
     controls, _, jobs, _ = _make_controls(session, show_onboarding=True)
-    choice = next(h for h in controls.gui.handles if h.options == presets.preset_labels())
+    choice = next(h for h in controls.gui.handles if h.options == _creature_labels())
     choice.update("Hexapod")
     edit = next(h for h in controls.gui.handles if h.text == "Edit first")
 
@@ -937,9 +977,8 @@ def test_onboarding_selecting_humanoid_keeps_move_forward_goal():
     """The 12-DOF humanoid has a measured curated walking gait, so onboarding must
     preserve the user's Move forward goal instead of silently changing their intent."""
     controls, _, _, _ = _make_controls(EditorSession(), show_onboarding=True)
-    creature_labels = presets.preset_labels()
     goal_labels = presets.onboarding_goal_labels()
-    creature_dropdown = next(h for h in controls.gui.handles if h.options == creature_labels)
+    creature_dropdown = next(h for h in controls.gui.handles if h.options == _creature_labels())
     goal_dropdown = next(h for h in controls.gui.handles if h.options == goal_labels)
     assert goal_dropdown.value == "Move forward"  # sanity: default before any change
 
