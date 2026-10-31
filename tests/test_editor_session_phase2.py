@@ -9,9 +9,15 @@ from creature_lab.schema import CreatureSpec
 # -- gait mutation helpers -------------------------------------------------------
 
 
+def _gait_before_editing(session: EditorSession) -> CreatureSpec:
+    """The gait a first edit starts from: the quadruped runs a packaged, tuned gait by default,
+    and editing copies it into the editable motors before changing it."""
+    return session.editable_gait_creature()
+
+
 def test_scale_all_motors_scales_amplitude_and_frequency():
     session = EditorSession(template="quadruped")
-    before = {m.joint: (m.amplitude, m.frequency) for m in session.creature.motors}
+    before = {m.joint: (m.amplitude, m.frequency) for m in _gait_before_editing(session).motors}
 
     assert session.scale_all_motors(amplitude_factor=0.5, frequency_factor=0.5) is True
 
@@ -19,6 +25,7 @@ def test_scale_all_motors_scales_amplitude_and_frequency():
         old_amp, old_freq = before[motor.joint]
         assert motor.amplitude == old_amp * 0.5
         assert motor.frequency == old_freq * 0.5
+    assert session.controller == "sinusoid"  # the edited gait is the one that runs
     assert session.status().ok
     assert session.can_undo
 
@@ -38,7 +45,7 @@ def test_reverse_gait_shifts_every_phase_by_pi():
     import math
 
     session = EditorSession(template="quadruped")
-    before = {m.joint: m.phase for m in session.creature.motors}
+    before = {m.joint: m.phase for m in _gait_before_editing(session).motors}
 
     assert session.reverse_gait() is True
 
@@ -184,9 +191,10 @@ def test_part_label_and_hierarchy_markdown_use_selected_part():
 def test_reduce_amplitude_fix_reduces_measured_joint_motion_signal():
     """Not a physics test - just confirms the fix data flows into what diagnosis reads."""
     session = EditorSession(template="quadruped")
+    before = {m.joint: m.amplitude for m in _gait_before_editing(session).motors}
     session.scale_all_motors(amplitude_factor=0.5)
     for motor in session.creature.motors:
-        assert motor.amplitude <= 0.7  # well below the quadruped preset default of 0.7 * 1.0
+        assert motor.amplitude == before[motor.joint] * 0.5
 
 
 def test_diagnose_still_runs_after_applying_every_fix_to_a_diagnosable_creature():

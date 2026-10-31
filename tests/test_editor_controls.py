@@ -732,17 +732,31 @@ def test_run_history_lists_and_restores_a_saved_run(tmp_path):
 
 
 def test_run_history_replay_loads_playback_without_mutating_session(tmp_path):
-    creature = EditorSession(template="hexapod").creature
-    save_run(creature, _fake_trace(creature_name="hexapod"), runs_dir=tmp_path)
-
     session = EditorSession(template="quadruped")
-    controls, _, _, playback = _make_controls(session, runs_dir=tmp_path)
+    save_run(session.creature, _fake_trace(creature_name="quadruped"), runs_dir=tmp_path)
+    before = session.creature.model_dump_json()
 
+    controls, _, _, playback = _make_controls(session, runs_dir=tmp_path)
     label = next(iter(controls._run_history_by_label))
     controls._replay_run(label)
 
     assert playback.trace is not None
-    assert session.creature.name == "quadruped"  # replay doesn't restore the design
+    assert session.creature.model_dump_json() == before  # replay doesn't touch the design
+    assert not session.can_undo
+
+
+def test_run_history_replay_refuses_a_run_from_a_different_design(tmp_path):
+    """Replaying a hexapod run on the quadruped's 3D scene would draw the wrong body."""
+    other = EditorSession(template="hexapod").creature
+    save_run(other, _fake_trace(creature_name="hexapod"), runs_dir=tmp_path)
+
+    session = EditorSession(template="quadruped")
+    controls, _, _, playback = _make_controls(session, runs_dir=tmp_path)
+    controls._replay_run(next(iter(controls._run_history_by_label)))
+
+    assert playback.trace is None
+    assert "Restore this run's design" in session.last_message
+    assert session.creature.name == "quadruped"
 
 
 def test_run_history_empty_state_does_not_crash(tmp_path):
