@@ -9,7 +9,14 @@
   demand against pinned SHA-256 hashes; Microduck's CC BY-NC-SA meshes are never bundled.
 - Revert the toy duckling, its PyBullet "showcase" renderer and guided experiment; the check-up
   replaces them. The editor opens on the quadruped again.
-- Fix a stale editor test that called the simulate job without opening the Results phase.
+- The build editor gets a **Real robots** panel: show Microduck or the G1 in the 3D view from their
+  meshes, replay saved check-up runs with a follow camera, and run a check-up in the background.
+- `build`, `demo`, `replay` and `compare` now serve on the first free port from the one requested
+  and say so. Viser used to move on silently, so the CLI opened the requested port, which an older
+  editor often still held.
+- Update five editor tests that still described behavior changed on purpose earlier (the quadruped
+  runs a packaged gait, controller choice is undoable, replay requires the same design) and add
+  tests for the replay refusal.
 
 - Skip indistinguishable controller counterfactuals, preserve reference and perturbation
   recordings in verified evidence packs, and report individual trial conditions.

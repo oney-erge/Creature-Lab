@@ -15,6 +15,7 @@ from creature_lab.diagnostics import summarize_episode
 from creature_lab.editor.controls import BuildControls
 from creature_lab.editor.jobs import EditorJobManager, JobCancelled, ProgressReporter
 from creature_lab.editor.playback import EditorPlayback
+from creature_lab.editor.robot_stage import RobotStage
 from creature_lab.editor.session import EditorSession
 from creature_lab.qualification import BUILTIN_PROFILES, QualificationResult
 from creature_lab.qualification import qualify as run_qualify
@@ -58,6 +59,7 @@ class EditorPreview:
         self._handles = None
         self._editor_overlays: list[Any] = []
         self._framed_reach: float | None = None
+        self._visible = True
         self._comparison: tuple[Any, Any, EpisodeTrace, EpisodeTrace, tuple, tuple] | None = None
 
     def refresh(self) -> None:
@@ -78,6 +80,24 @@ class EditorPreview:
         apply_frame(self._handles, frame)
         self._add_editor_overlays(frame)
         self._maybe_reframe_camera()
+        self._apply_visibility()
+
+    def set_visible(self, visible: bool) -> None:
+        """Show or hide the creature being edited (the floor stays), e.g. behind a robot stage."""
+        self._visible = visible
+        if visible:
+            self.refresh_overlays()
+        else:
+            self._remove_overlays()
+        self._apply_visibility()
+
+    def _apply_visibility(self) -> None:
+        if self._handles is None:
+            return
+        for handle in [*self._handles.parts.values(), *self._handles.extras]:
+            handle.visible = self._visible
+        if not self._visible:
+            self._remove_overlays()
 
     def _maybe_reframe_camera(self) -> None:
         """Re-frame only when the creature's scale changed enough to matter.
@@ -342,6 +362,7 @@ def run_editor(
             controls.scene_changed()
 
     preview = EditorPreview(server, session, on_select=select_part, on_change=scene_changed)
+    robot_stage = RobotStage(server, set_editor_visible=preview.set_visible)
 
     job_manager = EditorJobManager()
     playback = EditorPlayback()
@@ -625,6 +646,7 @@ def run_editor(
         on_frame_camera=lambda: preview.frame_camera(),
         runs_dir=runs_dir,
         show_onboarding=show_onboarding,
+        robot_stage=robot_stage,
     )
     preview.refresh()
     loading.remove()

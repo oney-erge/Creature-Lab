@@ -51,6 +51,20 @@ Downloaded files live in `%LOCALAPPDATA%\creature-lab\robots` (Windows),
 `~/Library/Caches/creature-lab/robots` (macOS) or `~/.cache/creature-lab/robots` (Linux).
 Set `CREATURE_LAB_ROBOTS_DIR` to move them.
 
+## In the editor
+
+Open **Real robots: Microduck, Unitree G1** at the top of the build editor's panel (`uv run
+creature-lab build`):
+
+- **Show robot in 3D** swaps your creature for the real robot, drawn from its meshes.
+- **Replay in 3D** plays any saved run of the newest check-up (baseline, the shoves that fell and
+  the ones that did not, slippery floors) on that robot, with a camera that follows it.
+- **Run robot check-up** starts a check-up in the background and opens its report when done.
+- **Back to my creature** returns to the design you were editing.
+
+The panel never accepts a license for you: if the robot is not downloaded yet it tells you to
+run `creature-lab robots fetch ...` in a terminal, which shows the license first.
+
 ## What it tests
 
 1. **Baseline walk.** Ten seconds forward at a fixed command.
@@ -107,8 +121,8 @@ one for analysis or filming.
   get-up behaviour.
 - **Rendering** needs OpenGL. On a headless Linux machine set `MUJOCO_GL=egl` (or `osmesa`).
   The check-up itself and the HTML report need no graphics.
-- The editor's interactive 3D view does not show these robots yet; the check-up writes its own
-  report and film.
+- The editor's 3D robot view and replay are unit-tested and were drawn once in a headless
+  browser; the buttons have not had a walkthrough in a GPU browser.
 
 ## Adding another robot
 

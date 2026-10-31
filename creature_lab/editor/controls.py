@@ -83,8 +83,10 @@ class BuildControls:
         on_seek_comparison: Callable[[float], None] | None = None,
         runs_dir: Path = DEFAULT_RUNS_DIR,
         show_onboarding: bool = False,
+        robot_stage: Any = None,
     ) -> None:
         self.gui = gui
+        self._robot_stage = robot_stage
         self.session = session
         self.job_manager = job_manager
         self.playback = playback
@@ -196,6 +198,9 @@ class BuildControls:
         if show_onboarding:
             self._build_onboarding_panel()
 
+        # Real robots sit right under the first-run picker so they are seen, not buried.
+        self._robot_panel = RobotCheckupPanel(self.gui, stage=self._robot_stage)
+
         self._build_header_controls()
 
         # Phase nav is the primary navigation - it used to sit below ~500px of
@@ -236,7 +241,6 @@ class BuildControls:
 
         self._build_project_folder()
         self._build_history_folder()
-        self._robot_panel = RobotCheckupPanel(self.gui)
         with self.gui.add_folder("Activity", expand_by_default=False):
             self.gui.add_markdown("Recent actions in this shared editor session (up to 30).")
             self._activity_log = self.gui.add_markdown("")
@@ -1313,7 +1317,7 @@ class BuildControls:
         """Poll the running job and advance playback. Call once per main-loop iteration."""
         self._tick_job()
         self._tick_playback(dt)
-        self._robot_panel.tick()
+        self._robot_panel.tick(dt)
         if self.comparison_playing and self._comparison_duration > 0:
             fraction = min(1.0, self._comparison_fraction + dt / self._comparison_duration)
             self._seek_comparison(fraction)

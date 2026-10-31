@@ -29,6 +29,12 @@ _UNIT = {"microduck": 1.0, "unitree_g1": 5.2}
 _SHOVE_REFERENCE_N = {"microduck": 4.0, "unitree_g1": 150.0}
 
 
+def scene_file(robot: str):
+    """Path of the robot's studio scene (written on demand next to its downloaded files)."""
+    name, robot_file, tile = _SCENE_FILES[robot]
+    return write_studio_scene(robot_dir(robot), name, robot_file, tile_m=tile)
+
+
 @dataclass
 class Shot:
     """How the camera frames the robot."""
@@ -62,9 +68,7 @@ class Studio:
     data: mujoco.MjData = field(init=False)
 
     def __post_init__(self) -> None:
-        name, robot_file, tile = _SCENE_FILES[self.robot]
-        scene = write_studio_scene(robot_dir(self.robot), name, robot_file, tile_m=tile)
-        self.model = mujoco.MjModel.from_xml_path(str(scene))
+        self.model = mujoco.MjModel.from_xml_path(str(scene_file(self.robot)))
         self.model.vis.global_.offwidth = max(self.width, int(self.model.vis.global_.offwidth))
         self.model.vis.global_.offheight = max(self.height, int(self.model.vis.global_.offheight))
         self.data = mujoco.MjData(self.model)
