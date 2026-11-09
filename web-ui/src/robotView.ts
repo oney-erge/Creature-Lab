@@ -1,0 +1,405 @@
+import * as THREE from "three";
+import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
+import {
+  type Overlay,
+  type Poses,
+  POSE_STRIDE,
+  decodeMesh,
+  headingAt,
+  pushForceAt,
+  supportAt,
+  trunkAt,
+} from "./decode";
+import {
+  arrowLength,
+  framingFor,
+  pointInConvexPolygon,
+  robotUnit,
+  shoveReference,
+} from "./geometry";
+import { frameAt } from "./playback";
+import type { SceneDescription } from "./types";
+
+// MuJoCo, the server and the films all use Z up; so does this scene.
+THREE.Object3D.DEFAULT_UP.set(0, 0, 1);
+
+const FOG = 0x24334d;
+const TEAL = 0x2bc4a9;
+const RED = 0xf2645e;
+const AMBER = 0xf5c542;
+const ORANGE = 0xff7a30;
+
+interface Loaded {
+  key: string;
+  unit: number;
+  bodies: THREE.Group[];
+  root: THREE.Group;
+}
+
+export interface ViewOptions {
+  follow: boolean;
+  overlays: boolean;
+}
+
+/** An imperative three.js view of one robot at a time. React owns it through a ref. */
+export class RobotView {
+  private renderer: THREE.WebGLRenderer;
+  private scene = new THREE.Scene();
+  private camera: THREE.PerspectiveCamera;
+  private controls: OrbitControls;
+  private key: THREE.DirectionalLight;
+  private floor: THREE.Mesh;
+  private observer: ResizeObserver;
+  private frame = 0;
+  private disposed = false;
+
+  private loaded: Loaded | null = null;
+  private poses: Poses | null = null;
+  private overlay: Overlay | null = null;
+  private fps = 50;
+  private options: ViewOptions = { follow: true, overlays: true };
+  private lastFocus: THREE.Vector3 | null = null;
+  private time = 0;
+
+  private markers = new THREE.Group();
+  private outline: THREE.LineLoop;
+  private heading: THREE.Mesh;
+  private arrow = new THREE.Group();
+  private tmpA = new THREE.Quaternion();
+  private tmpB = new THREE.Quaternion();
+
+  constructor(private container: HTMLElement) {
+    this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    this.renderer.shadowMap.enabled = true;
+    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = 1.05;
+    this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+    this.renderer.domElement.style.cssText = "display:block;width:100%;height:100%";
+    container.appendChild(this.renderer.domElement);
+
+    this.scene.fog = new THREE.Fog(FOG, 4, 30);
+    this.camera = new THREE.PerspectiveCamera(38, 1, 0.01, 200);
+    this.controls = new OrbitControls(this.camera, this.renderer.domElement);
+    this.controls.enableDamping = true;
+    this.controls.dampingFactor = 0.08;
+    this.controls.maxPolarAngle = Math.PI / 2 - 0.04; // never below the floor
+    this.controls.screenSpacePanning = false;
+
+    this.scene.add(new THREE.HemisphereLight(0xb4c6e6, 0x182036, 1.15));
+    this.key = new THREE.DirectionalLight(0xfff1dc, 2.6);
+    this.key.castShadow = true;
+    this.key.shadow.mapSize.set(2048, 2048);
+    this.key.shadow.bias = -0.0004;
+    this.key.shadow.normalBias = 0.002;
+    this.scene.add(this.key, this.key.target);
+    const rim = new THREE.DirectionalLight(0x6f94d6, 0.9);
+    rim.position.set(-3, 3, 2);
+    this.scene.add(rim);
+
+    this.floor = new THREE.Mesh(
+      new THREE.PlaneGeometry(400, 400),
+      new THREE.MeshStandardMaterial({ roughness: 0.62, metalness: 0.08 }),
+    );
+    this.floor.receiveShadow = true;
+    this.scene.add(this.floor);
+
+    this.outline = new THREE.LineLoop(
+      new THREE.BufferGeometry().setAttribute("position", new THREE.BufferAttribute(new Float32Array(8 * 3), 3)),
+      new THREE.LineBasicMaterial({ color: TEAL, transparent: true, opacity: 0.95 }),
+    );
+    this.outline.frustumCulled = false;
+    this.heading = new THREE.Mesh(
+      new THREE.CylinderGeometry(1, 1, 0.12, 28),
+      new THREE.MeshBasicMaterial({ color: AMBER }),
+    );
+    this.heading.rotation.x = Math.PI / 2; // a disc lying on the floor
+    const shaft = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.1, 0.1, 1, 16),
+      new THREE.MeshStandardMaterial({ color: ORANGE, emissive: ORANGE, emissiveIntensity: 0.35 }),
+    );
+    const head = new THREE.Mesh(
+      new THREE.ConeGeometry(0.26, 0.42, 20),
+      new THREE.MeshStandardMaterial({ color: ORANGE, emissive: ORANGE, emissiveIntensity: 0.35 }),
+    );
+    shaft.name = "shaft";
+    head.name = "head";
+    this.arrow.add(shaft, head);
+    this.markers.add(this.outline, this.heading, this.arrow);
+    this.scene.add(this.markers);
+
+    this.observer = new ResizeObserver(() => this.resize());
+    this.observer.observe(container);
+    this.resize();
+    this.loop();
+  }
+
+  // ---- loading ---------------------------------------------------------------------------
+  /** Build the robot from its server-side description; `fetchMesh` returns a mesh payload. */
+  async loadRobot(
+    key: string,
+    heightCm: number,
+    description: SceneDescription,
+    fetchMesh: (id: number) => Promise<ArrayBuffer>,
+  ): Promise<void> {
+    const geometries = new Map<number, THREE.BufferGeometry>();
+    await Promise.all(
+      description.meshes.map(async (mesh) => {
+        const data = decodeMesh(await fetchMesh(mesh.id));
+        const geometry = new THREE.BufferGeometry();
+        geometry.setAttribute("position", new THREE.BufferAttribute(data.positions, 3));
+        geometry.setIndex(new THREE.BufferAttribute(data.indices, 1));
+        geometries.set(mesh.id, geometry);
+      }),
+    );
+    if (this.disposed) return;
+    this.clearRobot();
+    const unit = robotUnit(heightCm);
+    const root = new THREE.Group();
+    const bodies = Array.from({ length: description.bodyCount }, () => {
+      const group = new THREE.Group();
+      root.add(group);
+      return group;
+    });
+    for (const geom of description.geoms) {
+      const geometry = geometries.get(geom.mesh);
+      const body = bodies[geom.body];
+      if (!geometry || !body) continue;
+      const material = new THREE.MeshStandardMaterial({
+        roughness: 0.46,
+        metalness: 0.06,
+        flatShading: true, // per-face shading, like the films: crisp servos, no normals to compute
+      });
+      material.color.setRGB(geom.rgba[0], geom.rgba[1], geom.rgba[2], THREE.SRGBColorSpace);
+      const mesh = new THREE.Mesh(geometry, material);
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      mesh.position.set(...geom.pos);
+      mesh.quaternion.set(geom.quat[1], geom.quat[2], geom.quat[3], geom.quat[0]);
+      body.add(mesh);
+    }
+    this.scene.add(root);
+    this.loaded = { key, unit, bodies, root };
+    this.dress(unit);
+    this.frameCamera();
+  }
+
+  private clearRobot(): void {
+    if (!this.loaded) return;
+    this.scene.remove(this.loaded.root);
+    const seen = new Set<THREE.BufferGeometry>();
+    this.loaded.root.traverse((object) => {
+      if (object instanceof THREE.Mesh) {
+        if (!seen.has(object.geometry)) {
+          seen.add(object.geometry);
+          object.geometry.dispose();
+        }
+        (object.material as THREE.Material).dispose();
+      }
+    });
+    this.loaded = null;
+  }
+
+  /** Floor, light and fog sized to the robot: a 25 cm duck and a 1.3 m humanoid differ 5x. */
+  private dress(unit: number): void {
+    const tile = 0.12 * unit;
+    const texture = checkerTexture();
+    texture.repeat.set(400 / (2 * tile), 400 / (2 * tile));
+    texture.anisotropy = this.renderer.capabilities.getMaxAnisotropy();
+    const material = this.floor.material as THREE.MeshStandardMaterial;
+    material.map?.dispose();
+    material.map = texture;
+    material.needsUpdate = true;
+    (this.scene.fog as THREE.Fog).near = 3 * unit + 1;
+    (this.scene.fog as THREE.Fog).far = 18 * unit + 8;
+    const reach = 2.6 * unit;
+    const cam = this.key.shadow.camera;
+    cam.left = -reach;
+    cam.right = reach;
+    cam.top = reach;
+    cam.bottom = -reach;
+    cam.near = 0.1;
+    cam.far = 12 * unit + 4;
+    cam.updateProjectionMatrix();
+    this.markers.scale.setScalar(1);
+    this.heading.scale.set(0.011 * unit, 0.011 * unit, 0.011 * unit);
+    this.camera.near = 0.01 * unit;
+    this.camera.far = 80 * unit + 30;
+    this.camera.updateProjectionMatrix();
+    this.controls.minDistance = 0.15 * unit;
+    this.controls.maxDistance = 8 * unit;
+  }
+
+  setRun(poses: Poses, overlay: Overlay, fps: number): void {
+    this.poses = poses;
+    this.overlay = overlay;
+    this.fps = fps;
+    this.lastFocus = null;
+    this.setTime(0);
+    this.frameCamera();
+  }
+
+  setOptions(options: ViewOptions): void {
+    this.options = options;
+    this.markers.visible = options.overlays;
+  }
+
+  // ---- per-frame state -------------------------------------------------------------------
+  /** Pose the robot (interpolated between recorded frames) and the markers at run time `t`. */
+  setTime(t: number): void {
+    this.time = t;
+    const { poses, overlay, loaded } = this;
+    if (!poses || !overlay || !loaded || poses.frames === 0) return;
+    const { i0, i1, w } = frameAt(t, this.fps, poses.frames);
+    const stride = poses.bodies * POSE_STRIDE;
+    loaded.bodies.forEach((group, body) => {
+      const a = i0 * stride + body * POSE_STRIDE;
+      const b = i1 * stride + body * POSE_STRIDE;
+      const d = poses.data;
+      group.position.set(
+        lerp(d[a]!, d[b]!, w),
+        lerp(d[a + 1]!, d[b + 1]!, w),
+        lerp(d[a + 2]!, d[b + 2]!, w),
+      );
+      this.tmpA.set(d[a + 4]!, d[a + 5]!, d[a + 6]!, d[a + 3]!);
+      this.tmpB.set(d[b + 4]!, d[b + 5]!, d[b + 6]!, d[b + 3]!);
+      group.quaternion.slerpQuaternions(this.tmpA, this.tmpB, w);
+    });
+    const trunk = trunkAt(overlay, i0);
+    const trunkNext = trunkAt(overlay, i1);
+    const focus = new THREE.Vector3(
+      lerp(trunk[0], trunkNext[0], w),
+      lerp(trunk[1], trunkNext[1], w),
+      0,
+    );
+    this.updateMarkers(i0, loaded.unit);
+    this.follow(focus);
+    // Keep the key light and its shadow box over the robot.
+    this.key.target.position.copy(focus);
+    this.key.position.set(focus.x + 2.2 * loaded.unit, focus.y - 3 * loaded.unit, 4.2 * loaded.unit);
+  }
+
+  private updateMarkers(frame: number, unit: number): void {
+    const overlay = this.overlay;
+    if (!overlay) return;
+    const outline = supportAt(overlay, frame);
+    const heading = headingAt(overlay, frame);
+    const inside = pointInConvexPolygon(heading, outline);
+    const positions = this.outline.geometry.getAttribute("position") as THREE.BufferAttribute;
+    const z = 0.0015 * unit;
+    outline.slice(0, 8).forEach(([x, y], i) => positions.setXYZ(i, x, y, z));
+    this.outline.geometry.setDrawRange(0, outline.length);
+    positions.needsUpdate = true;
+    this.outline.visible = outline.length > 1;
+    (this.outline.material as THREE.LineBasicMaterial).color.setHex(inside || outline.length < 3 ? TEAL : RED);
+    this.heading.visible = outline.length > 0;
+    this.heading.position.set(heading[0], heading[1], z * 1.2);
+
+    const force = pushForceAt(overlay, frame);
+    this.arrow.visible = force !== 0;
+    if (force !== 0) {
+      const length = arrowLength(force, shoveReference(unit), unit);
+      const headLength = 0.22 * length;
+      const shaftLength = length - headLength;
+      const gap = 0.05 * unit; // the tip stops this far short of the trunk
+      const radius = 0.042 * unit; // the unit shaft has radius 0.1, so this is 0.0042 * unit
+      const shaft = this.arrow.getObjectByName("shaft") as THREE.Mesh;
+      const head = this.arrow.getObjectByName("head") as THREE.Mesh;
+      // Built along +Y pointing at the trunk (at the origin): tail at -(gap + length).
+      shaft.scale.set(radius, shaftLength, radius);
+      shaft.position.set(0, -(gap + length) + shaftLength / 2, 0);
+      head.scale.set(radius, headLength / 0.42, radius);
+      head.position.set(0, -gap - headLength / 2, 0);
+      // A shove toward -Y comes from the +Y side: turn the whole arrow half a turn.
+      this.arrow.rotation.z = force > 0 ? 0 : Math.PI;
+      const trunk = trunkAt(overlay, frame);
+      this.arrow.position.set(trunk[0], trunk[1], trunk[2]);
+    }
+  }
+
+  private follow(focus: THREE.Vector3): void {
+    if (this.options.follow && this.lastFocus) {
+      const delta = focus.clone().sub(this.lastFocus);
+      this.camera.position.add(delta);
+      this.controls.target.add(delta);
+    }
+    this.lastFocus = focus;
+  }
+
+  /** Put the camera at a comfortable three-quarter view of the robot. */
+  frameCamera(): void {
+    if (!this.loaded) return;
+    const { distance, lookHeight } = framingFor(this.loaded.key, this.loaded.unit * 25);
+    const focus = this.lastFocus ?? new THREE.Vector3(0, 0, 0);
+    const target = new THREE.Vector3(focus.x, focus.y, lookHeight * distance);
+    this.controls.target.copy(target);
+    this.camera.position.set(
+      target.x + distance * 0.78,
+      target.y - distance * 0.82,
+      target.z + distance * 0.42,
+    );
+    this.controls.update();
+  }
+
+  // ---- loop ------------------------------------------------------------------------------
+  private resize(): void {
+    const { clientWidth: w, clientHeight: h } = this.container;
+    if (w === 0 || h === 0) return;
+    this.renderer.setSize(w, h, false);
+    this.camera.aspect = w / h;
+    this.camera.updateProjectionMatrix();
+  }
+
+  private loop = (): void => {
+    if (this.disposed) return;
+    this.controls.update();
+    this.renderer.render(this.scene, this.camera);
+    this.frame = requestAnimationFrame(this.loop);
+  };
+
+  /** The most recent time passed to setTime (for tests and screenshots). */
+  get currentTime(): number {
+    return this.time;
+  }
+
+  dispose(): void {
+    this.disposed = true;
+    cancelAnimationFrame(this.frame);
+    this.observer.disconnect();
+    this.controls.dispose();
+    this.clearRobot();
+    this.renderer.dispose();
+    this.renderer.domElement.remove();
+  }
+}
+
+function lerp(a: number, b: number, w: number): number {
+  return a + (b - a) * w;
+}
+
+/** A dark two-tone checker with faint grid lines, in the colours of the films' studio floor. */
+function checkerTexture(): THREE.CanvasTexture {
+  const size = 256;
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext("2d")!;
+  ctx.fillStyle = "#2a354c";
+  ctx.fillRect(0, 0, size, size);
+  ctx.fillStyle = "#232d42";
+  ctx.fillRect(0, 0, size / 2, size / 2);
+  ctx.fillRect(size / 2, size / 2, size / 2, size / 2);
+  ctx.strokeStyle = "rgba(120,150,200,0.28)";
+  ctx.lineWidth = 2;
+  ctx.strokeRect(1, 1, size - 2, size - 2);
+  ctx.beginPath();
+  ctx.moveTo(size / 2, 0);
+  ctx.lineTo(size / 2, size);
+  ctx.moveTo(0, size / 2);
+  ctx.lineTo(size, size / 2);
+  ctx.stroke();
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+}

@@ -1,0 +1,145 @@
+// Shapes of what creature_lab/web/server.py returns. Keep in step with that file.
+
+export type Outcome = "walked" | "fell_and_got_up" | "fell";
+export type RunKind = "baseline" | "shove" | "grip" | "battery" | "payload" | "other";
+
+export interface PolicyInfo {
+  key: string;
+  title: string;
+  summary: string;
+  getsUp: boolean;
+}
+
+export interface ShoveRow {
+  force: number;
+  total: number;
+  stayedUp: number;
+  gotUp: number;
+  stayedDown: number;
+  fallRun: string | null;
+  okRun: string | null;
+}
+
+export interface ConditionRow {
+  label: string;
+  passed: boolean;
+  relativeDistance: number;
+  verdict: string;
+  run: string | null;
+}
+
+export interface PolicySummary {
+  policy: string;
+  title: string;
+  summary: string;
+  getsUp: boolean;
+  baseline: string;
+  baselineRun: string | null;
+  neverFallsUpTo: number | null;
+  neverStaysDownUpTo: number | null;
+  shoves: ShoveRow[];
+  conditions: ConditionRow[];
+}
+
+export interface CheckupSummary {
+  robot: string;
+  folder: string;
+  policies: PolicySummary[];
+}
+
+export interface RobotInfo {
+  key: string;
+  title: string;
+  maker: string;
+  summary: string;
+  heightCm: number;
+  credit: string;
+  licenseNotice: string;
+  nonCommercial: boolean;
+  installed: boolean;
+  hasResults: boolean;
+  policies: PolicyInfo[];
+  checkup: CheckupSummary | null;
+}
+
+export interface RobotsResponse {
+  robots: RobotInfo[];
+  missingPackages: string[];
+}
+
+export interface RunCard {
+  id: string;
+  robot: string;
+  policy: string;
+  policyTitle: string;
+  title: string;
+  kind: RunKind;
+  outcome: Outcome;
+  outcomeText: string;
+  verdict: string;
+  fallAt: number | null;
+  recoveredAt: number | null;
+  distance: number;
+  pushN: number;
+}
+
+export interface Evidence {
+  label: string;
+  value: string;
+  detail: string;
+}
+
+export interface RunEvents {
+  pushAt: number | null;
+  pushFor: number;
+  pushN: number;
+  pushSide: "left" | "right";
+  fallAt: number | null;
+  recoveredAt: number | null;
+}
+
+export interface RunDetail extends RunCard {
+  fps: number;
+  frames: number;
+  duration: number;
+  scenario: Record<string, unknown>;
+  cause: string | null;
+  causeText: string | null;
+  evidence: Evidence[];
+  peakTiltDeg: number;
+  events: RunEvents;
+  tilt: number[];
+  credit: string;
+}
+
+export interface SceneGeom {
+  id: number;
+  body: number;
+  mesh: number;
+  pos: [number, number, number];
+  quat: [number, number, number, number];
+  rgba: [number, number, number, number];
+}
+
+export interface SceneDescription {
+  robot: string;
+  bodyCount: number;
+  poseStride: number;
+  geoms: SceneGeom[];
+  meshes: { id: number; vertices: number; faces: number }[];
+}
+
+export interface Job {
+  id: string;
+  kind: "download" | "checkup" | string;
+  robot: string;
+  state: "running" | "done" | "failed";
+  progress: number;
+  message: string;
+  error: string | null;
+  output: string | null;
+}
+
+export interface BuilderInfo {
+  url: string;
+}
