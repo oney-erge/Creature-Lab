@@ -22,6 +22,15 @@
   the committed `creature_lab/web/static/`. `scripts/start.py` defaults to `--mode app` and
   installs the app's extras itself; `--creature`, `--creature-path` or `--task` still open the
   build editor.
+- Browser app polish from a full click-through: on wide screens the library, 3D view and results
+  each scroll on their own, so picking a run never scrolls the robot away; a downloaded robot is
+  shown in the invitation; a download or check-up still running after a page reload is picked up
+  again (`GET /api/jobs`); the report opens with its film (served under `/report/`); the history
+  is one keyboard stop (arrow keys, plus a skip link); an unreachable server offers **Try again**;
+  and the 3D view draws only when something changed.
+- `build --preset NAME` (and **Build your own** in the app) opens the editor on that creature;
+  it used to open on the Microduck whenever the robot was downloaded. `doctor` now reports
+  whether the browser app's extras are installed.
 - Update five editor tests that still described behavior changed on purpose earlier (the quadruped
   runs a packaged gait, controller choice is undoable, replay requires the same design) and add
   tests for the replay refusal.

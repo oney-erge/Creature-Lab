@@ -38,9 +38,15 @@ build editor.
 - **Compare policies.** Switch between a robot's policies and open any shove in the matrix.
   Every card in the history is a run you can watch.
 - **Run a check-up.** *Run check-up* starts the same run as `creature-lab robots checkup` in the
-  background and shows its progress. When it finishes, the app opens the new results.
+  background and shows its progress (about two minutes). When it finishes, the app opens the new
+  results. If you reload the page meanwhile, it picks the running job up again.
+- **Open the report.** *Open report* shows the HTML report of the newest check-up, with its film.
 - **Build your own.** This opens the classic build editor for your own creature (it needs the
   `sim` and `viz` extras).
+
+Everything works from the keyboard: the first Tab stop is a skip link to the 3D view, the run
+history is one stop (arrow keys move between runs), and the timeline takes the arrow keys, Home
+and End.
 
 ## How it is built
 
