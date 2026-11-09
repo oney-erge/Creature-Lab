@@ -114,6 +114,13 @@ def test_runs_come_baseline_first_then_shoves_then_conditions(client):
     assert up["outcome"] == "fell_and_got_up" and up["outcomeText"].startswith("Back up in")
 
 
+def test_run_cards_say_how_hard_the_shove_was(client):
+    runs = client.get("/api/robots/microduck/runs").json()["runs"]
+    baseline = next(r for r in runs if r["kind"] == "baseline")
+    shove = next(r for r in runs if r["title"] == "3 N shove")
+    assert (baseline["pushN"], shove["pushN"]) == (0, 3)
+
+
 def test_a_robot_without_results_has_no_runs(client):
     assert client.get("/api/robots/unitree_g1/runs").json() == {"runs": []}
 
@@ -390,3 +397,61 @@ def test_without_a_build_the_app_says_how_to_make_one(results, installed, tmp_pa
     client = _client(create_app(results, static_dir=tmp_path / "missing"), headers=HEADERS)
     response = client.get("/")
     assert response.status_code == 503 and "npm run build" in response.json()["error"]
+
+
+# ---- report and classic builder ------------------------------------------------------------
+
+
+def test_the_report_is_served_when_a_check_up_wrote_one(results, installed):
+    client = _client(create_app(results, static_dir=results / "no-ui"), headers=HEADERS)
+    assert client.get("/api/robots/microduck/report").status_code == 404  # none written yet
+    folder = next(results.iterdir())
+    (folder / "report.html").write_text("<h1>Microduck check-up</h1>", encoding="utf-8")
+    response = client.get("/api/robots/microduck/report")
+    assert response.status_code == 200 and "Microduck check-up" in response.text
+    assert client.get("/api/robots/walle/report").status_code == 404
+
+
+def test_the_classic_builder_opens_only_known_presets(results, installed):
+    from creature_lab.web.builder import Builder
+
+    started = []
+
+    def launcher(args):
+        started.append(list(args))
+        return SimpleNamespace(poll=lambda: None, terminate=lambda: None)
+
+    builder = Builder(launcher=launcher, port_open=lambda port: True, wait_s=2)
+    client = _client(
+        create_app(results, static_dir=results / "no-ui", builder=builder), headers=HEADERS
+    )
+    url = client.post("/api/builder", json={"preset": "hexapod"}).json()["url"]
+    assert url.startswith("http://localhost:81")
+    assert started[0][:4] == ["build", "--preset", "hexapod", "--no-open-browser"]
+    again = client.post("/api/builder", json={"preset": "hexapod"}).json()["url"]
+    assert again == url and len(started) == 1  # the running one is reused
+    client.post("/api/builder", json={"preset": "worm"})
+    assert len(started) == 2  # a different preset restarts it
+    assert client.post("/api/builder", json={"preset": "../../etc"}).status_code == 409
+    assert client.post("/api/builder", json={}).status_code == 422
+    assert (
+        _client(create_app(results, static_dir=results / "no-ui"))
+        .post("/api/builder", json={"preset": "worm"})
+        .status_code
+        == 403
+    )  # needs the guard header like every changing request
+
+
+def test_a_builder_that_exits_at_once_explains_the_missing_extra(results, installed):
+    from creature_lab.web.builder import Builder
+
+    builder = Builder(
+        launcher=lambda args: SimpleNamespace(poll=lambda: 1, terminate=lambda: None),
+        port_open=lambda port: False,
+        wait_s=2,
+    )
+    client = _client(
+        create_app(results, static_dir=results / "no-ui", builder=builder), headers=HEADERS
+    )
+    response = client.post("/api/builder", json={"preset": "worm"})
+    assert response.status_code == 409 and "extra sim" in response.json()["detail"]

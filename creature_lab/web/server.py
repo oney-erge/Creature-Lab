@@ -13,6 +13,7 @@ from pydantic import BaseModel
 from creature_lab import VERSION
 from creature_lab.robots.catalog import ROBOTS, robot_info
 from creature_lab.robots.fetch import is_installed, missing_extra
+from creature_lab.web.builder import Builder, BuilderError
 from creature_lab.web.jobs import Jobs, known_robot
 from creature_lab.web.library import Library
 from creature_lab.web.scene import load_scene, overlay_payload
@@ -33,6 +34,10 @@ class DownloadRequest(BaseModel):
     accept_license: bool = False
 
 
+class BuilderRequest(BaseModel):
+    preset: str
+
+
 def _host_name(request: Request) -> str:
     host = request.headers.get("host", "")
     return host.rsplit(":", 1)[0] if not host.startswith("[") else host.split("]")[0] + "]"
@@ -44,6 +49,7 @@ def create_app(
     static_dir: Path | None = None,
     jobs: Jobs | None = None,
     thumbnails: Thumbnails | None = None,
+    builder: Builder | None = None,
     allowed_hosts: set[str] | None = None,
 ) -> FastAPI:
     """Build the app. ``checkup_root`` is where check-up results live and are written."""
@@ -51,6 +57,7 @@ def create_app(
     library = Library(checkup_root)
     jobs = jobs or Jobs(checkup_root)
     thumbnails = thumbnails or Thumbnails()
+    builder = builder or Builder()
     hosts = allowed_hosts or _LOCAL_HOSTS
     static = static_dir if static_dir is not None else STATIC_DIR
 
@@ -215,6 +222,22 @@ def create_app(
         if missing_extra():
             raise HTTPException(409, f"missing packages: {', '.join(missing_extra())}")
         return jobs.start_checkup(key).snapshot()
+
+    @app.post("/api/builder")
+    def open_builder(body: BuilderRequest) -> dict:
+        try:
+            return {"url": builder.open(body.preset)}
+        except BuilderError as error:
+            raise HTTPException(409, str(error)) from error
+
+    @app.get("/api/robots/{key}/report", include_in_schema=False)
+    def report(key: str) -> Response:
+        _require_robot(key)
+        folder = library.newest_folder(key)
+        page = folder / "report.html" if folder else None
+        if page is None or not page.is_file():
+            raise HTTPException(404, "no report yet: run a check-up first")
+        return FileResponse(page, media_type="text/html")
 
     @app.get("/api/jobs/{job_id}")
     def job(job_id: str) -> dict:

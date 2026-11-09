@@ -55,6 +55,7 @@ class RunEntry:
             "fallAt": a.fall_time_s,
             "recoveredAt": a.recovered_time_s,
             "distance": round(a.distance_m, 2),
+            "pushN": self.scenario.get("push_n", 0.0),
         }
 
 
