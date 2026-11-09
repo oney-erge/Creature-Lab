@@ -38,7 +38,7 @@ export function LicenseDialog({ robot, onAccept, onCancel }: Props) {
           hashes and stay on this computer.
         </p>
         <blockquote>{robot.licenseNotice}</blockquote>
-        {robot.nonCommercial && (
+        {robot.nonCommercial && !/non-?commercial/i.test(robot.licenseNotice) && (
           <p className="warn">
             Pictures and videos that show this robot's meshes must carry its credit and stay
             non-commercial.

@@ -45,7 +45,20 @@ function Hero({
         <p className="eyebrow">{robot.maker}</p>
         <h1>{robot.installed ? `Check up the ${robot.title}` : `Meet the ${robot.title}`}</h1>
         <p className="lede">{robot.summary}</p>
-        {!robot.installed ? (
+        {busy && job ? (
+          <div className="hero-progress" role="status" aria-live="polite">
+            <progress max={1} value={job.progress} aria-label="Progress" />
+            <p>
+              {job.kind === "download" ? "Downloading" : "Running the check-up"} ·{" "}
+              {job.message || "working…"}
+            </p>
+            <p className="muted">
+              {job.kind === "download"
+                ? "This takes a few seconds."
+                : "This takes a minute or two. You can leave this tab open."}
+            </p>
+          </div>
+        ) : !robot.installed ? (
           <>
             <p className="muted">
               Creature Lab runs the real robot model with its real trained policy, shoves it, and
@@ -61,7 +74,7 @@ function Hero({
             <p className="muted">
               The robot is on this computer. A check-up shoves it at several strengths and moments,
               tries slippery floors and weak batteries, and writes down why each fall happened. It
-              takes about a minute.
+              takes a minute or two.
             </p>
             <button
               type="button"
@@ -80,6 +93,13 @@ function Hero({
           </p>
         )}
       </div>
+      {robot.installed ? (
+        <img
+          className="hero-photo"
+          src={api.robotThumbnail(robot.key)}
+          alt={`${robot.title} standing in the studio (simulation)`}
+        />
+      ) : (
       <svg className="hero-art" viewBox="0 0 220 220" aria-hidden="true">
         <ellipse cx="110" cy="196" rx="70" ry="9" fill="rgba(0,0,0,.35)" />
         <rect x="62" y="70" width="96" height="58" rx="22" fill="none" stroke="currentColor" strokeWidth="5" />
@@ -87,6 +107,7 @@ function Hero({
         <circle cx="90" cy="98" r="7" fill="currentColor" />
         <circle cx="130" cy="98" r="7" fill="currentColor" />
       </svg>
+      )}
     </div>
   );
 }
@@ -105,9 +126,23 @@ export default function App() {
   const [banner, setBanner] = useState<string | null>(null);
   const [buildNote, setBuildNote] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const [attempt, setAttempt] = useState(0);
+  const [canRetry, setCanRetry] = useState(false);
   const jobRunning = useRef(false);
 
   const robot = robots.find((r) => r.key === robotKey) ?? null;
+
+  // On narrow screens the library sits below the 3D view: bring the view back after a pick.
+  const showPlayer = useCallback(() => {
+    document.getElementById("player")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, []);
+  const watch = useCallback(
+    (id: string) => {
+      setRunId(id);
+      showPlayer();
+    },
+    [showPlayer],
+  );
 
   const refresh = useCallback(async (): Promise<RobotInfo[]> => {
     const data = await api.robots();
@@ -138,12 +173,13 @@ export default function App() {
         const first = list.find((r) => r.hasResults) ?? list.find((r) => r.installed) ?? list[0];
         if (first) await openRobot(first.key, list);
       } catch (e) {
-        setBanner(`Could not reach the Creature Lab server: ${errorText(e)}`);
+        setBanner(`Could not reach the Creature Lab server (${errorText(e)}). Is it still running?`);
+        setCanRetry(true);
       } finally {
         setLoaded(true);
       }
     })();
-  }, [refresh, openRobot]);
+  }, [refresh, openRobot, attempt]);
 
   // The selected run's story.
   useEffect(() => {
@@ -204,6 +240,25 @@ export default function App() {
       },
     );
 
+  // A page reloaded during a download or check-up follows the running job again.
+  useEffect(() => {
+    if (!loaded) return;
+    api
+      .runningJobs()
+      .then((active) => {
+        const resumed = active[0];
+        if (!resumed) return;
+        void track(
+          async () => resumed,
+          async () => {
+            const list = await refresh();
+            await openRobot(resumed.robot, list);
+          },
+        );
+      })
+      .catch(() => undefined);
+  }, [loaded, track, refresh, openRobot]);
+
   const build = async (preset: string) => {
     setBuildNote("Opening the classic builder…");
     try {
@@ -220,6 +275,9 @@ export default function App() {
 
   return (
     <div className="app">
+      <a className="skip" href="#player">
+        Skip to the 3D view
+      </a>
       <header className="top">
         <div className="brand">
           <svg width="28" height="28" viewBox="0 0 28 28" aria-hidden="true">
@@ -254,7 +312,7 @@ export default function App() {
         </button>
       </header>
 
-      {job && (
+      {job && !(robot && !hasStage && job.robot === robot.key) && (
         <div className={`jobbar ${job.state}`} role="status" aria-live="polite">
           <span>
             {job.kind === "download" ? "Downloading" : "Check-up"} · {job.message || "working…"}
@@ -264,26 +322,45 @@ export default function App() {
       )}
       {banner && (
         <div className="banner" role="alert">
-          {banner}
-          <button type="button" className="link" onClick={() => setBanner(null)}>
-            Dismiss
-          </button>
+          <span>{banner}</span>
+          <span className="banner-actions">
+            {canRetry && (
+              <button
+                type="button"
+                className="link"
+                onClick={() => {
+                  setBanner(null);
+                  setCanRetry(false);
+                  setLoaded(false);
+                  setAttempt((n) => n + 1);
+                }}
+              >
+                Try again
+              </button>
+            )}
+            <button type="button" className="link" onClick={() => setBanner(null)}>
+              Dismiss
+            </button>
+          </span>
         </div>
       )}
 
-      <div className="shell">
+      <div className={`shell${hasStage ? "" : " solo"}`}>
         <Library
           robots={robots}
           selected={robotKey ?? ""}
-          onSelect={(key) => void openRobot(key, robots)}
+          onSelect={(key) => {
+            void openRobot(key, robots);
+            showPlayer();
+          }}
           runs={runs}
           runId={runId}
-          onRun={setRunId}
+          onRun={watch}
           onBuild={(preset) => void build(preset)}
           buildNote={buildNote}
         />
 
-        <main className="center">
+        <main className="center" id="player" tabIndex={-1}>
           {!loaded && <div className="stage-note">Loading…</div>}
           {loaded && robot && hasStage && <Stage robot={robot} run={detail} playback={playback} />}
           {loaded && robot && !hasStage && (
@@ -298,14 +375,14 @@ export default function App() {
           {hasStage && <Timeline playback={playback} run={detail} />}
         </main>
 
-        {robot && (
+        {robot && hasStage && (
           <Inspector
             robot={robot}
             checkup={robot.checkup}
             policyKey={policyKey}
             onPolicy={setPolicyKey}
             run={detail}
-            onRun={setRunId}
+            onRun={watch}
           />
         )}
       </div>

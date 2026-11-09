@@ -59,9 +59,10 @@ export const api = {
   overlay: (id: string) => getBuffer(`/api/runs/${id}/overlay`),
   robotThumbnail: (robot: string) => `/api/robots/${robot}/thumbnail`,
   runThumbnail: (id: string) => `/api/runs/${id}/thumbnail`,
-  reportUrl: (robot: string) => `/api/robots/${robot}/report`,
+  reportUrl: (robot: string) => `/api/robots/${robot}/report/`,
   download: (robot: string) => postJSON<Job>(`/api/robots/${robot}/download`, { accept_license: true }),
   startCheckup: (robot: string) => postJSON<Job>(`/api/robots/${robot}/checkup`),
   job: (id: string) => getJSON<Job>(`/api/jobs/${id}`),
+  runningJobs: async () => (await getJSON<{ jobs: Job[] }>("/api/jobs")).jobs,
   builder: (preset: string) => postJSON<BuilderInfo>("/api/builder", { preset }),
 };

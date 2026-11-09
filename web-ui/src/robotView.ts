@@ -50,6 +50,8 @@ export class RobotView {
   private key: THREE.DirectionalLight;
   private floor: THREE.Mesh;
   private observer: ResizeObserver;
+  /** Set whenever the picture could differ from the last one drawn. */
+  private dirty = true;
   private frame = 0;
   private disposed = false;
 
@@ -72,7 +74,7 @@ export class RobotView {
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.renderer.shadowMap.type = THREE.PCFShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.05;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -129,6 +131,7 @@ export class RobotView {
     this.markers.add(this.outline, this.heading, this.arrow);
     this.scene.add(this.markers);
 
+    this.controls.addEventListener("change", () => (this.dirty = true));
     this.observer = new ResizeObserver(() => this.resize());
     this.observer.observe(container);
     this.resize();
@@ -183,6 +186,7 @@ export class RobotView {
     this.loaded = { key, unit, bodies, root };
     this.dress(unit);
     this.frameCamera();
+    this.dirty = true;
   }
 
   private clearRobot(): void {
@@ -236,6 +240,7 @@ export class RobotView {
     this.overlay = overlay;
     this.fps = fps;
     this.lastFocus = null;
+    this.dirty = true;
     this.setTime(0);
     this.frameCamera();
   }
@@ -243,12 +248,15 @@ export class RobotView {
   setOptions(options: ViewOptions): void {
     this.options = options;
     this.markers.visible = options.overlays;
+    this.dirty = true;
   }
 
   // ---- per-frame state -------------------------------------------------------------------
   /** Pose the robot (interpolated between recorded frames) and the markers at run time `t`. */
   setTime(t: number): void {
+    if (t === this.time && !this.dirty) return;
     this.time = t;
+    this.dirty = true;
     const { poses, overlay, loaded } = this;
     if (!poses || !overlay || !loaded || poses.frames === 0) return;
     const { i0, i1, w } = frameAt(t, this.fps, poses.frames);
@@ -349,12 +357,17 @@ export class RobotView {
     this.renderer.setSize(w, h, false);
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
+    this.dirty = true;
   }
 
+  /** Draw the next frame only when something changed, so a paused view costs nothing. */
   private loop = (): void => {
     if (this.disposed) return;
     this.controls.update();
-    this.renderer.render(this.scene, this.camera);
+    if (this.dirty) {
+      this.dirty = false;
+      this.renderer.render(this.scene, this.camera);
+    }
     this.frame = requestAnimationFrame(this.loop);
   };
 

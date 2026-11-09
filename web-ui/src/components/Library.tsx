@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type KeyboardEvent } from "react";
 import { api } from "../api";
 import { groupRuns, outcomeTone } from "../format";
 import type { RobotInfo, RunCard } from "../types";
@@ -37,9 +37,28 @@ const PRESETS = [
   { key: "humanoid", name: "Humanoid" },
 ];
 
+/** Arrow keys, Home and End move between the run cards, so one Tab stop covers the whole list. */
+function moveBetweenRuns(event: KeyboardEvent<HTMLElement>) {
+  const keys = ["ArrowDown", "ArrowUp", "Home", "End"];
+  if (!keys.includes(event.key)) return;
+  const cards = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>(".run-card"));
+  const at = cards.indexOf(document.activeElement as HTMLButtonElement);
+  if (at < 0) return;
+  event.preventDefault();
+  const next =
+    event.key === "Home"
+      ? 0
+      : event.key === "End"
+        ? cards.length - 1
+        : Math.min(Math.max(at + (event.key === "ArrowDown" ? 1 : -1), 0), cards.length - 1);
+  cards[next]?.focus();
+  cards[next]?.scrollIntoView({ block: "nearest" });
+}
+
 export function Library({ robots, selected, onSelect, runs, runId, onRun, onBuild, buildNote }: Props) {
   const robot = robots.find((r) => r.key === selected);
   const groups = groupRuns(runs);
+  const tabStop = runs.some((r) => r.id === runId) ? runId : runs[0]?.id;
   return (
     <aside className="rail-col" aria-label="Library">
       <section>
@@ -71,7 +90,7 @@ export function Library({ robots, selected, onSelect, runs, runId, onRun, onBuil
       </section>
 
       {robot && runs.length > 0 && (
-        <section>
+        <section aria-label={`History of ${robot.title} runs`} onKeyDown={moveBetweenRuns}>
           <h2 className="eyebrow">History · {robot.title}</h2>
           {groups.map((group) => (
             <div key={group.kind} className="run-group">
@@ -82,6 +101,7 @@ export function Library({ robots, selected, onSelect, runs, runId, onRun, onBuil
                   type="button"
                   className={`run-card${run.id === runId ? " selected" : ""}`}
                   aria-pressed={run.id === runId}
+                  tabIndex={run.id === tabStop ? 0 : -1}
                   onClick={() => onRun(run.id)}
                 >
                   <Picture src={api.runThumbnail(run.id)} alt="" className="run-pic" />
