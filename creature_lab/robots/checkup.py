@@ -198,3 +198,11 @@ def run_checkup(
 
 def read_checkup(out_dir: Path) -> Checkup:
     return Checkup.model_validate(json.loads((Path(out_dir) / "checkup.json").read_text("utf-8")))
+
+
+def planned_steps(robot: str) -> int:
+    """How many progress lines a full check-up of ``robot`` prints (every policy, every test)."""
+    levels = _LEVELS[robot]
+    per_policy = 1 + len(levels.shoves_n) + len(levels.grips) + len(levels.batteries_v)
+    per_policy += len(levels.payloads_kg)
+    return per_policy * len(robot_info(robot).policies)

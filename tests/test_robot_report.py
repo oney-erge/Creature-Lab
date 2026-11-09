@@ -1,58 +1,14 @@
 """The HTML report is built from saved check-ups alone, so it needs no simulator."""
 
 import pytest
-from robot_helpers import synthetic_run
+from robot_helpers import saved_checkup
 
-from creature_lab.robots.analysis import analyze
-from creature_lab.robots.checkup import Checkup, ConditionResult, ShoveRow
 from creature_lab.robots.report import PolicyResult, limit_text, write_report
 
 
 def _checkup(tmp_path, policy: str, *, stays_down: bool) -> PolicyResult:
     folder = tmp_path / policy
-    baseline = synthetic_run(policy=policy)
-    baseline.save(folder / "runs" / "baseline")
-    fall = synthetic_run(
-        policy=policy,
-        fall_at=4.6,
-        recover_at=None if stays_down else 5.6,
-        push_n=3.0,
-        pushed_outside=True,
-    )
-    fall.save(folder / "runs" / "shove_3N_fall")
-    ice = synthetic_run(policy=policy, fall_at=4.5, slide=0.3, grip=0.15)
-    ice.save(folder / "runs" / "grip_0.15")
-    row = lambda force, up, got, down: ShoveRow(  # noqa: E731
-        force_n=force,
-        total=8,
-        stayed_up=up,
-        got_up=got,
-        stayed_down=down,
-        example_fall_run="shove_3N_fall" if down + got else None,
-    )
-    shoves = (
-        [row(1, 8, 0, 0), row(3, 1, 0, 7)] if stays_down else [row(1, 7, 1, 0), row(3, 3, 5, 0)]
-    )
-    checkup = Checkup(
-        robot="microduck",
-        policy=policy,
-        command=0.5,
-        baseline=analyze(baseline),
-        baseline_run="baseline",
-        shoves=shoves,
-        conditions=[
-            ConditionResult(
-                key="grip_0.15",
-                label="Floor grip at 0.15× normal",
-                passed=False,
-                distance_m=0.3,
-                relative_distance=0.2,
-                analysis=analyze(ice),
-                run="grip_0.15",
-            )
-        ],
-    )
-    return PolicyResult(checkup, folder)
+    return PolicyResult(saved_checkup(folder, policy, stays_down=stays_down), folder)
 
 
 def test_two_policy_report_tells_the_before_and_after_story(tmp_path):

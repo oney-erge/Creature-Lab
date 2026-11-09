@@ -12,13 +12,13 @@ from typing import Any
 
 import numpy as np
 
+from creature_lab.robots.visual import geom_rgba, mesh_arrays, visual_mesh_geoms
+
 #: Camera distance from the robot, in metres, and the height it looks at (fraction of distance).
 _FRAMING = {"microduck": (0.5, 0.2), "unitree_g1": (2.4, 0.32)}
 _CONTROL_HZ = 50
 #: Seconds a finished replay holds its last pose before looping.
 _HOLD_S = 1.2
-#: Geom groups that hold the visual meshes in the published models (the rest are collision).
-_VISUAL_GROUPS = (1, 2)
 
 
 class RobotStage:
@@ -71,12 +71,7 @@ class RobotStage:
         scene = self._server.scene
         root = scene.add_frame("/robot_stage", show_axes=False)
         self._nodes.append(root)
-        meshes = [
-            geom
-            for geom in range(model.ngeom)
-            if model.geom_type[geom] == mujoco.mjtGeom.mjGEOM_MESH and model.geom_rgba[geom][3] > 0
-        ]
-        visual = [g for g in meshes if model.geom_group[g] in _VISUAL_GROUPS] or meshes
+        visual = visual_mesh_geoms(model)
         for geom in visual:
             body = int(model.geom_bodyid[geom])
             if body not in self._bodies:
@@ -179,14 +174,8 @@ def _geom_mesh(model: Any, geom: int) -> Any:
     """A colored trimesh of one mesh geom, in the geom's own frame."""
     import trimesh
 
-    mesh_id = int(model.geom_dataid[geom])
-    v0, vn = int(model.mesh_vertadr[mesh_id]), int(model.mesh_vertnum[mesh_id])
-    f0, fn = int(model.mesh_faceadr[mesh_id]), int(model.mesh_facenum[mesh_id])
-    vertices = np.array(model.mesh_vert[v0 : v0 + vn], dtype=float).reshape(-1, 3)
-    faces = np.array(model.mesh_face[f0 : f0 + fn], dtype=int).reshape(-1, 3)
-    material = int(model.geom_matid[geom])
-    rgba = model.mat_rgba[material] if material >= 0 else model.geom_rgba[geom]
-    colour = np.clip(np.array(rgba) * 255, 0, 255).astype(np.uint8)
-    mesh = trimesh.Trimesh(vertices=vertices, faces=faces, process=False)
+    vertices, faces = mesh_arrays(model, int(model.geom_dataid[geom]))
+    colour = np.clip(geom_rgba(model, geom) * 255, 0, 255).astype(np.uint8)
+    mesh = trimesh.Trimesh(vertices=vertices.astype(float), faces=faces.astype(int), process=False)
     mesh.visual.vertex_colors = np.tile(colour, (len(vertices), 1))
     return mesh

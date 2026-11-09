@@ -419,6 +419,41 @@ def _claim_port(host: str, port: int) -> int:
     return free
 
 
+@app.command("app", rich_help_panel="Start Here")
+def web_app(
+    port: Annotated[int, typer.Option(help="Port to serve on (the next free one if busy).")] = 8080,
+    host: Annotated[str, typer.Option(help="Interface to listen on.")] = DEFAULT_HOST,
+    open_browser: Annotated[
+        bool, typer.Option("--open-browser/--no-open-browser", help="Open the app in your browser.")
+    ] = True,
+    checkups: Annotated[
+        Path, typer.Option(help="Where check-up results are read from and written to.")
+    ] = Path("outputs") / "checkup",
+) -> None:
+    """Open the Creature Lab browser app: real robots, check-ups, and replays."""
+    import threading
+    import webbrowser
+
+    try:
+        import uvicorn
+
+        from creature_lab.web.server import create_app
+    except ImportError as exc:
+        console.print(
+            "[red]error:[/red] the browser app needs its extras. Install them with "
+            "`uv sync --inexact --extra web --extra robots`."
+        )
+        raise typer.Exit(code=2) from exc
+
+    _warn_if_network_exposed(host)
+    port = _claim_port(host, port)
+    url = f"http://localhost:{port}"
+    console.print(f"[green]serving[/green] Creature Lab on {url} (Ctrl+C to stop)")
+    if open_browser:
+        threading.Timer(1.2, webbrowser.open, args=(url,)).start()
+    uvicorn.run(create_app(checkups), host=host, port=port, log_level="warning")
+
+
 @app.command(rich_help_panel="Start Here")
 def demo(
     creature_path: Annotated[

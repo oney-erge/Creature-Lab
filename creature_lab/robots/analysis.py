@@ -83,6 +83,13 @@ def _signed_distance_to_hull(point: np.ndarray, hull: np.ndarray) -> float:
     return closest if inside else -closest
 
 
+def extrapolated_com(run: RobotRun) -> np.ndarray:
+    """Per frame: (x, y) of the extrapolated centre of mass, ``x + v / sqrt(g / h)`` (Hof 2005)."""
+    height = np.maximum(run.com[:, 2], 0.05)
+    omega = np.sqrt(_GRAVITY / height)
+    return run.com[:, :2] + run.com_vel[:, :2] / omega[:, None]
+
+
 def balance_margin_cm(run: RobotRun) -> np.ndarray:
     """Per frame: gap (cm) between the extrapolated centre of mass and the feet.
 
@@ -92,15 +99,13 @@ def balance_margin_cm(run: RobotRun) -> np.ndarray:
     touches the floor.
     """
     margin = np.full(len(run), np.nan)
+    heading = extrapolated_com(run)
     for frame in range(len(run)):
         outline = run.support[frame]
         outline = outline[~np.isnan(outline[:, 0])]
         if len(outline) == 0:
             continue
-        height = max(float(run.com[frame, 2]), 0.05)
-        omega = math.sqrt(_GRAVITY / height)
-        extrapolated = run.com[frame, :2] + run.com_vel[frame, :2] / omega
-        margin[frame] = 100.0 * _signed_distance_to_hull(extrapolated, outline)
+        margin[frame] = 100.0 * _signed_distance_to_hull(heading[frame], outline)
     return margin
 
 

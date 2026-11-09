@@ -61,6 +61,12 @@ robots = [
     "imageio-ffmpeg>=0.4",  # MP4 film
     "pillow>=10.0",  # overlays and animated WebP
 ]
+web = [
+    # `creature-lab app`: the browser app (React front end in web-ui/, built into
+    # creature_lab/web/static). Needs the `robots` extra too for the real robots.
+    "fastapi>=0.115",
+    "uvicorn>=0.30",
+]
 mujoco = [
     "mujoco>=3.0",  # MuJoCo backend + MJCF export round-trip (`run --backend mujoco`)
 ]
@@ -84,6 +90,7 @@ rl = [
 dev = [
     "pytest>=8.0",
     "ruff>=0.6",
+    "httpx>=0.27",  # FastAPI TestClient for the web app tests
 ]
 
 [project.scripts]
