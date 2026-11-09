@@ -6,6 +6,7 @@ Use `uv run creature-lab --help` for exact options. This page groups commands by
 
 ```bash
 python scripts/start.py
+uv run creature-lab app
 uv run creature-lab demo --open-browser
 uv run creature-lab build
 uv run creature-lab zoo list
@@ -15,6 +16,8 @@ uv run creature-lab report latest
 uv run creature-lab robots checkup microduck
 ```
 
+- `app` opens the [browser app](WEB_APP.md): real robots, 3D replays and check-ups (`web` and
+  `robots` extras). `--checkups DIR` chooses the results folder, `--port` the port.
 - `demo` runs a built-in creature in the live browser viewer.
 - `build` opens the browser setup screen for visual creature editing and simulation.
 - `zoo list` distinguishes measured showcases from intentionally difficult challenges.
@@ -40,7 +43,8 @@ The root launcher is the recommended first command from a repo checkout:
 ```
 
 Use `.\run.ps1` from PowerShell. The lower-level launcher below exposes
-editor-specific options after the environment is installed:
+more options after the environment is installed. It opens the browser app unless you ask for a
+particular creature or task, which opens the build editor:
 
 ```bash
 python scripts/start.py
@@ -50,7 +54,8 @@ Useful options:
 
 | Option | Purpose |
 | --- | --- |
-| `--once` | Run one pass, save the trace, and exit. |
+| `--mode app\|build\|demo` | What to open. Default `app`; `build` when `--creature`, `--creature-path` or `--task` is given. |
+| `--once` | With `--mode demo`: run one pass, save the trace, and exit. |
 | `--no-open-browser` | Print the viewer URL without opening a browser tab. |
 | `--creature worm` | Run a different packaged demo creature. |
 | `--creature-path path/to/creature.json` | Run a local CreatureSpec. |

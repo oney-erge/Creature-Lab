@@ -25,6 +25,10 @@ uv sync --inexact --all-extras
 uv run creature-lab doctor
 ```
 
+The browser app's front end lives in `web-ui/` and is built into the committed
+`creature_lab/web/static/`. Change it only with Node installed, and commit the rebuilt bundle
+(see [web-ui/README.md](web-ui/README.md)); CI fails when the bundle is stale.
+
 ## Before Opening A PR
 
 Run:

@@ -30,8 +30,9 @@ Use the launcher from a checkout:
 ./run.sh       # Linux
 ```
 
-Use `python scripts/start.py` for editor-specific development options after
-the root launcher has prepared the environment.
+Use `python scripts/start.py` for more options after the root launcher has prepared the
+environment. It opens the browser app by default; `--creature`, `--creature-path` or `--task` (or
+`--mode build`) open the build editor, and `--mode demo` the playback viewer.
 
 Manual first run:
 
@@ -81,6 +82,13 @@ uv run creature-lab validate examples/tripod.json --task examples/crawl_forward.
   Apache-2.0 (Microduck's meshes are CC BY-NC-SA). `actuator.py`, `analysis.py`, `types.py`,
   `report.py` and `catalog.py` are numpy-only; MuJoCo stays in `rollout.py`, `render.py` and
   the per-robot modules.
+- `creature_lab/web/` is the browser app's local server (optional `web` extra, FastAPI). It
+  reads saved check-ups, serves meshes and poses as binary arrays, and starts downloads and
+  check-ups as jobs. It listens on loopback only and guards against DNS rebinding and
+  cross-origin posts; never accept a file path from the browser. `web-ui/` is its React and
+  three.js front end; `npm run build` writes the bundle to `creature_lab/web/static/`, which is
+  committed, so rebuild and commit it with any front-end change. Keep `web-ui/src/types.ts`
+  and `decode.ts` in step with `server.py` and `scene.py`.
 - `docs/` explains user workflows, architecture, and roadmap.
 - `scripts/` contains repo automation that should run before package dependencies are installed.
 
@@ -93,7 +101,9 @@ uv run creature-lab validate examples/tripod.json --task examples/crawl_forward.
 - Preserve backend-agnostic behavior unless a command is explicitly backend-specific.
 - Do not add dependencies without a clear reason and matching docs.
 - Do not add Unity, Godot, Isaac, ROS, CUDA, databases, web frameworks, hosted dashboards, or
-  generic agent orchestration for the MVP unless explicitly requested.
+  generic agent orchestration for the MVP unless explicitly requested. The one requested
+  exception is the browser app: FastAPI in `creature_lab/web/` and React/three.js in `web-ui/`
+  (extras `web` and `robots`). Keep web code out of everything else, and keep the app local-only.
 
 ## Testing Guidance
 

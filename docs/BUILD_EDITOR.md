@@ -2,7 +2,9 @@
 
 The build editor is a one-screen workbench, powered by Viser: configure a creature, run it, and
 read its metrics without leaving the browser tab. It uses the same dependency as the replay
-viewer, so there is no separate web app, server framework, or frontend build step.
+viewer, so it needs no server framework or frontend build step. (The separate
+[browser app](WEB_APP.md) that the launcher opens first is where the real robots live; its
+**Build your own** button starts this editor.)
 
 ## Layout
 

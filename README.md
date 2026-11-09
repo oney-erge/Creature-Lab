@@ -24,7 +24,24 @@ by the recorded evidence. Or design your own modular robot, then explore how its
 controller, task, and simulator affect its behavior. Every experiment is saved so you can
 inspect, replay, improve, and share it.
 
-## Robot check-up
+## Browser app
+
+<p align="center">
+  <img src="docs/assets/app-microduck.webp" width="800" alt="The Creature Lab browser app: a Microduck robot on the floor in slow motion after a shove, the run history on the left, and the explanation of the fall and the shove results on the right." />
+</p>
+
+<p align="center"><sub>Simulation. Microduck model by Pollen Robotics, CC BY-NC-SA 4.0.</sub></p>
+
+```bash
+./run.sh            # Linux; macOS: ./run.command; Windows: .\run.bat
+```
+
+The launcher opens the app. Choose Microduck or the Unitree G1, watch a saved shove in 3D (slowed
+down at the shove and the fall), read why the robot fell, switch between its policies, or press
+**Run check-up** to run a fresh one. Robots are downloaded after you accept their license. See
+[Browser app](docs/WEB_APP.md).
+
+## Robot check-up from the command line
 
 ```bash
 uv sync --inexact --extra robots
@@ -45,7 +62,7 @@ tests, how falls are explained, licenses, and limits. It is a simulation, not th
 Watch the films: [Microduck check-up (1 min)](docs/assets/checkup-microduck.mp4) and
 [Unitree G1 check-up (35 s)](docs/assets/checkup-unitree-g1.mp4). GIF versions of both loops are in
 [docs/assets](docs/assets/MEDIA_LICENSES.md). In the build editor, both robots are the first
-choices in the creature picker.
+choices in the creature picker too.
 
 Try the [recorded quadruped replay](https://oney-physics-replays.hazycow18.chatgpt.site/creature-lab.html)
 in your browser. An [experimental Windows x64 preview](https://github.com/oney-erge/Creature-Lab/releases/tag/preview-windows-2026-10-30)
@@ -69,10 +86,11 @@ cd Creature-Lab
 ./run.sh            # Linux; macOS: ./run.command
 ```
 
-On Windows, use `.\run.bat`. The launcher sets up the starter environment and
-opens the browser-based build editor. Pick a creature and goal, then click
-**Run first simulation**. Watch the replay, inspect the result, and use **Back to
-design** to make a change. Use **Explain failure** to run a
+On Windows, use `.\run.bat`. The launcher sets up the environment and opens the
+[browser app](docs/WEB_APP.md). To design your own creature instead, press **Build your own**
+there, or start the build editor directly with `python scripts/start.py --creature quadruped`.
+In the build editor, pick a creature and goal, then click **Run first simulation**. Watch the
+replay, inspect the result, and use **Back to design** to make a change. Use **Explain failure** to run a
 counterfactual analysis, compare saved runs in History, and download its report
 and experiment pack.
 
@@ -121,8 +139,8 @@ command.
 
 ## What it includes
 
-- Robot check-ups for published robots (Microduck, Unitree G1): shoves, slippery floors,
-  weak batteries, explained falls, an HTML report and a film.
+- A browser app for published robots (Microduck, Unitree G1): 3D replays, shoves, slippery
+  floors, weak batteries, explained falls, an HTML report and a film.
 - A Creature Zoo with working and deliberately broken examples.
 - A browser editor for presets, parts, motors, validation, simulation, and
   URDF import/export.
@@ -137,6 +155,7 @@ portable, but exact physics behavior can differ by backend.
 
 | Guide | Use it for |
 |---|---|
+| [Browser app](docs/WEB_APP.md) | The app that opens first: robots, replays, check-ups |
 | [Robot check-up](docs/ROBOT_CHECKUP.md) | Shoving real robots and explaining their falls |
 | [Getting Started](docs/GETTING_STARTED.md) | A complete first experiment |
 | [Build Editor](docs/BUILD_EDITOR.md) | Creating and editing creatures in the browser |

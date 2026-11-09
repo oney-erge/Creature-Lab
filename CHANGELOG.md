@@ -14,6 +14,14 @@
 - `build`, `demo`, `replay` and `compare` now serve on the first free port from the one requested
   and say so. Viser used to move on silently, so the CLI opened the requested port, which an older
   editor often still held.
+- Add a **browser app** (`creature-lab app`, `web` and `robots` extras) and make it what the
+  launcher opens: pick Microduck or the G1, watch saved shoves in 3D from the real meshes with
+  slow motion at the shove and the fall, see the feet's support area and the shove drawn in the
+  scene, switch policies, and start a check-up or a download (after the license) from the page.
+  FastAPI server in `creature_lab/web/`, React and three.js front end in `web-ui/`, built into
+  the committed `creature_lab/web/static/`. `scripts/start.py` defaults to `--mode app` and
+  installs the app's extras itself; `--creature`, `--creature-path` or `--task` still open the
+  build editor.
 - Update five editor tests that still described behavior changed on purpose earlier (the quadruped
   runs a packaged gait, controller choice is undoable, replay requires the same design) and add
   tests for the replay refusal.

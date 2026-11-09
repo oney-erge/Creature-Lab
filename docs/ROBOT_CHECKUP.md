@@ -8,6 +8,8 @@ uv sync --inexact --extra robots
 uv run creature-lab robots checkup microduck
 ```
 
+The [browser app](WEB_APP.md) shows the same results in 3D and can start a check-up for you.
+
 The first run downloads the robot (about 25 MB) after showing you its license. It then runs
 about fifty ten-second simulations per policy on the CPU (20 to 40 seconds), and writes a folder
 containing `report.html`, a `checkup.json` per policy, and the saved runs behind every claim.
