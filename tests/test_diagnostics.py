@@ -9,7 +9,14 @@ def test_doctor_checks_cover_platform_and_extras():
     checks = {check.name: check for check in collect_doctor_checks()}
     assert "platform" in checks
     assert checks["platform"].status == "info"
-    for name in ("sim (pybullet)", "mujoco", "viz (viser)", "export (imageio)", "llm (litellm)"):
+    for name in (
+        "sim (pybullet)",
+        "mujoco",
+        "viz (viser)",
+        "export (imageio)",
+        "app (browser)",
+        "llm (litellm)",
+    ):
         assert name in checks
         assert checks[name].status in {"ok", "missing", "warn", "info"}
     assert "examples run" in checks
@@ -211,3 +218,10 @@ def test_doctor_never_crashes_when_a_check_raises(monkeypatch):
     assert "simulated broken environment" in checks["examples run"].detail
     # Other checks are unaffected.
     assert checks["platform"].status == "info"
+
+
+def test_doctor_names_the_app_extras_when_they_are_missing(monkeypatch):
+    monkeypatch.setattr(diagnostics, "_installed", lambda module: module != "fastapi")
+    check = {c.name: c for c in collect_doctor_checks()}["app (browser)"]
+    assert check.status == "info"
+    assert "fastapi" in check.detail and "--extra web --extra robots" in check.detail

@@ -83,10 +83,14 @@ class BuildControls:
         on_seek_comparison: Callable[[float], None] | None = None,
         runs_dir: Path = DEFAULT_RUNS_DIR,
         show_onboarding: bool = False,
+        prefer_robot: bool = True,
         robot_stage: Any = None,
     ) -> None:
         self.gui = gui
         self._robot_stage = robot_stage
+        #: Whether the first picker choice is the real robot (when downloaded) rather than the
+        #: preset the session started from. Off when someone chose a preset explicitly.
+        self._prefer_robot = prefer_robot
         self.session = session
         self.job_manager = job_manager
         self.playback = playback
@@ -2264,10 +2268,15 @@ class BuildControls:
         """Choose a starting point and run it, or edit the chosen design first."""
         creature_labels = [*PICKER_LABELS, *presets.preset_labels()]
         first_robot = next(iter(PICKER_LABELS))
+        started_from = (
+            presets.preset_label(self.session.template)
+            if self.session.template in presets.CREATURE_PRESETS
+            else presets.preset_labels()[0]
+        )
         initial_creature = (
             first_robot
-            if self._robot_ready(PICKER_LABELS[first_robot])
-            else presets.preset_labels()[0]
+            if self._prefer_robot and self._robot_ready(PICKER_LABELS[first_robot])
+            else started_from
         )
         goal_labels = presets.onboarding_goal_labels()
         self._onboarding_folder = self.gui.add_folder("Get started", expand_by_default=True)

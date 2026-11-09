@@ -314,6 +314,7 @@ def run_editor(
     open_browser: bool = False,
     runs_dir: Path = DEFAULT_RUNS_DIR,
     show_onboarding: bool = False,
+    prefer_robot: bool = True,
 ) -> None:
     """Start the Viser build editor and block until interrupted.
 
@@ -646,6 +647,7 @@ def run_editor(
         on_frame_camera=lambda: preview.frame_camera(),
         runs_dir=runs_dir,
         show_onboarding=show_onboarding,
+        prefer_robot=prefer_robot,
         robot_stage=robot_stage,
     )
     preview.refresh()

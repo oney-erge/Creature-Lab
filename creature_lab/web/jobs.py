@@ -80,6 +80,11 @@ class Jobs:
     def get(self, job_id: str) -> Job:
         return self._jobs[job_id]
 
+    def active(self) -> list[Job]:
+        """The jobs still running, so a page that was reloaded can follow them again."""
+        with self._lock:
+            return [j for j in self._jobs.values() if j.state == "running"]
+
     def running(self, kind: str, robot: str) -> Job | None:
         with self._lock:
             return next(

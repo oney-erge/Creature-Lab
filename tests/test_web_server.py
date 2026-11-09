@@ -358,6 +358,28 @@ def test_the_same_checkup_is_not_started_twice(results, installed):
     _wait(client, first["id"])
 
 
+def test_a_reloaded_page_can_find_the_running_job(results, installed):
+    release = []
+
+    def launcher(args):
+        def lines():
+            while not release:
+                time.sleep(0.01)
+            yield ""
+
+        return SimpleNamespace(stdout=lines(), wait=lambda: 0)
+
+    jobs = Jobs(results, launcher=launcher)
+    client = _client(create_app(results, static_dir=results / "no-ui", jobs=jobs), headers=HEADERS)
+    assert client.get("/api/jobs").json() == {"jobs": []}
+    started = client.post("/api/robots/unitree_g1/checkup").json()
+    running = client.get("/api/jobs").json()["jobs"]
+    assert [j["id"] for j in running] == [started["id"]]
+    release.append(True)
+    _wait(client, started["id"])
+    assert client.get("/api/jobs").json() == {"jobs": []}
+
+
 def test_unknown_job_is_404(client):
     assert client.get("/api/jobs/nope").status_code == 404
 
@@ -407,9 +429,27 @@ def test_the_report_is_served_when_a_check_up_wrote_one(results, installed):
     assert client.get("/api/robots/microduck/report").status_code == 404  # none written yet
     folder = next(results.iterdir())
     (folder / "report.html").write_text("<h1>Microduck check-up</h1>", encoding="utf-8")
-    response = client.get("/api/robots/microduck/report")
+    response = client.get("/api/robots/microduck/report/")
     assert response.status_code == 200 and "Microduck check-up" in response.text
-    assert client.get("/api/robots/walle/report").status_code == 404
+    assert client.get("/api/robots/walle/report/").status_code == 404
+    # The address without the slash moves to the one with it, so relative links resolve.
+    moved = client.get("/api/robots/microduck/report", follow_redirects=False)
+    assert moved.status_code == 307 and moved.headers["location"] == "/api/robots/microduck/report/"
+
+
+def test_the_report_shows_its_film_but_nothing_else_in_the_folder(results, installed):
+    client = _client(create_app(results, static_dir=results / "no-ui"), headers=HEADERS)
+    folder = next(results.iterdir())
+    (folder / "report.html").write_text("<video src='microduck-checkup.mp4'>", encoding="utf-8")
+    (folder / "microduck-checkup.mp4").write_bytes(b"film")
+    (folder / "checkup.json").write_text("{}", encoding="utf-8")
+    film = client.get("/api/robots/microduck/report/microduck-checkup.mp4")
+    assert film.status_code == 200 and film.headers["content-type"] == "video/mp4"
+    assert film.content == b"film"
+    assert client.get("/api/robots/microduck/report/checkup.json").status_code == 404
+    assert client.get("/api/robots/microduck/report/missing.mp4").status_code == 404
+    for sneaky in ("..%2Fsecret.mp4", "%2e%2e/secret.mp4", "runs%5Cx.mp4", "a%2Fb.mp4"):
+        assert client.get(f"/api/robots/microduck/report/{sneaky}").status_code == 404
 
 
 def test_the_classic_builder_opens_only_known_presets(results, installed):

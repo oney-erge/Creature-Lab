@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request, Response
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -23,6 +23,17 @@ STATIC_DIR = Path(__file__).parent / "static"
 #: Browsers send this host name for pages served from this machine; anything else is another
 #: site reaching this server through DNS rebinding.
 _LOCAL_HOSTS = {"127.0.0.1", "localhost", "[::1]", "::1"}
+#: What a check-up report may show beside it (its film and pictures), by file type.
+_REPORT_FILES = {
+    ".html": "text/html",
+    ".mp4": "video/mp4",
+    ".webm": "video/webm",
+    ".webp": "image/webp",
+    ".gif": "image/gif",
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".svg": "image/svg+xml",
+}
 #: Mutating requests must carry this header. A web page on another site cannot add it without a
 #: CORS preflight, which this server never approves.
 _GUARD_HEADER = "x-creature-lab"
@@ -231,13 +242,26 @@ def create_app(
             raise HTTPException(409, str(error)) from error
 
     @app.get("/api/robots/{key}/report", include_in_schema=False)
-    def report(key: str) -> Response:
+    def report_redirect(key: str) -> Response:
+        # The report links to its film by a relative name, so it must live in a directory URL.
+        return RedirectResponse(f"/api/robots/{key}/report/")
+
+    @app.get("/api/robots/{key}/report/{name}", include_in_schema=False)
+    @app.get("/api/robots/{key}/report/", include_in_schema=False)
+    def report(key: str, name: str = "") -> Response:
+        """The newest check-up's report page and the film or pictures it shows beside it."""
         _require_robot(key)
         folder = library.newest_folder(key)
-        page = folder / "report.html" if folder else None
-        if page is None or not page.is_file():
+        name = name or "report.html"
+        # One plain file name from the allow-list, never a path: nothing else is readable here.
+        page = folder / name if folder and Path(name).name == name else None
+        if page is None or page.suffix.lower() not in _REPORT_FILES or not page.is_file():
             raise HTTPException(404, "no report yet: run a check-up first")
-        return FileResponse(page, media_type="text/html")
+        return FileResponse(page, media_type=_REPORT_FILES[page.suffix.lower()])
+
+    @app.get("/api/jobs")
+    def running_jobs() -> dict:
+        return {"jobs": [j.snapshot() for j in jobs.active()]}
 
     @app.get("/api/jobs/{job_id}")
     def job(job_id: str) -> dict:

@@ -680,9 +680,12 @@ def build(
         ),
     ] = None,
     preset: Annotated[
-        str,
-        typer.Option(help="Starting preset: quadruped, hexapod, worm, or humanoid."),
-    ] = "quadruped",
+        str | None,
+        typer.Option(
+            help="Starting preset: quadruped, hexapod, worm, or humanoid. Without it, the "
+            "editor opens on a real robot when one is downloaded, else on the quadruped."
+        ),
+    ] = None,
     out: Annotated[
         Path,
         typer.Option("--out", "-o", help="Where Save JSON writes the CreatureSpec."),
@@ -741,6 +744,8 @@ def build(
     from creature_lab.editor.live import run_editor
     from creature_lab.editor.session import AVAILABLE_CONTROLLERS, EditorSession
 
+    start_on_robot = preset is None
+    preset = preset or "quadruped"
     if preset not in editor_presets.CREATURE_PRESETS:
         available = ", ".join(editor_presets.preset_names())
         console.print(f"[red]error:[/red] unknown preset {preset!r}; choose one of: {available}")
@@ -869,6 +874,7 @@ def build(
         # Only greet with the creature x goal picker on a truly fresh launch - not
         # when the user already pointed at a specific creature or project.
         show_onboarding=creature_path is None and project is None,
+        prefer_robot=start_on_robot,
     )
 
 

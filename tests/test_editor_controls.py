@@ -254,6 +254,7 @@ def _make_controls(
     on_start_refit_gait=None,
     runs_dir: Path | None = None,
     show_onboarding: bool = False,
+    prefer_robot: bool = True,
 ) -> tuple[BuildControls, list[str], EditorJobManager, EditorPlayback]:
     events: list[str] = []
     job_manager = EditorJobManager()
@@ -285,6 +286,7 @@ def _make_controls(
         on_playback_frame=lambda frame: events.append("frame"),
         runs_dir=runs_dir or Path("runs"),
         show_onboarding=show_onboarding,
+        prefer_robot=prefer_robot,
     )
     # These tests inject a fake re-fit implementation without the optional package.
     controls._has_cmaes = True
@@ -933,6 +935,23 @@ def test_creature_pickers_list_the_real_robots_first():
     assert "Unitree G1 humanoid · real robot" in pickers[0].options
     # Without a 3D robot stage (or a downloaded robot) the first run still starts on a preset.
     assert pickers[0].value == presets.preset_labels()[0]
+
+
+def _first_creature_choice(monkeypatch, session, *, prefer_robot):
+    monkeypatch.setattr(BuildControls, "_robot_ready", lambda self, key: True)
+    controls, _, _, _ = _make_controls(session, show_onboarding=True, prefer_robot=prefer_robot)
+    return next(h for h in controls.gui.handles if h.options == _creature_labels()).value
+
+
+def test_the_picker_opens_on_the_real_robot_unless_a_preset_was_chosen(monkeypatch):
+    session = EditorSession(template="hexapod")
+    assert _first_creature_choice(monkeypatch, session, prefer_robot=True) == (
+        "Microduck · real robot"
+    )
+    # Someone who asked for the hexapod gets the hexapod, even with the robot downloaded.
+    assert _first_creature_choice(monkeypatch, session, prefer_robot=False) == (
+        presets.preset_label("hexapod")
+    )
 
 
 def test_picking_a_real_robot_without_a_stage_explains_and_keeps_the_design():
