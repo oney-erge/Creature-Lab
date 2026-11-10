@@ -30,6 +30,7 @@ Dockerfile    text eol=lf
 # Never touched: conversion corrupts these.
 *.png         binary
 *.gif         binary
+*.webp        binary
 *.jpg         binary
 *.ico         binary
 *.woff        binary
