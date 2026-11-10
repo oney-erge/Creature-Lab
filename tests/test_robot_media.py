@@ -3,6 +3,7 @@
 import numpy as np
 import pytest
 
+pytest.importorskip("mujoco")  # the video module draws with the renderer
 pytest.importorskip("imageio_ffmpeg")
 pytest.importorskip("PIL")
 

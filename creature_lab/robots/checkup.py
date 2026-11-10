@@ -12,7 +12,6 @@ from pydantic import Field
 from creature_lab import VERSION
 from creature_lab.io_utils import atomic_write_text
 from creature_lab.robots.analysis import RunAnalysis, analyze
-from creature_lab.robots.api import run_scenario
 from creature_lab.robots.catalog import RobotInfo, robot_info
 from creature_lab.robots.types import RobotRun, Scenario
 from creature_lab.schema.base import StrictModel
@@ -111,6 +110,10 @@ def run_checkup(
     command: float | None = None,
 ) -> Checkup:
     """Run the full check-up and save its featured runs plus ``checkup.json`` under ``out_dir``."""
+    # Here, not at import: reading a saved check-up (the report, the app's listings) must not
+    # need the simulator, which pulls in MuJoCo.
+    from creature_lab.robots.api import run_scenario
+
     info: RobotInfo = robot_info(robot)
     levels = _LEVELS[robot]
     out_dir = Path(out_dir)

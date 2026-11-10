@@ -8,7 +8,6 @@ from __future__ import annotations
 
 from typing import Any
 
-import mujoco
 import numpy as np
 
 #: Geom groups that hold the visual meshes in the published models (the rest are collision).
@@ -17,6 +16,8 @@ VISUAL_GROUPS = (1, 2)
 
 def visual_mesh_geoms(model: Any) -> list[int]:
     """Ids of the visible mesh geoms: the visual groups if any, else every visible mesh."""
+    import mujoco  # here, not at import: the editor imports this module without MuJoCo installed
+
     meshes = [
         geom
         for geom in range(model.ngeom)
