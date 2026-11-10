@@ -83,8 +83,9 @@ uv run creature-lab validate examples/tripod.json --task examples/crawl_forward.
   `report.py` and `catalog.py` are numpy-only; MuJoCo stays in `rollout.py`, `render.py` and
   the per-robot modules.
 - `creature_lab/web/` is the browser app's local server (optional `web` extra, FastAPI). It
-  reads saved check-ups, serves meshes and poses as binary arrays, and starts downloads and
-  check-ups as jobs. It listens on loopback only and guards against DNS rebinding and
+  reads saved check-ups, serves meshes and poses as binary arrays, builds and runs the preset
+  creatures designed in the browser (`creatures.py`, on the same mesh and pose streams), and
+  starts downloads and check-ups as jobs. It listens on loopback only and guards against DNS rebinding and
   cross-origin posts; never accept a file path from the browser. `web-ui/` is its React and
   three.js front end; `npm run build` writes the bundle to `creature_lab/web/static/`, which is
   committed, so rebuild and commit it with any front-end change. Keep `web-ui/src/types.ts`

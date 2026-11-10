@@ -28,6 +28,21 @@
   again (`GET /api/jobs`); the report opens with its film (served under `/report/`); the history
   is one keyboard stop (arrow keys, plus a skip link); an unreachable server offers **Try again**;
   and the 3D view draws only when something changed.
+- Browser app, second pass: the support area is a filled teal (or red) floor patch with a legend,
+  the weight point has a plumb line, and both policies can be shown side by side on one clock
+  and one timeline with a **Can it be fixed?** panel; the history can be filtered; every view has
+  an address and the back button works; **Save a clip** records the run as a WebM with the credit
+  line; **Build your own** is now a designer inside the app (sliders, 3D preview, run, result)
+  with the classic editor one click away; the 3D view simplifies itself without a GPU and
+  respects reduced motion; a finished check-up no longer moves you off the run you are watching.
+- Fix the Microduck's support area: MuJoCo reports a mesh foot touching at a few points
+  millimetres apart, so the outline was a point. It is now the sole of the foot (the part within
+  6 mm of the floor), which makes "balance point vs feet" margins a little more accurate. The
+  headline results are unchanged (34 of 48 shoves leave the walk-only policy on the floor, 0 of 48
+  for the get-up policy). A walk that went nowhere after a shove reads "Stayed up, barely moved"
+  instead of "Walked -0.2 m".
+- The Docker image now serves the browser app (with the `web` and `robots` extras and a volume for
+  downloaded robots); `creature-lab app` honours `CREATURE_LAB_HOST` like `build` and `demo`.
 - `build --preset NAME` (and **Build your own** in the app) opens the editor on that creature;
   it used to open on the Microduck whenever the robot was downloaded. `doctor` now reports
   whether the browser app's extras are installed.

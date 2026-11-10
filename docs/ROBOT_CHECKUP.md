@@ -8,7 +8,13 @@ uv sync --inexact --extra robots
 uv run creature-lab robots checkup microduck
 ```
 
-The [browser app](WEB_APP.md) shows the same results in 3D and can start a check-up for you.
+The [browser app](WEB_APP.md) shows the same results in 3D, puts a shove to both policies side by
+side, and can start a check-up for you.
+
+"Balance point vs feet" compares where the body is heading with the area the feet hold it up
+from. That area is the hull of the foot contacts, or, for a mesh foot such as Microduck's, of the
+part of the sole within 6 mm of the floor (MuJoCo reports a mesh touching at a few points
+millimetres apart, which would make a flat foot look like a point).
 
 The first run downloads the robot (about 25 MB) after showing you its license. It then runs
 about fifty ten-second simulations per policy on the CPU (20 to 40 seconds), and writes a folder

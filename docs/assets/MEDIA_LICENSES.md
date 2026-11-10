@@ -3,7 +3,8 @@
 | File | Shows | License |
 | --- | --- | --- |
 | `checkup-microduck.webp`, `.gif`, `.mp4` | Pollen Robotics' Microduck model, rendered by Creature Lab | **CC BY-NC-SA 4.0** |
-| `app-microduck.webp` | Screenshot of the browser app showing Pollen Robotics' Microduck model | **CC BY-NC-SA 4.0** |
+| `app-microduck.webp`, `app-compare.webp` | Screenshots of the browser app showing Pollen Robotics' Microduck model | **CC BY-NC-SA 4.0** |
+| `app-build.webp` | Screenshot of the browser app's creature designer (Creature Lab's own shapes) | Apache-2.0 |
 | `checkup-unitree-g1.webp`, `.gif`, `.mp4` | Unitree Robotics' G1 model, rendered by Creature Lab | BSD 3-Clause model; renders Apache-2.0 |
 | `creature-lab-logo.svg`, `demo.gif`, `quickstart.ipynb` | Creature Lab's own work | Apache-2.0 |
 

@@ -37,9 +37,17 @@ inspect, replay, improve, and share it.
 ```
 
 The launcher opens the app. Choose Microduck or the Unitree G1, watch a saved shove in 3D (slowed
-down at the shove and the fall), read why the robot fell, switch between its policies, or press
-**Run check-up** to run a fresh one. Robots are downloaded after you accept their license. See
+down at the shove and the fall), read why the robot fell, then put the same shove to the other
+policy side by side to see whether the change fixes it. Press **Run check-up** to run a fresh one,
+**Save a clip** to keep a video, or **Build your own** to reshape a quadruped, hexapod, worm or
+humanoid and run it. Robots are downloaded after you accept their license. See
 [Browser app](docs/WEB_APP.md).
+
+<p align="center">
+  <img src="docs/assets/app-compare.webp" width="800" alt="The browser app showing the same 2 N shove on a Microduck twice: with the walk-only policy it stays on the floor, with the walk-and-get-up policy it stays on its feet. The lean angle of both is drawn on one timeline." />
+</p>
+
+<p align="center"><sub>The same shove, two policies, one clock (simulation). Microduck model by Pollen Robotics, CC BY-NC-SA 4.0.</sub></p>
 
 ## Robot check-up from the command line
 
@@ -87,10 +95,11 @@ cd Creature-Lab
 ```
 
 On Windows, use `.\run.bat`. The launcher sets up the environment and opens the
-[browser app](docs/WEB_APP.md). To design your own creature instead, press **Build your own**
-there, or start the build editor directly with `python scripts/start.py --creature quadruped`.
-In the build editor, pick a creature and goal, then click **Run first simulation**. Watch the
-replay, inspect the result, and use **Back to design** to make a change. Use **Explain failure** to run a
+[browser app](docs/WEB_APP.md). To design your own creature, press **Build your own** there. For
+part-by-part editing, use the classic build editor: **Open the classic editor** in the app, or
+`python scripts/start.py --creature quadruped`. In the classic editor, pick a creature and goal,
+then click **Run first simulation**. Watch the replay, inspect the result, and use **Back to
+design** to make a change. Use **Explain failure** to run a
 counterfactual analysis, compare saved runs in History, and download its report
 and experiment pack.
 
@@ -117,7 +126,8 @@ If launch fails, try `python scripts/start.py --dry-run` and
 `uv run creature-lab doctor`.
 
 The launchers also accept `doctor`, `repair`, `docker`, `logs`, and `stop`.
-Docker binds the editor to localhost and keeps runs and outputs in named volumes.
+Docker serves the browser app on localhost and keeps runs, outputs and downloaded robots in named
+volumes.
 
 ## Next steps
 

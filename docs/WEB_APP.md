@@ -32,27 +32,38 @@ build editor.
   shown is a middle-strength shove that the robot got up from. Playback slows to 0.3x through
   the shove and the fall, as in the films; you can switch that off, pause, scrub, or change speed
   (arrow keys, Home and End work on the timeline).
-- **See why.** Teal and red outlines show the feet's support area, the amber disc is where the
-  body's weight would land, and the orange arrow is the shove. The panel on the right states the
-  cause in words with the three numbers behind it.
-- **Compare policies.** Switch between a robot's policies and open any shove in the matrix.
-  Every card in the history is a run you can watch.
+- **See why.** The teal area on the floor is where the feet hold the robot up; it turns red when
+  the yellow dot, where the body's weight would land, leaves it. The orange arrow is the shove. A
+  legend sits on the view, and the panel on the right states the cause in words with the numbers
+  behind it.
+- **Try the fix.** When a run has a twin under the robot's other policy (same shove, same floor),
+  a *Can it be fixed?* panel offers *See both side by side*: two views on one clock, both lean
+  angles on one timeline, and a sentence saying which policy did better. Back goes back to one
+  view.
+- **Find a run.** The history can be filtered by how runs ended (stayed down, got up, stayed
+  up). Each view has an address you can bookmark or reload; the back button works.
 - **Run a check-up.** *Run check-up* starts the same run as `creature-lab robots checkup` in the
-  background and shows its progress (about two minutes). When it finishes, the app opens the new
-  results. If you reload the page meanwhile, it picks the running job up again.
+  background and shows its progress (about two minutes). If you reload the page meanwhile, it
+  picks the running job up again. If you are watching a run when it finishes, you are told, not
+  moved.
 - **Open the report.** *Open report* shows the HTML report of the newest check-up, with its film.
-- **Build your own.** This opens the classic build editor for your own creature (it needs the
-  `sim` and `viz` extras).
+- **Save a clip.** The camera button on the 3D view records the run from a moment before the
+  shove to two seconds after the outcome, slow motion included, with the credit line on the
+  video, and saves it as a WebM file.
+- **Build your own.** Pick a quadruped, hexapod, worm or humanoid, reshape it with sliders, and
+  see it in 3D as you move them. *Run simulation* runs it toward a goal (move forward, reach a
+  target, stay balanced) with its packaged gait and shows what happened. *Open the classic
+  editor* starts the part-by-part editor in a second tab (it needs the `sim` and `viz` extras).
 
 Everything works from the keyboard: the first Tab stop is a skip link to the 3D view, the run
 history is one stop (arrow keys move between runs), and the timeline takes the arrow keys, Home
-and End.
+and End. If your system asks for reduced motion, runs wait for you to press play.
 
 ## How it is built
 
 | Part | Where | Notes |
 | --- | --- | --- |
-| Server | `creature_lab/web/` | FastAPI. `library.py` reads saved check-ups, `scene.py` turns a MuJoCo model and a run into binary arrays, `jobs.py` runs downloads and check-ups, `thumbs.py` renders cached thumbnails, `builder.py` starts the classic editor. |
+| Server | `creature_lab/web/` | FastAPI. `library.py` reads saved check-ups, `scene.py` turns a MuJoCo model and a run into binary arrays, `jobs.py` runs downloads and check-ups, `thumbs.py` renders cached thumbnails, `creatures.py` builds and runs the creatures designed in the browser, `builder.py` starts the classic editor. |
 | Front end | `web-ui/` | React, three.js, Vite and TypeScript. |
 | Built bundle | `creature_lab/web/static/` | **Committed**, so users never need Node. Rebuild it after changing `web-ui/` (see [web-ui/README.md](../web-ui/README.md)); CI fails when it is stale. |
 
@@ -79,5 +90,11 @@ The app is meant for your own machine.
 ## Limits
 
 - It shows simulations of the robots, not the hardware.
-- Software WebGL (a machine without a GPU) draws it, but slowly.
-- Building a creature is still the classic Viser editor, opened in a second tab.
+- On a computer without graphics acceleration the 3D view switches to a simplified drawing (no
+  shadows, normal resolution) and says so.
+- The area "where the feet hold it up" is the footprint of the feet touching the floor. For
+  Microduck, whose feet are meshes, that is the part of each sole within 6 mm of the floor.
+- The designer builds the four presets only. Adding or removing parts, joints and motors is
+  the classic editor's job.
+- Repeated check-ups of the same robot give the same results (the simulation is deterministic),
+  so the app shows the newest one instead of a history of them.

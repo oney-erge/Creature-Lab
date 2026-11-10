@@ -30,7 +30,7 @@ python scripts/start.py
 The launcher installs the dependencies (including the `web` and `robots` extras the browser app
 needs), runs `doctor`, and opens the [browser app](WEB_APP.md): pick Microduck or the Unitree G1,
 watch a saved shove, and read why the robot fell. To design your own creature, press **Build your
-own** in the app, or start the build editor directly:
+own** in the app, or for part-by-part editing start the classic build editor directly:
 
 ```bash
 python scripts/start.py --creature quadruped
