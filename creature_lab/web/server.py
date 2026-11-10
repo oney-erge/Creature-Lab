@@ -14,6 +14,7 @@ from creature_lab import VERSION
 from creature_lab.robots.catalog import ROBOTS, robot_info
 from creature_lab.robots.fetch import is_installed, missing_extra
 from creature_lab.web.builder import Builder, BuilderError
+from creature_lab.web.creatures import CreatureError, Designer, EngineMissing, preset_catalog
 from creature_lab.web.jobs import Jobs, known_robot
 from creature_lab.web.library import Library
 from creature_lab.web.scene import load_scene, overlay_payload
@@ -49,6 +50,15 @@ class BuilderRequest(BaseModel):
     preset: str
 
 
+class BuildRequest(BaseModel):
+    """A creature to design: a preset, its parameters, and a goal to run it toward."""
+
+    preset: str
+    params: dict[str, float] = {}
+    goal: str = "move_forward"
+    simulate: bool = False
+
+
 def _host_name(request: Request) -> str:
     host = request.headers.get("host", "")
     return host.rsplit(":", 1)[0] if not host.startswith("[") else host.split("]")[0] + "]"
@@ -61,12 +71,14 @@ def create_app(
     jobs: Jobs | None = None,
     thumbnails: Thumbnails | None = None,
     builder: Builder | None = None,
+    designer: Designer | None = None,
     allowed_hosts: set[str] | None = None,
 ) -> FastAPI:
     """Build the app. ``checkup_root`` is where check-up results live and are written."""
     app = FastAPI(title="Creature Lab", version=VERSION, docs_url=None, redoc_url=None)
     library = Library(checkup_root)
     jobs = jobs or Jobs(checkup_root)
+    designer = designer or Designer()
     thumbnails = thumbnails or Thumbnails()
     builder = builder or Builder()
     hosts = allowed_hosts or _LOCAL_HOSTS
@@ -258,6 +270,47 @@ def create_app(
         if page is None or page.suffix.lower() not in _REPORT_FILES or not page.is_file():
             raise HTTPException(404, "no report yet: run a check-up first")
         return FileResponse(page, media_type=_REPORT_FILES[page.suffix.lower()])
+
+    # ---- designing a creature -------------------------------------------------------------
+    @app.get("/api/creatures/presets")
+    def creature_presets() -> dict:
+        return preset_catalog()
+
+    @app.post("/api/creatures/build")
+    def build_creature(body: BuildRequest) -> dict:
+        """A resting preview, or a simulated run toward the goal, of a preset creature."""
+        try:
+            built = designer.build(body.preset, body.params, body.goal, simulate=body.simulate)
+        except EngineMissing as error:
+            raise HTTPException(409, str(error)) from error
+        except CreatureError as error:
+            raise HTTPException(400, str(error)) from error
+        return {"scene": built.scene, "run": built.detail, "creature": built.creature}
+
+    def _built(creature_id: str):
+        try:
+            return designer.get(creature_id)
+        except CreatureError as error:
+            raise HTTPException(404, str(error)) from error
+
+    @app.get("/api/creatures/{creature_id}/scene")
+    def creature_scene(creature_id: str) -> dict:
+        return _built(creature_id).scene
+
+    @app.get("/api/creatures/{creature_id}/mesh/{mesh_id}")
+    def creature_mesh(creature_id: str, mesh_id: int) -> Response:
+        meshes = _built(creature_id).meshes
+        if mesh_id not in meshes:
+            raise HTTPException(404, "no such mesh")
+        return Response(meshes[mesh_id], media_type=_BINARY)
+
+    @app.get("/api/creatures/{creature_id}/poses")
+    def creature_poses(creature_id: str) -> Response:
+        return Response(_built(creature_id).poses, media_type=_BINARY)
+
+    @app.get("/api/creatures/{creature_id}/overlay")
+    def creature_overlay(creature_id: str) -> Response:
+        return Response(_built(creature_id).overlay, media_type=_BINARY)
 
     @app.get("/api/jobs")
     def running_jobs() -> dict:

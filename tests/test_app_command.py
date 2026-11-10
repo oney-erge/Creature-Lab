@@ -59,3 +59,19 @@ def test_launcher_refuses_a_creature_for_the_app(start, monkeypatch):
     with pytest.raises(SystemExit) as stop:
         start.parse_args()
     assert stop.value.code == 2
+
+
+def test_the_app_listens_where_the_environment_says_so_and_warns(monkeypatch, tmp_path):
+    """The Docker image relies on this: the app must listen on 0.0.0.0 inside the container."""
+    pytest.importorskip("fastapi")
+    uvicorn = pytest.importorskip("uvicorn")
+    served = {}
+    monkeypatch.setattr(uvicorn, "run", lambda application, **kwargs: served.update(kwargs))
+    result = runner.invoke(
+        app,
+        ["app", "--no-open-browser", "--checkups", str(tmp_path)],
+        env={"CREATURE_LAB_HOST": "0.0.0.0"},
+    )
+    assert result.exit_code == 0, result.output
+    assert served["host"] == "0.0.0.0"
+    assert "no sign-in" in result.output

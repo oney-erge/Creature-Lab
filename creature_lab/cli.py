@@ -422,7 +422,7 @@ def _claim_port(host: str, port: int) -> int:
 @app.command("app", rich_help_panel="Start Here")
 def web_app(
     port: Annotated[int, typer.Option(help="Port to serve on (the next free one if busy).")] = 8080,
-    host: Annotated[str, typer.Option(help="Interface to listen on.")] = DEFAULT_HOST,
+    host: HostOption = DEFAULT_HOST,
     open_browser: Annotated[
         bool, typer.Option("--open-browser/--no-open-browser", help="Open the app in your browser.")
     ] = True,

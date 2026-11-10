@@ -38,6 +38,8 @@ class RunEntry:
     analysis: RunAnalysis
     scenario: dict
     mtime: float
+    #: The same test run with the robot's other policy (same shove, floor, battery, load).
+    pair: str | None = None
 
     def card(self) -> dict:
         info = robot_info(self.robot)
@@ -56,11 +58,15 @@ class RunEntry:
             "recoveredAt": a.recovered_time_s,
             "distance": round(a.distance_m, 2),
             "pushN": self.scenario.get("push_n", 0.0),
+            "pair": self.pair,
         }
 
 
 def _outcome_text(analysis: RunAnalysis) -> str:
     if analysis.outcome == "walked":
+        # A shove can leave it standing but going nowhere or backwards: "Walked -0.2 m" misleads.
+        if analysis.distance_m < 0.25:
+            return "Stayed up, barely moved"
         return f"Walked {analysis.distance_m:.1f} m"
     if analysis.outcome == "fell_and_got_up" and analysis.recovered_time_s is not None:
         return f"Back up in {analysis.recovered_time_s - (analysis.fall_time_s or 0):.1f} s"
@@ -72,6 +78,23 @@ def _kind(name: str) -> str:
         if name.startswith(word):
             return word
     return "other"
+
+
+_PAIR_FIELDS = ("push_n", "push_side", "push_at_s", "push_for_s", "grip", "battery_v", "payload_kg")
+
+
+def _pair_key(entry: RunEntry) -> tuple:
+    return (entry.kind, *(entry.scenario.get(field) for field in _PAIR_FIELDS))
+
+
+def _link_pairs(entries: list[RunEntry]) -> None:
+    """Point each run at its twin under the other policy, so the app can show them together."""
+    groups: dict[tuple, list[RunEntry]] = {}
+    for entry in entries:
+        groups.setdefault(_pair_key(entry), []).append(entry)
+    for entry in entries:
+        twins = [e for e in groups[_pair_key(entry)] if e.policy != entry.policy]
+        entry.pair = twins[0].id if len(twins) == 1 else None
 
 
 def _title(name: str, scenario: dict) -> str:
@@ -147,6 +170,7 @@ class Library:
         entries.sort(
             key=lambda e: (rank.get(e.kind, len(rank)), info.policy(e.policy).gets_up, e.name)
         )
+        _link_pairs(entries)
         return entries
 
     def run(self, run_id: str) -> RunEntry:

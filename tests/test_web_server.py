@@ -495,3 +495,27 @@ def test_a_builder_that_exits_at_once_explains_the_missing_extra(results, instal
     )
     response = client.post("/api/builder", json={"preset": "worm"})
     assert response.status_code == 409 and "extra sim" in response.json()["detail"]
+
+
+# ---- policy twins and wording ---------------------------------------------------------------
+
+
+def test_each_run_points_at_its_twin_under_the_other_policy(client):
+    runs = client.get("/api/robots/microduck/runs").json()["runs"]
+    by_id = {run["id"]: run for run in runs}
+    assert runs
+    for run in runs:
+        twin = by_id[run["pair"]]
+        assert twin["policy"] != run["policy"] and twin["title"] == run["title"]
+        assert twin["pair"] == run["id"]
+
+
+def test_a_walk_that_went_nowhere_is_not_called_a_walk():
+    from creature_lab.web.library import _outcome_text
+
+    def walked(metres):
+        return SimpleNamespace(outcome="walked", distance_m=metres)
+
+    assert _outcome_text(walked(1.7)) == "Walked 1.7 m"
+    assert _outcome_text(walked(-0.2)) == "Stayed up, barely moved"
+    assert _outcome_text(walked(0.1)) == "Stayed up, barely moved"
