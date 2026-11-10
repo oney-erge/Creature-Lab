@@ -6,14 +6,18 @@ Use `uv run creature-lab --help` for exact options. This page groups commands by
 
 ```bash
 python scripts/start.py
+uv run creature-lab app
 uv run creature-lab demo --open-browser
 uv run creature-lab build
 uv run creature-lab zoo list
 uv run creature-lab zoo run quadruped
 uv run creature-lab zoo check-showcases
 uv run creature-lab report latest
+uv run creature-lab robots checkup microduck
 ```
 
+- `app` opens the [browser app](WEB_APP.md): real robots, 3D replays and check-ups (`web` and
+  `robots` extras). `--checkups DIR` chooses the results folder, `--port` the port.
 - `demo` runs a built-in creature in the live browser viewer.
 - `build` opens the browser setup screen for visual creature editing and simulation.
 - `zoo list` distinguishes measured showcases from intentionally difficult challenges.
@@ -21,6 +25,9 @@ uv run creature-lab report latest
   controller snapshot. Use `--controller sinusoid` for the raw teaching baseline.
 - `zoo check-showcases` runs every promoted example against score and fall thresholds.
 - `report latest` summarizes the last saved run.
+- `robots checkup <robot>` shoves a published robot with its trained policy and writes an HTML
+  report that explains each fall (`robots list`, `robots fetch`, `robots film` and
+  `robots loop` are its companions). See [Robot check-up](ROBOT_CHECKUP.md).
 
 ## Launcher Scripts
 
@@ -36,7 +43,8 @@ The root launcher is the recommended first command from a repo checkout:
 ```
 
 Use `.\run.ps1` from PowerShell. The lower-level launcher below exposes
-editor-specific options after the environment is installed:
+more options after the environment is installed. It opens the browser app unless you ask for a
+particular creature or task, which opens the build editor:
 
 ```bash
 python scripts/start.py
@@ -46,7 +54,8 @@ Useful options:
 
 | Option | Purpose |
 | --- | --- |
-| `--once` | Run one pass, save the trace, and exit. |
+| `--mode app\|build\|demo` | What to open. Default `app`; `build` when `--creature`, `--creature-path` or `--task` is given. |
+| `--once` | With `--mode demo`: run one pass, save the trace, and exit. |
 | `--no-open-browser` | Print the viewer URL without opening a browser tab. |
 | `--creature worm` | Run a different packaged demo creature. |
 | `--creature-path path/to/creature.json` | Run a local CreatureSpec. |
@@ -76,8 +85,7 @@ uv run creature-lab controller extract examples/quadruped.json --out gait.json
 uv run creature-lab run examples/quadruped.json --task examples/crawl_forward.json --controller gait.json
 ```
 
-- `build` opens the humanoid by default and edits a CreatureSpec (or URDF) in a Viser browser UI:
-  choose `--preset duckling` for the experimental biped, tune it, drag task targets in
+- `build` edits a CreatureSpec (or URDF) in a Viser browser UI: tune it, drag task targets in
   3D, read live metrics, a
   robustness sweep, and a qualification pass/fail after Simulate, then save. `--project <dir>`
   binds it to `creature.json`, `task.json`, and `editor-state.json` in that directory, autosaving
@@ -168,7 +176,7 @@ uv run creature-lab verify-pack outputs/my_design_pack
   reproducibility block. `--html` also writes a self-contained HTML run card (score
   breakdown, signal sparklines, root-path plot, and an optional embedded GIF preview).
 - `view` replays recorded poses in the browser viewer.
-- `export` renders a recorded trace to GIF or MP4, sampling the trace at the requested output FPS.
+- `export` renders a recorded trace to GIF or MP4.
 - `export-pack` bundles a run into one portable, shareable directory: `creature.json`,
   `task.json` (if any), `controller.json`, `trace.json`, and a `manifest.json` with
   reproducibility hashes — no dependency on `runs/` or anything else on the machine that
@@ -239,4 +247,5 @@ needs structured output instead of Rich tables.
 | `evolve` | `evolve --strategy cmaes` and `optimize` (both CMA-ES-based) |
 | `rl` | `train` (PPO over `CreatureEnv` via Stable-Baselines3) and loading a trained `policy` controller |
 | `mujoco` | MuJoCo backend and MJCF loading tests |
+| `robots` | `robots checkup`, `film` and `loop`: MuJoCo, onnxruntime, MP4/WebP writing |
 | `llm` | Online `ask` mode through LiteLLM |

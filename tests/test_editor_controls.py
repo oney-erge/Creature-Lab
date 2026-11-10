@@ -254,6 +254,7 @@ def _make_controls(
     on_start_refit_gait=None,
     runs_dir: Path | None = None,
     show_onboarding: bool = False,
+    prefer_robot: bool = True,
 ) -> tuple[BuildControls, list[str], EditorJobManager, EditorPlayback]:
     events: list[str] = []
     job_manager = EditorJobManager()
@@ -285,6 +286,7 @@ def _make_controls(
         on_playback_frame=lambda frame: events.append("frame"),
         runs_dir=runs_dir or Path("runs"),
         show_onboarding=show_onboarding,
+        prefer_robot=prefer_robot,
     )
     # These tests inject a fake re-fit implementation without the optional package.
     controls._has_cmaes = True
@@ -397,7 +399,7 @@ def test_custom_loaded_creature_renders_body_placeholder(tmp_path):
 
 def test_tick_consumes_completed_simulate_job_and_loads_playback():
     controls, events, job_manager, playback = _make_controls(EditorSession())
-    controls._start_simulate()
+    controls._run_from_workspace()  # what the Run button does: open Results, then simulate
     assert controls._pending_job_kind == "simulate"
 
     _wait_for_job_consumed(controls, lambda: playback.trace is not None)
@@ -732,17 +734,31 @@ def test_run_history_lists_and_restores_a_saved_run(tmp_path):
 
 
 def test_run_history_replay_loads_playback_without_mutating_session(tmp_path):
-    creature = EditorSession(template="hexapod").creature
-    save_run(creature, _fake_trace(creature_name="hexapod"), runs_dir=tmp_path)
-
     session = EditorSession(template="quadruped")
-    controls, _, _, playback = _make_controls(session, runs_dir=tmp_path)
+    save_run(session.creature, _fake_trace(creature_name="quadruped"), runs_dir=tmp_path)
+    before = session.creature.model_dump_json()
 
+    controls, _, _, playback = _make_controls(session, runs_dir=tmp_path)
     label = next(iter(controls._run_history_by_label))
     controls._replay_run(label)
 
     assert playback.trace is not None
-    assert session.creature.name == "quadruped"  # replay doesn't restore the design
+    assert session.creature.model_dump_json() == before  # replay doesn't touch the design
+    assert not session.can_undo
+
+
+def test_run_history_replay_refuses_a_run_from_a_different_design(tmp_path):
+    """Replaying a hexapod run on the quadruped's 3D scene would draw the wrong body."""
+    other = EditorSession(template="hexapod").creature
+    save_run(other, _fake_trace(creature_name="hexapod"), runs_dir=tmp_path)
+
+    session = EditorSession(template="quadruped")
+    controls, _, _, playback = _make_controls(session, runs_dir=tmp_path)
+    controls._replay_run(next(iter(controls._run_history_by_label)))
+
+    assert playback.trace is None
+    assert "Restore this run's design" in session.last_message
+    assert session.creature.name == "quadruped"
 
 
 def test_run_history_empty_state_does_not_crash(tmp_path):
@@ -904,10 +920,67 @@ def test_onboarding_runs_the_chosen_design_and_starts_replay():
     assert "Simulation complete" in controls._activity_log.content
 
 
+def _creature_labels() -> list[str]:
+    """What both creature pickers list: the real robots first, then the presets."""
+    from creature_lab.editor.robot_panel import PICKER_LABELS
+
+    return [*PICKER_LABELS, *presets.preset_labels()]
+
+
+def test_creature_pickers_list_the_real_robots_first():
+    controls, _, _, _ = _make_controls(EditorSession(), show_onboarding=True)
+    pickers = [h for h in controls.gui.handles if h.options == _creature_labels()]
+    assert len(pickers) == 2  # Get started's Creature and Design's Start from
+    assert pickers[0].options[0] == "Microduck · real robot"
+    assert "Unitree G1 humanoid · real robot" in pickers[0].options
+    # Without a 3D robot stage (or a downloaded robot) the first run still starts on a preset.
+    assert pickers[0].value == presets.preset_labels()[0]
+
+
+def _first_creature_choice(monkeypatch, session, *, prefer_robot):
+    monkeypatch.setattr(BuildControls, "_robot_ready", lambda self, key: True)
+    controls, _, _, _ = _make_controls(session, show_onboarding=True, prefer_robot=prefer_robot)
+    return next(h for h in controls.gui.handles if h.options == _creature_labels()).value
+
+
+def test_the_picker_opens_on_the_real_robot_unless_a_preset_was_chosen(monkeypatch):
+    session = EditorSession(template="hexapod")
+    assert _first_creature_choice(monkeypatch, session, prefer_robot=True) == (
+        "Microduck · real robot"
+    )
+    # Someone who asked for the hexapod gets the hexapod, even with the robot downloaded.
+    assert _first_creature_choice(monkeypatch, session, prefer_robot=False) == (
+        presets.preset_label("hexapod")
+    )
+
+
+def test_picking_a_real_robot_without_a_stage_explains_and_keeps_the_design():
+    session = EditorSession(template="quadruped")
+    controls, _, _, _ = _make_controls(session)
+    start_from = next(h for h in controls.gui.handles if h.options == _creature_labels())
+    before = session.creature.model_dump_json()
+
+    start_from.update("Microduck · real robot")
+
+    assert "3D robot view is not available" in session.last_message
+    assert session.creature.model_dump_json() == before
+    assert not session.can_undo
+
+
+def test_onboarding_with_a_real_robot_unavailable_keeps_the_picker_open():
+    controls, _, jobs, _ = _make_controls(EditorSession(), show_onboarding=True)
+    creature = next(h for h in controls.gui.handles if h.options == _creature_labels())
+    creature.update("Unitree G1 humanoid · real robot")
+    next(h for h in controls.gui.handles if h.text == "Run first simulation").click()
+
+    assert controls._onboarding_folder is not None  # nothing was shown, so stay on Get started
+    assert jobs.status().state == "idle"
+
+
 def test_onboarding_edit_first_applies_choice_without_running():
     session = EditorSession(template="hexapod")
     controls, _, jobs, _ = _make_controls(session, show_onboarding=True)
-    choice = next(h for h in controls.gui.handles if h.options == presets.preset_labels())
+    choice = next(h for h in controls.gui.handles if h.options == _creature_labels())
     choice.update("Hexapod")
     edit = next(h for h in controls.gui.handles if h.text == "Edit first")
 
@@ -923,9 +996,8 @@ def test_onboarding_selecting_humanoid_keeps_move_forward_goal():
     """The 12-DOF humanoid has a measured curated walking gait, so onboarding must
     preserve the user's Move forward goal instead of silently changing their intent."""
     controls, _, _, _ = _make_controls(EditorSession(), show_onboarding=True)
-    creature_labels = presets.preset_labels()
     goal_labels = presets.onboarding_goal_labels()
-    creature_dropdown = next(h for h in controls.gui.handles if h.options == creature_labels)
+    creature_dropdown = next(h for h in controls.gui.handles if h.options == _creature_labels())
     goal_dropdown = next(h for h in controls.gui.handles if h.options == goal_labels)
     assert goal_dropdown.value == "Move forward"  # sanity: default before any change
 

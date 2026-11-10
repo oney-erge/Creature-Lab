@@ -6,18 +6,19 @@ WORKDIR /app
 COPY pyproject.toml uv.lock README.md LICENSE ./
 COPY creature_lab/ ./creature_lab/
 COPY examples/ ./examples/
-RUN uv sync --frozen --no-dev --extra sim --extra viz --no-editable
+RUN uv sync --frozen --no-dev --extra sim --extra viz --extra web --extra robots --no-editable
 
 FROM python:3.11-slim-bookworm@sha256:0bee7276f83efd4a1ee05bbbf4281d95ed28e079220a9457f25a93e3f1e3c31b AS runtime
 # Listen on every interface inside the container; compose.yaml publishes the port on 127.0.0.1 only.
-ENV PATH="/app/.venv/bin:$PATH" PYTHONUNBUFFERED=1 CREATURE_LAB_HOST=0.0.0.0
+# Downloaded robot files live in their own volume, so they survive rebuilding the image.
+ENV PATH="/app/.venv/bin:$PATH" PYTHONUNBUFFERED=1 CREATURE_LAB_HOST=0.0.0.0 CREATURE_LAB_ROBOTS_DIR=/app/robots
 RUN useradd --create-home --uid 10001 creature
 WORKDIR /app
 COPY --from=builder --chown=creature:creature /app /app
-RUN mkdir -p /app/runs /app/outputs && chown -R creature:creature /app/runs /app/outputs
+RUN mkdir -p /app/runs /app/outputs /app/robots && chown -R creature:creature /app/runs /app/outputs /app/robots
 USER creature
 EXPOSE 8080
-VOLUME ["/app/runs", "/app/outputs"]
+VOLUME ["/app/runs", "/app/outputs", "/app/robots"]
 HEALTHCHECK --interval=10s --timeout=3s --start-period=20s --retries=12 \
   CMD ["python", "-c", "import socket; s=socket.create_connection(('127.0.0.1',8080),2); s.close()"]
-CMD ["creature-lab", "build", "--port", "8080", "--no-open-browser"]
+CMD ["creature-lab", "app", "--port", "8080", "--no-open-browser"]

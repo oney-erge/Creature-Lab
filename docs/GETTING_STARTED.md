@@ -2,7 +2,7 @@
 
 This guide is the shortest path from a fresh clone to a moving creature.
 
-## 1. Launch The Build Editor
+## 1. Launch Creature Lab
 
 Use the launcher from the repository root:
 
@@ -21,21 +21,27 @@ PyBullet 3.2.7 has no Windows or macOS PyPI wheels. A first install there builds
 the 80 MB source distribution and requires a working C++ compiler; it can take
 several minutes. Linux x86-64 has a Python 3.11 wheel, while other Python and
 platform combinations may also need a source build.
-For direct control of the build editor after installation, use:
+For direct control after installation, use:
 
 ```bash
 python scripts/start.py
 ```
 
-The launcher installs the starter dependencies, runs `doctor`, and opens the interactive
-**build editor** in your browser — a setup screen where you configure a creature before running
-it, instead of jumping straight into physics.
+The launcher installs the dependencies (including the `web` and `robots` extras the browser app
+needs), runs `doctor`, and opens the [browser app](WEB_APP.md): pick Microduck or the Unitree G1,
+watch a saved shove, and read why the robot fell. To design your own creature, press **Build your
+own** in the app, or for part-by-part editing start the classic build editor directly:
 
-What you should see:
+```bash
+python scripts/start.py --creature quadruped
+```
+
+That opens the interactive **build editor** — a setup screen where you configure a creature before
+running it, instead of jumping straight into physics. What you should see there:
 
 - A terminal progress log with the editor URL.
 - A browser tab at `http://localhost:8080` or the next free port.
-- A humanoid preset in the 3D preview, with sliders to tune it, a template picker, part/motor
+- A quadruped preset in the 3D preview, with sliders to tune it, a template picker, part/motor
   editing, and a **Run simulation** button that runs the existing physics pipeline once you're happy
   with the setup.
 - After Simulate: a **Metrics** panel (score, displacement, root-cause failure diagnosis) and a
@@ -45,7 +51,7 @@ What you should see:
 Pick a different starting preset:
 
 ```bash
-python scripts/start.py --creature duckling
+python scripts/start.py --creature humanoid
 ```
 
 For a fresh launch, choose **Humanoid**, keep **Move forward**, and click **Run first simulation**.
@@ -53,14 +59,7 @@ The default curated controller is the packaged 12-DOF walking gait. The replay s
 finishes. **Back to design** restores the editable standing pose instead of leaving the scene
 stuck on a replay frame.
 
-For a guided comparison, open **Results → Guided experiment**, choose a creature, and run the
-baseline. Then click **Try walking gait and run again**, followed by **Compare with baseline**.
-The duck gait is an experimental PyBullet baseline, and its behavior varies with edits and backend.
-
-Use **Download GIF** after a saved run; GIF export requires `uv sync --inexact --extra sim --extra
-viz --extra export`. GIFs and MP4s can also be created from the CLI's `export` command.
-
-Presets are `humanoid`, `duckling`, `quadruped`, `hexapod`, or `worm`. Add `--project outputs/mydude` (via
+Presets are `quadruped`, `hexapod`, `worm`, or `humanoid`. Add `--project outputs/mydude` (via
 `uv run creature-lab build --project outputs/mydude`) to bind the editor to a directory whose
 `creature.json`/`task.json` and `editor-state.json` autosave edits and detect external changes. See
 [`docs/BUILD_EDITOR.md`](BUILD_EDITOR.md) for the full editor walkthrough.
@@ -128,7 +127,7 @@ uv run creature-lab failure export frozen-gait --out outputs/frozen-gait
 
 ## 5. Improve One Creature
 
-Reopen the build editor on a specific preset any time (this is what step 1 launches by default):
+Reopen the build editor on a specific preset any time (this is what `--creature` in step 1 launches):
 
 ```bash
 uv run creature-lab build --preset humanoid
@@ -180,5 +179,5 @@ Common fixes:
 
 - Browser did not open: copy the printed `http://localhost:<port>` URL into your browser.
 - Port is busy: rerun with `python scripts/start.py --port 8090`.
-- Dependencies failed to install: run `uv sync --inexact --extra sim --extra viz` and retry.
+- Dependencies failed to install: run `uv sync --inexact --extra sim --extra viz --extra web --extra robots` and retry.
 - You only want a quick verification run: use `python scripts/start.py --once --no-open-browser`.

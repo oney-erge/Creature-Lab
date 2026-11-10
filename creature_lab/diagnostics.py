@@ -56,6 +56,7 @@ def collect_doctor_checks() -> list[DoctorCheck]:
         _safe("mujoco", _mujoco_check),
         _safe("viz (viser)", _viz_check),
         _safe("export (imageio)", _export_check),
+        _safe("app (browser)", _app_check),
         _safe("llm (litellm)", _llm_check),
         _safe("examples run", _examples_check),
     ]
@@ -93,6 +94,19 @@ def _viz_check() -> DoctorCheck:
             "viz (viser)", "warn", f"viser present but {', '.join(missing)} missing (capsules)"
         )
     return DoctorCheck("viz (viser)", "ok", "viser + trimesh + numpy importable")
+
+
+def _app_check() -> DoctorCheck:
+    """The browser app needs the `web` and `robots` extras; the launcher installs them."""
+    needed = ("fastapi", "uvicorn", "mujoco", "onnxruntime", "imageio", "PIL")
+    missing = [module for module in needed if not _installed(module)]
+    if not missing:
+        return DoctorCheck("app (browser)", "ok", "fastapi + uvicorn + mujoco + onnxruntime")
+    return DoctorCheck(
+        "app (browser)",
+        "info",
+        f"{', '.join(missing)} not installed — `uv sync --inexact --extra web --extra robots`",
+    )
 
 
 def _export_check() -> DoctorCheck:

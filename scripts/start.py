@@ -16,6 +16,9 @@ from _process_utils import port_is_open, taskkill_tree
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_PORT = 8080
 VENV_DIR = ROOT / ".venv"
+#: What the browser app imports. If any is missing the app extras are not installed.
+APP_PROBE = "import fastapi, uvicorn, mujoco, onnxruntime, imageio, PIL"
+APP_EXTRAS = ["--extra", "sim", "--extra", "viz", "--extra", "web", "--extra", "robots"]
 
 
 def check_python() -> None:
@@ -204,8 +207,8 @@ def clear_stray_processes(processes: list[tuple[int, str]]) -> None:
 def run_sync_step(uv: list[str], sync_args: list[str], *, dry_run: bool, auto_yes: bool) -> None:
     """Install dependencies, recovering automatically from a stray-process file lock."""
     hint = (
-        "Dependency installation failed. Check your network connection, then try "
-        "`uv sync --frozen --extra sim --extra viz` manually."
+        "Dependency installation failed. Check your network connection, then run the "
+        "`uv sync` command shown above manually."
     )
     try:
         run_step("Install dependencies", [*uv, *sync_args], dry_run=dry_run, failure_hint=hint)
@@ -237,6 +240,24 @@ def run_sync_step(uv: list[str], sync_args: list[str], *, dry_run: bool, auto_ye
                 file=sys.stderr,
             )
             raise
+
+
+def ensure_app_extras(uv: list[str], *, dry_run: bool, auto_yes: bool) -> None:
+    """Install the browser app's extras when the environment lacks them.
+
+    The shared launchers (run.ps1, run.sh) sync only the build editor's extras and then
+    call this script with --skip-sync, so the app cannot rely on them. `--inexact` keeps
+    the packages the launcher installed, so this only adds.
+    """
+    probe = [*uv, "run", "--frozen", "--no-sync", "python", "-c", APP_PROBE]
+    if not dry_run and subprocess.run(probe, cwd=ROOT, capture_output=True).returncode == 0:
+        return
+    run_sync_step(
+        uv,
+        ["sync", "--frozen", "--inexact", *APP_EXTRAS],
+        dry_run=dry_run,
+        auto_yes=auto_yes,
+    )
 
 
 def uv_command(explicit: str | None) -> list[str]:
@@ -297,20 +318,20 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--mode",
-        choices=["build", "demo"],
-        default="build",
+        choices=["app", "build", "demo"],
         help=(
-            "What to launch: the interactive build/setup screen where you configure a "
-            "creature before running it (default), or the read-only demo playback viewer."
+            "What to launch: the browser app with the real robots, check-ups and replays "
+            "(default), the classic build/setup screen where you configure a creature "
+            "(the default when you pass --creature, --creature-path or --task), or the "
+            "read-only demo playback viewer."
         ),
     )
     parser.add_argument(
         "--creature",
-        default=None,
         help=(
-            "Starting point. In --mode build: humanoid, duckling, quadruped, hexapod, "
-            "or worm. In --mode demo: quadruped, worm, or tripod. "
-            "Defaults to humanoid in build and quadruped in demo."
+            "Starting point. In --mode build: a preset (quadruped, hexapod, worm, "
+            "humanoid). In --mode demo: a built-in creature (quadruped, worm, tripod). "
+            "Default: quadruped."
         ),
     )
     parser.add_argument(
@@ -373,10 +394,15 @@ def parse_args() -> argparse.Namespace:
     )
 
     args = parser.parse_args()
-    if args.creature_path and args.creature is not None:
+    if args.creature_path and args.creature:
         parser.error("--creature-path cannot be combined with --creature")
-    if args.creature is None:
-        args.creature = "humanoid" if args.mode == "build" else "quadruped"
+    if args.mode is None:
+        # Asking for a particular creature or task means the classic screens.
+        wants_classic = args.creature or args.creature_path or args.task
+        args.mode = "build" if wants_classic else "app"
+    if args.mode == "app" and (args.creature or args.creature_path or args.task):
+        parser.error("--creature, --creature-path and --task apply to --mode build or demo")
+    args.creature = args.creature or "quadruped"
     if args.creature_path and not args.creature_path.exists():
         parser.error(f"--creature-path does not exist: {args.creature_path}")
     if args.task and not args.task.exists():
@@ -392,26 +418,18 @@ def main() -> None:
     port = choose_port(args.port or DEFAULT_PORT, explicit=requested_port)
     url = f"http://localhost:{port}"
 
-    label = "Build editor" if args.mode == "build" else "Demo viewer"
+    label = {"app": "App", "build": "Build editor", "demo": "Demo viewer"}[args.mode]
     print("Creature Lab starter")
     print(f"Repository: {ROOT}")
     print(f"{label} URL: {url}")
     print("Press Ctrl+C in this terminal to stop.")
 
     if not args.skip_sync:
-        sync_args = (
-            ["sync", "--frozen", "--all-extras"]
-            if args.full
-            else [
-                "sync",
-                "--frozen",
-                "--extra",
-                "sim",
-                "--extra",
-                "viz",
-            ]
-        )
+        extras = APP_EXTRAS if args.mode == "app" else ["--extra", "sim", "--extra", "viz"]
+        sync_args = ["sync", "--frozen", *(["--all-extras"] if args.full else extras)]
         run_sync_step(uv, sync_args, dry_run=args.dry_run, auto_yes=args.yes)
+    elif args.mode == "app":
+        ensure_app_extras(uv, dry_run=args.dry_run, auto_yes=args.yes)
 
     if not args.skip_doctor:
         run_step(
@@ -427,7 +445,11 @@ def main() -> None:
     if not args.open_browser:
         print(f"Open this URL manually after launch: {url}")
 
-    if args.mode == "build":
+    if args.mode == "app":
+        launch_command = [*uv, "run", "creature-lab", "app", "--port", str(port)]
+        launch_command.append("--open-browser" if args.open_browser else "--no-open-browser")
+        title = "Launch app"
+    elif args.mode == "build":
         launch_command = [*uv, "run", "creature-lab", "build", "--port", str(port)]
         launch_command.append("--open-browser" if args.open_browser else "--no-open-browser")
         if args.creature_path:

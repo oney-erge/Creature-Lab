@@ -21,6 +21,7 @@ outputs/
 !docs/assets/*.gif
 !docs/assets/**/
 !docs/assets/**/*.gif
+!docs/assets/*.mp4
 *.webm
 .DS_Store
 .idea/
@@ -31,3 +32,6 @@ MUJOCO_LOG.TXT
 # Local assistant state
 .claude/settings.local.json
 .claude/scheduled_tasks.lock
+
+# Browser app front end (the built bundle in creature_lab/web/static is committed)
+web-ui/node_modules/

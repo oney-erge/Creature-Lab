@@ -9,7 +9,9 @@ services:
     volumes:
       - creature-runs:/app/runs
       - creature-outputs:/app/outputs
+      - creature-robots:/app/robots
 
 volumes:
   creature-runs:
   creature-outputs:
+  creature-robots:

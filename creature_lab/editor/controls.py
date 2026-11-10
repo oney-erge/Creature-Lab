@@ -33,6 +33,7 @@ from creature_lab.editor import presets
 from creature_lab.editor.jobs import EditorJobManager, JobStatus
 from creature_lab.editor.labels import friendly_label, hierarchy_rows
 from creature_lab.editor.playback import EditorPlayback
+from creature_lab.editor.robot_panel import PICKER_LABELS, RobotCheckupPanel
 from creature_lab.editor.session import AVAILABLE_CONTROLLERS, EditorSession
 from creature_lab.hashing import spec_hash
 from creature_lab.qualification import BUILTIN_PROFILES, QualificationResult
@@ -75,31 +76,33 @@ class BuildControls:
         on_playback_frame: Callable[[FrameState], None],
         notify: Callable[[str, str, str], None] | None = None,
         on_frame_camera: Callable[[], None] | None = None,
-        on_camera_view: Callable[[str], None] | None = None,
         on_start_refit_gait: Callable[[int], None] | None = None,
         on_start_autopsy: Callable[[], None] | None = None,
         on_start_replay_export: Callable[[EpisodeTrace], None] | None = None,
-        on_start_gif_export: Callable[[EpisodeTrace], None] | None = None,
         on_compare_runs: Callable[[Path, Path], None] | None = None,
         on_seek_comparison: Callable[[float], None] | None = None,
         runs_dir: Path = DEFAULT_RUNS_DIR,
         show_onboarding: bool = False,
+        prefer_robot: bool = True,
+        robot_stage: Any = None,
     ) -> None:
         self.gui = gui
+        self._robot_stage = robot_stage
+        #: Whether the first picker choice is the real robot (when downloaded) rather than the
+        #: preset the session started from. Off when someone chose a preset explicitly.
+        self._prefer_robot = prefer_robot
         self.session = session
         self.job_manager = job_manager
         self.playback = playback
         self.on_preview = on_preview
         self.on_preview_light = on_preview_light or on_preview
         self.on_frame_camera = on_frame_camera or (lambda: None)
-        self.on_camera_view = on_camera_view or (lambda _view: self.on_frame_camera())
         self.on_start_simulate = on_start_simulate
         self.on_start_robustness = on_start_robustness
         self.on_start_qualify = on_start_qualify
         self.on_start_refit_gait = on_start_refit_gait or (lambda attempts: None)
         self.on_start_autopsy = on_start_autopsy
         self.on_start_replay_export = on_start_replay_export
-        self.on_start_gif_export = on_start_gif_export
         self.on_compare_runs = on_compare_runs
         self.on_seek_comparison = on_seek_comparison
         self.on_playback_frame = on_playback_frame
@@ -118,12 +121,6 @@ class BuildControls:
         self._activity_latest: Any | None = None
         self._activity_log: Any | None = None
         self._activity: deque[tuple[str, str]] = deque(maxlen=30)
-        self._guided_stage = "idle"
-        self._guided_pending: str | None = None
-        self._guided_status: Any | None = None
-        self._guided_improve_button: Any | None = None
-        self._guided_start_button: Any | None = None
-        self._guided_push_button: Any | None = None
         self._design_tab: Any | None = None
         self._motion_tab: Any | None = None
         self._test_tab: Any | None = None
@@ -143,6 +140,7 @@ class BuildControls:
         self._comparison_duration = 0.0
         self._comparison_fraction = 0.0
         self._onboarding_folder: Any | None = None
+        self._onboarding_creature: Any | None = None
         # Persistent handles updated in place.
         self._message: Any | None = None
         self._controller_resolution_md: Any | None = None
@@ -164,7 +162,6 @@ class BuildControls:
         self._refit_gait_button: Any | None = None
         self._autopsy_button: Any | None = None
         self._replay_export_button: Any | None = None
-        self._gif_export_button: Any | None = None
         self._replay_export_client: Any | None = None
         self._last_autopsy: Any | None = None
         self._autopsy_report_dir: Path | None = None
@@ -206,6 +203,9 @@ class BuildControls:
         if show_onboarding:
             self._build_onboarding_panel()
 
+        # Real robots sit right under the first-run picker so they are seen, not buried.
+        self._robot_panel = RobotCheckupPanel(self.gui, stage=self._robot_stage)
+
         self._build_header_controls()
 
         # Phase nav is the primary navigation - it used to sit below ~500px of
@@ -241,7 +241,6 @@ class BuildControls:
             self._build_template_picker()
         with self._test_tab:
             self._build_run_section()
-            self._build_guided_experiment()
             self._build_refit_gait_section()
             self._build_lesson_section()
 
@@ -435,29 +434,54 @@ class BuildControls:
             else presets.preset_label("quadruped")
         )
         template = self.gui.add_dropdown(
-            "Start from", presets.preset_labels(), initial_value=initial
+            "Start from", [*PICKER_LABELS, *presets.preset_labels()], initial_value=initial
         )
-        template.on_update(
-            lambda event: self._safe(
-                lambda: self.session.apply_template(
-                    presets.preset_name_from_label(event.target.value)
-                ),
-                rebuild_body=True,
-                rebuild_part=True,
-                rebuild_motion=True,
-                rebuild_task=False,
-            )
-        )
+        template.on_update(lambda event: self._pick_start(event.target.value))
         frame_button = self.gui.add_button(
             "Frame creature",
             icon="focus-2",
             hint="Point the camera at the creature - lost it off-screen or zoomed too far?",
         )
         frame_button.on_click(lambda _event: self.on_frame_camera())
-        view = self.gui.add_dropdown(
-            "Camera", ["Overview", "Front", "Side", "Follow"], initial_value="Overview"
+
+    def _pick_start(self, label: str) -> None:
+        """A creature picker choice: a real robot goes on the 3D stage, a preset is designed."""
+        if label in PICKER_LABELS:
+            self.session.last_message = self._robot_panel.open_robot(PICKER_LABELS[label])
+            self._record_activity(f"Opened {label}.")
+            self._update_status()
+            return
+        if self._robot_panel.showing:
+            self._robot_panel.back()
+        self._safe(
+            lambda: self.session.apply_template(presets.preset_name_from_label(label)),
+            rebuild_body=True,
+            rebuild_part=True,
+            rebuild_motion=True,
+            rebuild_task=False,
         )
-        view.on_update(lambda event: self.on_camera_view(event.target.value))
+
+    def _preview_onboarding_choice(self, label: str) -> None:
+        """Show what the Get started picker points at: the real robot, or the creature."""
+        if label in PICKER_LABELS:
+            self.session.last_message = self._robot_panel.open_robot(PICKER_LABELS[label])
+            self._update_status()
+        elif self._robot_panel.showing:
+            self._robot_panel.back()
+            self._update_status()
+
+    def show_first_choice(self) -> None:
+        """At startup, put the default real robot on stage so it is the first thing seen."""
+        dropdown = self._onboarding_creature
+        if self._onboarding_folder is not None and dropdown is not None:
+            if dropdown.value in PICKER_LABELS:
+                self._preview_onboarding_choice(dropdown.value)
+
+    def _robot_ready(self, key: str) -> bool:
+        """Whether a real robot can be shown right away (so it can be the first choice)."""
+        from creature_lab.robots.fetch import is_installed, missing_extra
+
+        return self._robot_stage is not None and not missing_extra() and is_installed(key)
 
     def _build_run_section(self) -> None:
         with self.gui.add_folder("Run", expand_by_default=True, order=10):
@@ -506,94 +530,6 @@ class BuildControls:
                     self._controller_dropdown.value = self.session.controller
 
             button.on_click(load)
-
-    def _build_guided_experiment(self) -> None:
-        with self.gui.add_folder("Guided experiment", expand_by_default=True, order=15):
-            self.gui.add_markdown(
-                "Compare a still gait with a packaged walking gait on the same body and task. "
-                "Loading the experiment replaces the current design; Undo restores it."
-            )
-            choice = self.gui.add_dropdown(
-                "Experiment", ["Humanoid", "Duckling"], initial_value="Humanoid"
-            )
-            start = self.gui.add_button("Run baseline experiment", color="blue")
-            push = self.gui.add_button("Try Duckling with a gentle push")
-            self._guided_start_button = start
-            self._guided_push_button = push
-            self._guided_status = self.gui.add_markdown("Choose a creature and run its baseline.")
-            self._guided_improve_button = self.gui.add_button(
-                "Try walking gait and run again", color="blue"
-            )
-            self._guided_improve_button.visible = False
-
-            def start_experiment(_event: Any) -> None:
-                if self.job_manager.is_running:
-                    return
-                success = self._safe(
-                    lambda: self.session.load_guided_experiment(choice.value.lower()),
-                    rebuild_body=True,
-                    rebuild_part=True,
-                    rebuild_motion=True,
-                    rebuild_task=True,
-                )
-                if success:
-                    self._guided_pending = "baseline"
-                    self._guided_stage = "running"
-                    self._guided_improve_button.visible = False
-                    self._guided_status.content = "Running the no-swing baseline…"
-                    if not self._start_simulate():
-                        self._guided_pending = None
-                        self._guided_stage = "idle"
-                        self._guided_status.content = "Could not start. Check the status above."
-
-            def improve(_event: Any) -> None:
-                if self.job_manager.is_running:
-                    return
-                success = self._safe(
-                    self.session.apply_guided_gait,
-                    rebuild_body=True,
-                    rebuild_part=True,
-                    rebuild_motion=True,
-                    rebuild_task=True,
-                )
-                if success:
-                    self._guided_pending = "improved"
-                    self._guided_stage = "running"
-                    self._guided_improve_button.visible = False
-                    self._guided_status.content = "Running with the packaged walking gait…"
-                    if not self._start_simulate():
-                        self._guided_pending = None
-                        self._guided_stage = "baseline_ready"
-                        self._guided_improve_button.visible = True
-                        self._guided_status.content = "Could not start. Check the status above."
-
-            start.on_click(start_experiment)
-            self._guided_improve_button.on_click(improve)
-
-            def push_demo(_event: Any) -> None:
-                if self.job_manager.is_running:
-                    return
-                success = self._safe(
-                    self.session.load_duckling_push_demo,
-                    rebuild_body=True,
-                    rebuild_part=True,
-                    rebuild_motion=True,
-                    rebuild_task=True,
-                )
-                if success:
-                    self._guided_pending = "push"
-                    self._guided_stage = "running"
-                    self._baseline_run_id = None
-                    self._guided_improve_button.visible = False
-                    self._guided_status.content = (
-                        "Running a 10 N lateral push lasting one physics step at 2 seconds."
-                    )
-                    if not self._start_simulate():
-                        self._guided_pending = None
-                        self._guided_stage = "idle"
-                        self._guided_status.content = "Could not start. Check the status above."
-
-            push.on_click(push_demo)
 
     def _build_refit_gait_section(self) -> None:
         """CMA-ES re-tune this body's own sinusoid motors (order=25: right after
@@ -1284,16 +1220,16 @@ class BuildControls:
 
     # -- Test phase: run (async) -------------------------------------------------
 
-    def _start_simulate(self) -> bool:
+    def _start_simulate(self) -> None:
         if self.job_manager.is_running:
             self.session.last_message = "A job is already running."
             self._update_status()
-            return False
+            return
         status = self.session.status()
         if not status.ok:
             self.session.last_message = "Fix validation errors before simulating."
             self._update_status()
-            return False
+            return
         if self.playback.playing:
             self.playback.pause()
             self._sync_playback_widgets()
@@ -1312,12 +1248,11 @@ class BuildControls:
             self.session.last_message = f"Could not start simulation: {exc}"
             self._record_activity(self.session.last_message, "error")
             self._update_status()
-            return False
+            return
         self.session.last_message = "Simulation started."
         self._record_activity("Simulation started.", "run")
         self._render_job_status(self.job_manager.status())
         self._update_status()
-        return True
 
     def _start_robustness(self, trials: int, mass_jitter: float, friction_jitter: float) -> None:
         if self.job_manager.is_running:
@@ -1380,20 +1315,6 @@ class BuildControls:
         self.on_start_replay_export(self._last_trace)
         self._render_job_status(self.job_manager.status())
 
-    def _start_gif_export(self, event: Any) -> None:
-        client = getattr(event, "client", None)
-        if self.job_manager.is_running or self.on_start_gif_export is None or client is None:
-            self.session.last_message = "GIF export is unavailable while another job is running."
-            self._update_status()
-            return
-        if self._last_trace is None:
-            return
-        self._replay_export_client = client
-        self._pending_job_kind = "gif_export"
-        self.on_start_gif_export(self._last_trace)
-        self._record_activity("Preparing GIF from the saved run.")
-        self._render_job_status(self.job_manager.status())
-
     def _start_refit_gait(self, attempts: int) -> None:
         if not self._has_cmaes:
             self.session.last_message = "Re-fit gait requires the optional CMA-ES dependency."
@@ -1430,6 +1351,7 @@ class BuildControls:
         """Poll the running job and advance playback. Call once per main-loop iteration."""
         self._tick_job()
         self._tick_playback(dt)
+        self._robot_panel.tick(dt)
         if self.comparison_playing and self._comparison_duration > 0:
             fraction = min(1.0, self._comparison_fraction + dt / self._comparison_duration)
             self._seek_comparison(fraction)
@@ -1474,15 +1396,6 @@ class BuildControls:
             self._autopsy_button.disabled = running
         if self._replay_export_button is not None:
             self._replay_export_button.disabled = running
-        if self._gif_export_button is not None:
-            self._gif_export_button.disabled = running
-        for button in (
-            self._guided_start_button,
-            self._guided_push_button,
-            self._guided_improve_button,
-        ):
-            if button is not None:
-                button.disabled = running
 
     def _current_run_signature(self) -> tuple[str, str, str]:
         """Identity of the current (creature, task, controller) - a run is stale once
@@ -1516,16 +1429,13 @@ class BuildControls:
     def _consume_completed_job(self, status: JobStatus) -> None:
         kind, self._pending_job_kind = self._pending_job_kind, None
         signature, self._pending_signature = self._pending_signature, None
-        if kind in {"replay_export", "gif_export"}:
+        if kind == "replay_export":
             run_id, page = status.result
             client, self._replay_export_client = self._replay_export_client, None
             try:
                 if client is not None:
-                    filename = (
-                        f"creature-lab-replay-{run_id}.{'gif' if kind == 'gif_export' else 'html'}"
-                    )
                     client.send_file_download(
-                        filename, page if isinstance(page, bytes) else page.encode("utf-8")
+                        f"creature-lab-replay-{run_id}.html", page.encode("utf-8")
                     )
                     self.session.last_message = (
                         "Recorded replay is available in the browser download notification."
@@ -1535,13 +1445,6 @@ class BuildControls:
             self._update_status()
             return
         if signature is not None and signature != self._current_run_signature():
-            if self._guided_pending is not None:
-                self._guided_pending = None
-                self._guided_stage = "idle"
-                if self._guided_status is not None:
-                    self._guided_status.content = (
-                        "The design changed during the run. Restart the experiment."
-                    )
             self.session.last_message = (
                 "The design or task changed while the job ran; its result was not applied. "
                 "Completed simulation and analysis runs remain in History."
@@ -1566,7 +1469,6 @@ class BuildControls:
         self._last_run_signature = self._current_run_signature()
         if kind == "simulate":
             trace, run_dir = status.result
-            guided, self._guided_pending = self._guided_pending, None
             self._showing_saved_replay = False
             self._last_autopsy = None
             self._autopsy_report_dir = None
@@ -1583,27 +1485,6 @@ class BuildControls:
                 f"score={trace.score:+.4f} — see Result below."
             )
             self._record_activity(f"Simulation complete. Score: {trace.score:+.3f}.", "result")
-            if guided == "baseline":
-                self._baseline_run_id = trace.run_id
-                self._guided_stage = "baseline_ready"
-                if self._guided_status is not None:
-                    self._guided_status.content = (
-                        "Baseline saved. Look at the result, then try the packaged walking gait."
-                    )
-                if self._guided_improve_button is not None:
-                    self._guided_improve_button.visible = True
-            elif guided == "improved":
-                self._guided_stage = "complete"
-                if self._guided_status is not None:
-                    self._guided_status.content = (
-                        "Both runs are saved. Compare the two results below."
-                    )
-            elif guided == "push":
-                self._guided_stage = "complete"
-                if self._guided_status is not None:
-                    self._guided_status.content = (
-                        "Push demonstration complete. Inspect the result and replay below."
-                    )
             self._notify_simulate_result(trace)
             self._rebuild_playback_controls()
             self._rebuild_run_history_controls()
@@ -1669,11 +1550,6 @@ class BuildControls:
         self._pending_job_kind = None
         self._pending_signature = None
         self._replay_export_client = None
-        if self._guided_pending is not None:
-            self._guided_pending = None
-            self._guided_stage = "idle"
-            if self._guided_status is not None:
-                self._guided_status.content = "The run did not finish. Start the experiment again."
         if status.state == "cancelled":
             self.session.last_message = "Cancelled."
         else:
@@ -1810,7 +1686,6 @@ class BuildControls:
         self._remove_folder("_metrics_folder")
         self._autopsy_button = None
         self._replay_export_button = None
-        self._gif_export_button = None
         with self._test_tab:
             # order=20: pinned right after Run regardless of rebuild churn - the
             # payoff of the whole tool shouldn't require scrolling past Task/
@@ -1889,11 +1764,6 @@ class BuildControls:
                 self.gui.add_markdown(
                     "Experimental standalone viewer; this records poses and does not rerun physics."
                 )
-
-            if self.on_start_gif_export is not None:
-                self._gif_export_button = self.gui.add_button("Download GIF", icon="download")
-                self._gif_export_button.on_click(self._start_gif_export)
-                self._gif_export_button.disabled = self.job_manager.is_running
 
             if self.on_start_autopsy is not None:
                 self.gui.add_markdown(
@@ -2289,8 +2159,8 @@ class BuildControls:
         if left is None or right is None or client is None:
             return
         try:
-            a, trace_a, creature_a, task_a = build_report_bundle(left.run_dir)
-            b, trace_b, creature_b, task_b = build_report_bundle(right.run_dir)
+            a, trace_a, creature_a, _ = build_report_bundle(left.run_dir)
+            b, trace_b, creature_b, _ = build_report_bundle(right.run_dir)
             page = comparison_to_html(
                 a,
                 b,
@@ -2299,8 +2169,6 @@ class BuildControls:
                 trace_a=trace_a,
                 creature_b=creature_b,
                 trace_b=trace_b,
-                task_a=task_a,
-                task_b=task_b,
             )
             client.send_file_download("creature-lab-comparison.html", page.encode("utf-8"))
         except (OSError, ValueError) as exc:
@@ -2398,7 +2266,18 @@ class BuildControls:
     #: The 12-DOF humanoid left this set after gaining its measured walking setup.
     def _build_onboarding_panel(self) -> None:
         """Choose a starting point and run it, or edit the chosen design first."""
-        creature_labels = presets.preset_labels()
+        creature_labels = [*PICKER_LABELS, *presets.preset_labels()]
+        first_robot = next(iter(PICKER_LABELS))
+        started_from = (
+            presets.preset_label(self.session.template)
+            if self.session.template in presets.CREATURE_PRESETS
+            else presets.preset_labels()[0]
+        )
+        initial_creature = (
+            first_robot
+            if self._prefer_robot and self._robot_ready(PICKER_LABELS[first_robot])
+            else started_from
+        )
         goal_labels = presets.onboarding_goal_labels()
         self._onboarding_folder = self.gui.add_folder("Get started", expand_by_default=True)
         with self._onboarding_folder:
@@ -2407,13 +2286,11 @@ class BuildControls:
                 "You can edit the design at any time."
             )
             creature_dropdown = self.gui.add_dropdown(
-                "Creature",
-                creature_labels,
-                initial_value=(
-                    presets.preset_label(self.session.template)
-                    if self.session.template in presets.CREATURE_PRESETS
-                    else creature_labels[0]
-                ),
+                "Creature", creature_labels, initial_value=initial_creature
+            )
+            self._onboarding_creature = creature_dropdown
+            creature_dropdown.on_update(
+                lambda event: self._preview_onboarding_choice(event.target.value)
             )
             goal_dropdown = self.gui.add_dropdown("Goal", goal_labels, initial_value=goal_labels[0])
             start_button = self.gui.add_button(
@@ -2422,6 +2299,15 @@ class BuildControls:
             edit_button = self.gui.add_button("Edit first")
 
             def _choose(*, run: bool) -> None:
+                if creature_dropdown.value in PICKER_LABELS:
+                    self._pick_start(creature_dropdown.value)
+                    if self._robot_panel.showing:
+                        self._remove_folder("_onboarding_folder")
+                        if self._simulate_button is not None:
+                            self._simulate_button.visible = True
+                    return
+                if self._robot_panel.showing:
+                    self._robot_panel.back()
                 creature_key = presets.preset_name_from_label(creature_dropdown.value)
                 goal_key = presets.onboarding_goal_key_from_label(goal_dropdown.value)
                 success = self._safe(

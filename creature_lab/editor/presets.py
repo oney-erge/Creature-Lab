@@ -7,7 +7,6 @@ from dataclasses import dataclass
 from typing import Any, Literal
 
 from creature_lab.scaffold import (
-    generate_duckling,
     generate_hexapod,
     generate_humanoid,
     generate_quadruped,
@@ -92,20 +91,7 @@ def _humanoid(params: dict[str, float]) -> CreatureSpec:
     )
 
 
-def _duckling(params: dict[str, float]) -> CreatureSpec:
-    return generate_duckling(height=params["height"], mass=params["mass"])
-
-
 CREATURE_PRESETS: dict[str, CreaturePreset] = {
-    "duckling": CreaturePreset(
-        "duckling",
-        "Duckling",
-        (
-            ParamSpec("height", "Height", 0.4, 1.2, 0.02, 0.8),
-            ParamSpec("mass", "Mass", 2.0, 20.0, 0.5, 8.0),
-        ),
-        _duckling,
-    ),
     "quadruped": CreaturePreset(
         "quadruped",
         "Quadruped",
@@ -176,12 +162,7 @@ def preset_names() -> list[str]:
 
 
 def preset_labels() -> list[str]:
-    names = [
-        "humanoid",
-        "duckling",
-        *(name for name in CREATURE_PRESETS if name not in {"humanoid", "duckling"}),
-    ]
-    return [CREATURE_PRESETS[name].label for name in names]
+    return [preset.label for preset in CREATURE_PRESETS.values()]
 
 
 def preset_name_from_label(label: str) -> str:

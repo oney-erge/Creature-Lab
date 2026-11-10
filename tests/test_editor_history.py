@@ -223,15 +223,22 @@ def test_controller_defaults_to_curated_and_switches():
     assert session.controller == "target_seek"  # unchanged on invalid input
 
 
-def test_controller_choice_is_not_undoable():
+def test_controller_choice_is_undoable_like_any_other_edit():
+    """Choosing a controller changes what Simulate runs, so it is its own undo step."""
     session = EditorSession()
     session.select_part("leg_0l")
     session.update_selected_part(mass=2.0)  # creates real history
+    original = session.controller
 
     session.set_controller("cpg")
-
-    session.undo()  # undoes the mass edit, not the controller choice
     assert session.controller == "cpg"
+
+    session.undo()  # undoes the controller choice only; the mass edit stays
+    assert session.controller == original
+    assert next(p for p in session.creature.parts if p.id == "leg_0l").mass == 2.0
+
+    session.undo()  # now the mass edit
+    assert next(p for p in session.creature.parts if p.id == "leg_0l").mass != 2.0
 
 
 # -- controller-aware status (regression: blank "Failed: " in the editor) ------------

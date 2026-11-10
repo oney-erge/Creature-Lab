@@ -36,6 +36,7 @@ from creature_lab.library import (
     default_creature,
     default_task,
 )
+from creature_lab.robots.cli import robots_app
 from creature_lab.runs import (
     DEFAULT_RUNS_DIR,
     new_run_id,
@@ -53,7 +54,7 @@ from creature_lab.schema import (
 )
 from creature_lab.schema.trace import TRACE_SCHEMA_VERSION
 from creature_lab.validation import EpisodeInputError, validate_episode_inputs
-from creature_lab.viewers.viser_viewer import DEFAULT_HOST
+from creature_lab.viewers.viser_viewer import DEFAULT_HOST, find_free_port
 
 app = typer.Typer(
     help=(
@@ -410,6 +411,49 @@ def _warn_if_network_exposed(host: str) -> None:
     )
 
 
+def _claim_port(host: str, port: int) -> int:
+    """The port to serve on: the requested one, or the next free one (said out loud)."""
+    free = find_free_port(host, port)
+    if free != port:
+        console.print(f"[yellow]note:[/yellow] port {port} is already in use; using {free}.")
+    return free
+
+
+@app.command("app", rich_help_panel="Start Here")
+def web_app(
+    port: Annotated[int, typer.Option(help="Port to serve on (the next free one if busy).")] = 8080,
+    host: HostOption = DEFAULT_HOST,
+    open_browser: Annotated[
+        bool, typer.Option("--open-browser/--no-open-browser", help="Open the app in your browser.")
+    ] = True,
+    checkups: Annotated[
+        Path, typer.Option(help="Where check-up results are read from and written to.")
+    ] = Path("outputs") / "checkup",
+) -> None:
+    """Open the Creature Lab browser app: real robots, check-ups, and replays."""
+    import threading
+    import webbrowser
+
+    try:
+        import uvicorn
+
+        from creature_lab.web.server import create_app
+    except ImportError as exc:
+        console.print(
+            "[red]error:[/red] the browser app needs its extras. Install them with "
+            "`uv sync --inexact --extra web --extra robots`."
+        )
+        raise typer.Exit(code=2) from exc
+
+    _warn_if_network_exposed(host)
+    port = _claim_port(host, port)
+    url = f"http://localhost:{port}"
+    console.print(f"[green]serving[/green] Creature Lab on {url} (Ctrl+C to stop)")
+    if open_browser:
+        threading.Timer(1.2, webbrowser.open, args=(url,)).start()
+    uvicorn.run(create_app(checkups), host=host, port=port, log_level="warning")
+
+
 @app.command(rich_help_panel="Start Here")
 def demo(
     creature_path: Annotated[
@@ -495,6 +539,7 @@ def demo(
             backend.close()
 
     _warn_if_network_exposed(host)
+    port = _claim_port(host, port)
     console.print(
         f"[green]serving[/green] {creature.name!r} on http://localhost:{port} (Ctrl+C to stop)"
     )
@@ -635,9 +680,12 @@ def build(
         ),
     ] = None,
     preset: Annotated[
-        str,
-        typer.Option(help="Starting preset: humanoid, duckling, quadruped, hexapod, or worm."),
-    ] = "humanoid",
+        str | None,
+        typer.Option(
+            help="Starting preset: quadruped, hexapod, worm, or humanoid. Without it, the "
+            "editor opens on a real robot when one is downloaded, else on the quadruped."
+        ),
+    ] = None,
     out: Annotated[
         Path,
         typer.Option("--out", "-o", help="Where Save JSON writes the CreatureSpec."),
@@ -696,6 +744,8 @@ def build(
     from creature_lab.editor.live import run_editor
     from creature_lab.editor.session import AVAILABLE_CONTROLLERS, EditorSession
 
+    start_on_robot = preset is None
+    preset = preset or "quadruped"
     if preset not in editor_presets.CREATURE_PRESETS:
         available = ", ".join(editor_presets.preset_names())
         console.print(f"[red]error:[/red] unknown preset {preset!r}; choose one of: {available}")
@@ -807,6 +857,7 @@ def build(
         )
 
     _warn_if_network_exposed(host)
+    port = _claim_port(host, port)
     console.print(
         f"[green]serving[/green] build editor on http://localhost:{port} (Ctrl+C to stop)"
     )
@@ -823,6 +874,7 @@ def build(
         # Only greet with the creature x goal picker on a truly fresh launch - not
         # when the user already pointed at a specific creature or project.
         show_onboarding=creature_path is None and project is None,
+        prefer_robot=start_on_robot,
     )
 
 
@@ -1825,6 +1877,7 @@ def view(
         raise typer.Exit(code=2) from exc
 
     _warn_if_network_exposed(host)
+    port = _claim_port(host, port)
     console.print(
         f"[green]serving[/green] {trace.run_id!r} on http://localhost:{port} (Ctrl+C to stop)"
     )
@@ -1887,8 +1940,6 @@ def compare(
                 trace_a=trace_a,
                 creature_b=creature_b,
                 trace_b=trace_b,
-                task_a=_task_a,
-                task_b=_task_b,
             )
         )
         console.print(f"[green]wrote[/green] comparison report -> {html_out}")
@@ -1908,6 +1959,7 @@ def compare(
         raise typer.Exit(code=2) from exc
 
     _warn_if_network_exposed(host)
+    port = _claim_port(host, port)
     console.print(
         f"[green]serving[/green] {trace_a.run_id!r} vs {trace_b.run_id!r} "
         f"on http://localhost:{port} (Ctrl+C to stop)"
@@ -2429,7 +2481,7 @@ def export(
         )
         raise typer.Exit(code=2) from exc
 
-    frames = render_trace(creature, trace, task=task_spec, width=width, height=height, fps=fps)
+    frames = render_trace(creature, trace, task=task_spec, width=width, height=height)
     saved_path = write_animation(frames, out_path, fps=fps)
     console.print(f"[green]exported[/green] {len(frames)} frame(s) -> {saved_path}")
 
@@ -2898,6 +2950,8 @@ def mirror_limb_cmd(
 zoo_app = typer.Typer(help="Browse and run the curated Creature Zoo.")
 app.add_typer(zoo_app, name="zoo", rich_help_panel="Start Here")
 
+app.add_typer(robots_app, name="robots", rich_help_panel="Start Here")
+
 failure_app = typer.Typer(
     help="Explore intentionally broken experiments and their expected causes."
 )
@@ -3016,7 +3070,7 @@ def zoo_list(
         table.add_row(name, ", ".join(tasks), default_task_name(name), optimized, status)
     console.print(table)
     console.print(
-        "[dim]'optimized gait' creatures also ship a tuned controller.json - "
+        "[dim]'optimized gait' creatures also ship a CMA-ES-tuned controller.json - "
         "the curated default automatically uses them; `sinusoid` remains the raw baseline.[/dim]"
     )
 
@@ -3031,7 +3085,7 @@ def zoo_run(
         str,
         typer.Option(
             help="Controller: 'curated' (default), 'sinusoid', 'cpg', 'target_seek', a path to a "
-            "controller.json, or 'optimized' for this creature's packaged tuned "
+            "controller.json, or 'optimized' for this creature's packaged CMA-ES-tuned "
             "gait if one is shipped (see `zoo list`)."
         ),
     ] = "curated",
