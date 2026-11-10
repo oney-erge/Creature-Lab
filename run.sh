@@ -81,5 +81,7 @@ install_complete
 
 args=(run --frozen --no-sync python scripts/start.py --skip-sync)
 [ "$no_browser" -eq 1 ] && args+=(--no-open-browser)
-args+=("${forward[@]}")
+# ${forward[@]+...} and not "${forward[@]}": macOS ships Bash 3.2, where expanding an empty array under
+# `set -u` aborts with "unbound variable", which stopped a plain ./run.sh after the install.
+args+=(${forward[@]+"${forward[@]}"})
 exec "$uv" "${args[@]}"

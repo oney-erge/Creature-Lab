@@ -9,6 +9,11 @@
   editor and the new `creature-lab quick` fall back to MuJoCo and say so, `doctor` reports it as
   optional, and the error for a missing PyBullet names `--backend mujoco` and the compiler caveat.
   A cold start from an empty cache measured about 16 s on a fast connection.
+- **Fix: `./run.sh` stopped after the install on macOS.** macOS ships Bash 3.2, where expanding an
+  empty array under `set -u` aborts ("forward[@]: unbound variable"), so a plain `./run.sh` or
+  `./run.command` with no extra arguments never started the app. Found by the new first-launch CI
+  job, which also showed that a Mac whose newest Python is 3.15 cannot install onnxruntime: the
+  launchers now ask uv for Python 3.12 on a first install (an existing environment is kept).
 - When an install does fail, the launcher says what to do for the usual causes (a path too long for
   Windows, no C++ build tools, a full disk, no network) instead of leaving raw build errors.
 - A bare `creature-lab` now opens the browser app (or says how to install it). The old terminal

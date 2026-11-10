@@ -151,3 +151,10 @@ def test_the_shared_launchers_only_pin_python_for_a_first_install(script):
     assert "3.12" in line
     # The pin is conditional on there being no .venv yet, so a developer's own venv is not rebuilt.
     assert "-not (Test-Path" in line or "[ -d .venv ] ||" in line
+
+
+def test_run_sh_survives_bash_3_2_when_there_are_no_extra_arguments():
+    """macOS's Bash 3.2 aborts on an empty array under `set -u`; that broke every plain ./run.sh."""
+    text = (ROOT / "run.sh").read_text(encoding="utf-8")
+    assert 'args+=("${forward[@]}")' not in text
+    assert 'args+=(${forward[@]+"${forward[@]}"})' in text
