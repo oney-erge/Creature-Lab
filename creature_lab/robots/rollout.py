@@ -13,6 +13,10 @@ from creature_lab.robots.types import CONTROL_HZ, SUPPORT_VERTICES, RobotRun, Sc
 
 #: Contacts pressing less than this (newtons) are ignored when outlining the support area.
 _MIN_CONTACT_N = 0.02
+#: A mesh foot's footprint is the part of the mesh this close to the floor (metres).
+_SOLE_HEIGHT_M = 0.006
+#: A mesh footprint is reduced to its outermost points in this many directions.
+_SOLE_DIRECTIONS = 16
 
 
 class MujocoRobot(ABC):
@@ -78,12 +82,33 @@ def _convex_hull(points: np.ndarray) -> np.ndarray:
     return np.array(lower[:-1] + upper[:-1], dtype=float)
 
 
+def _sole_footprint(model: mujoco.MjModel, data: mujoco.MjData, geom: int) -> np.ndarray:
+    """(n, 2) floor positions of a mesh geom's vertices within ``_SOLE_HEIGHT_M`` of the floor.
+
+    MuJoCo reports a mesh touching the floor at a few deepest vertices, often within a
+    millimetre of each other, so a flat foot looks like a point. Its footprint is the sole.
+    """
+    mesh = model.geom_dataid[geom]
+    start, count = model.mesh_vertadr[mesh], model.mesh_vertnum[mesh]
+    vertices = model.mesh_vert[start : start + count] @ data.geom_xmat[geom].reshape(3, 3).T
+    vertices = vertices + data.geom_xpos[geom]
+    sole = vertices[vertices[:, 2] < _SOLE_HEIGHT_M, :2]
+    if len(sole) <= _SOLE_DIRECTIONS:
+        return sole
+    # Thousands of vertices make the hull slow, and the outline keeps only a few corners: the
+    # outermost vertex in each of a few evenly spaced directions is the same shape to ~2%.
+    angles = np.linspace(0.0, 2.0 * math.pi, _SOLE_DIRECTIONS, endpoint=False)
+    directions = np.stack([np.cos(angles), np.sin(angles)])
+    return sole[np.unique(np.argmax(sole @ directions, axis=0))]
+
+
 def _ground_contacts(robot: MujocoRobot) -> tuple[np.ndarray, float]:
     """Support outline (NaN-padded) and the fastest contact-point slide this frame (m/s)."""
     model, data = robot.model, robot.data
     points = []
     slide = 0.0
     velocity = np.zeros(6)
+    soles: set[int] = set()
     for index in range(data.ncon):
         contact = data.contact[index]
         if robot._floor not in (contact.geom1, contact.geom2):
@@ -91,8 +116,13 @@ def _ground_contacts(robot: MujocoRobot) -> tuple[np.ndarray, float]:
         mujoco.mj_contactForce(model, data, index, robot._contact_buffer)
         if robot._contact_buffer[0] < _MIN_CONTACT_N:
             continue
-        points.append(contact.pos[:2].copy())
         geom = contact.geom2 if contact.geom1 == robot._floor else contact.geom1
+        if model.geom_type[geom] == mujoco.mjtGeom.mjGEOM_MESH:
+            if geom not in soles:
+                soles.add(geom)
+                points.extend(_sole_footprint(model, data, geom))
+        else:
+            points.append(contact.pos[:2].copy())
         mujoco.mj_objectVelocity(model, data, mujoco.mjtObj.mjOBJ_GEOM, geom, velocity, 0)
         # Velocity of the touching point itself: centre velocity plus spin about the centre.
         offset = contact.pos - data.geom_xpos[geom]

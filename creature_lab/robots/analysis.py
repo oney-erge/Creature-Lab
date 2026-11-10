@@ -124,7 +124,11 @@ def analyze(run: RobotRun) -> RunAnalysis:
     if len(fallen) == 0:
         margin = balance_margin_cm(run)
         evidence = []
-        verdict = f"Walked {distance:.1f} m without falling."
+        verdict = (
+            f"Walked {distance:.1f} m without falling."
+            if distance >= 0.25
+            else "Stayed on its feet without making headway."
+        )
         if pushed:
             peak = float(tilt_deg[time >= push_window[0]].max())
             verdict = (
