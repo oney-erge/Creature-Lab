@@ -105,6 +105,16 @@ export function whatIfSentence(original: RunCard, changed: RunCard): string {
   return `In the original it ${did(original)}. ${lead}, it ${did(changed)}.`;
 }
 
+/**
+ * The name that tells a run apart from the one beside it: the policy when the two differ, else
+ * (a "what if" pair, same policy) which run is the original and what the other one changed.
+ */
+export function pairName(run: RunCard, other: RunCard | null): string {
+  if (!other || run.policy !== other.policy) return run.policyTitle;
+  if (run.whatIf) return `What if: ${run.whatIfShort ?? run.whatIf}`;
+  return `Original: ${run.title}`;
+}
+
 /** What two policies did on the same shove, in one sentence. `a` is the one being looked at. */
 export function compareSentence(a: RunCard, b: RunCard): string {
   const left = severity(a.outcome);

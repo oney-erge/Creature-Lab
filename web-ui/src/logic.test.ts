@@ -11,7 +11,18 @@ import {
   supportAt,
   trunkAt,
 } from "./decode";
-import { dotsFor, featuredRun, groupRuns, limitText, outcomeTone, quickestStart, roughDuration, totals, whatIfSentence } from "./format";
+import {
+  dotsFor,
+  featuredRun,
+  groupRuns,
+  limitText,
+  outcomeTone,
+  pairName,
+  quickestStart,
+  roughDuration,
+  totals,
+  whatIfSentence,
+} from "./format";
 import { arrowLength, framingFor, pointInConvexPolygon, robotUnit, shoveReference } from "./geometry";
 import { HOLD_S, Playback, SLOW_FACTOR, frameAt, rateAt } from "./playback";
 import { clipFileName, clipWindow } from "./clip";
@@ -322,5 +333,14 @@ describe("what if", () => {
   it("counts getting back up as a way of falling", () => {
     const sentence = whatIfSentence(card({}), changed("fell_and_got_up", "Back up in 1.2 s", "walking faster"));
     expect(sentence).toContain("fell and was back up in 1.2 s");
+  });
+  it("names the two sides of a pair by what differs, not by the shared policy", () => {
+    const original = card({ title: "150 N shove" });
+    const whatIf = changed("walked", "Walked 4.2 m", "shoved more gently (100 N)");
+    expect(pairName(original, whatIf)).toBe("Original: 150 N shove");
+    expect(pairName(whatIf, original)).toBe("What if: shoved more gently (100 N)");
+    const otherPolicy = card({ policy: "other", policyTitle: "Walk + get-up policy" });
+    expect(pairName(otherPolicy, original)).toBe("Walk + get-up policy");
+    expect(pairName(original, null)).toBe(original.policyTitle);
   });
 });

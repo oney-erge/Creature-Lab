@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from "react";
+import { pairName } from "../format";
 import { formatTime, type Playback } from "../playback";
 import type { RunDetail } from "../types";
 
@@ -152,10 +153,10 @@ export function Timeline({ playback, run, other = null }: Props) {
         {other && run ? (
           <>
             <span>
-              <i className="swatch tilt" /> {run.policyTitle} lean
+              <i className="swatch tilt" /> {pairName(run, other)}
             </span>
             <span>
-              <i className="swatch tilt-b" /> {other.policyTitle} lean
+              <i className="swatch tilt-b" /> {pairName(other, run)}
             </span>
           </>
         ) : (

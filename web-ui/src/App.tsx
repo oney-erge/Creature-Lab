@@ -6,7 +6,7 @@ import { LicenseDialog } from "./components/LicenseDialog";
 import { Library } from "./components/Library";
 import { Stage, robotSource } from "./components/Stage";
 import { Timeline } from "./components/Timeline";
-import { featuredRun, quickestStart, roughDuration } from "./format";
+import { featuredRun, pairName, quickestStart, roughDuration } from "./format";
 import { Playback } from "./playback";
 import { prefersReducedMotion } from "./prefs";
 import { hashFor, parseHash } from "./url";
@@ -573,7 +573,14 @@ export default function App() {
           {loaded && robot && source && hasStage && pairShown && detail && other && (
             <div className="pair" data-testid="pair">
               {(mirrored ? [other, detail] : [detail, other]).map((r) => (
-                <Stage key={r.id} source={source} run={r} playback={playback} follower={r.id !== detail.id} />
+                <Stage
+                  key={r.id}
+                  source={source}
+                  run={r}
+                  playback={playback}
+                  follower={r.id !== detail.id}
+                  label={pairName(r, r.id === detail.id ? other : detail)}
+                />
               ))}
             </div>
           )}

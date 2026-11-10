@@ -44,12 +44,14 @@ interface Props {
   playback: Playback;
   /** A second view on the same clock (side-by-side compare): it never drives playback itself. */
   follower?: boolean;
+  /** What to call the run in the corner; defaults to its policy (see `pairName` for pairs). */
+  label?: string;
 }
 
 type Status = "loading" | "ready" | "error";
 
 /** The 3D view: the real robot's meshes, the run replayed on them, and a few viewing controls. */
-export function Stage({ source, run, playback, follower = false }: Props) {
+export function Stage({ source, run, playback, follower = false, label }: Props) {
   const src = useRef(source);
   src.current = source;
   const framedFor = useRef<string | null>(null);
@@ -193,7 +195,7 @@ export function Stage({ source, run, playback, follower = false }: Props) {
       )}
       <div className="hud tl">
         <span className="hud-robot">{source.title.toUpperCase()}</span>
-        {run && run.policyTitle !== source.title && <span>{run.policyTitle}</span>}
+        {run && (label ?? run.policyTitle) !== source.title && <span>{label ?? run.policyTitle}</span>}
       </div>
       {run && <div className={`hud tr badge-${tone}`}>{run.outcomeText}</div>}
       {overlays && run && source.markers !== false && (
