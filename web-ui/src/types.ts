@@ -81,6 +81,8 @@ export interface RunCard {
   recoveredAt: number | null;
   distance: number;
   pushN: number;
+  /** The same test under the robot's other policy, when there is one. */
+  pair: string | null;
 }
 
 export interface Evidence {
@@ -142,4 +144,39 @@ export interface Job {
 
 export interface BuilderInfo {
   url: string;
+}
+
+export interface CreatureParam {
+  key: string;
+  label: string;
+  min: number;
+  max: number;
+  step: number;
+  initial: number;
+  integer: boolean;
+}
+
+export interface CreaturePresetInfo {
+  key: string;
+  label: string;
+  params: CreatureParam[];
+}
+
+export interface CreatureCatalog {
+  presets: CreaturePresetInfo[];
+  goals: { key: string; label: string }[];
+}
+
+/** A designed creature's run, shaped like a robot's so the same 3D view and timeline play it. */
+export interface CreatureRun extends RunDetail {
+  sizeCm: number;
+  score: number;
+  simulated: boolean;
+  backend?: string;
+}
+
+export interface BuildResponse {
+  scene: SceneDescription;
+  run: CreatureRun;
+  creature: { preset: string; params: Record<string, number>; goal: string; backend: string };
 }

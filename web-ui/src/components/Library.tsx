@@ -1,6 +1,6 @@
 import { useState, type KeyboardEvent } from "react";
 import { api } from "../api";
-import { groupRuns, outcomeTone } from "../format";
+import { type Filter, groupRuns, matchesFilter, outcomeTone } from "../format";
 import type { RobotInfo, RunCard } from "../types";
 
 /** A picture from the server that falls back to a plain tile when it cannot be rendered. */
@@ -55,10 +55,19 @@ function moveBetweenRuns(event: KeyboardEvent<HTMLElement>) {
   cards[next]?.scrollIntoView({ block: "nearest" });
 }
 
+const FILTERS: { key: Filter; label: string }[] = [
+  { key: "all", label: "All" },
+  { key: "down", label: "Stayed down" },
+  { key: "got-up", label: "Got up" },
+  { key: "up", label: "Stayed up" },
+];
+
 export function Library({ robots, selected, onSelect, runs, runId, onRun, onBuild, buildNote }: Props) {
   const robot = robots.find((r) => r.key === selected);
-  const groups = groupRuns(runs);
-  const tabStop = runs.some((r) => r.id === runId) ? runId : runs[0]?.id;
+  const [filter, setFilter] = useState<Filter>("all");
+  const shown = runs.filter((run) => matchesFilter(run, filter));
+  const groups = groupRuns(shown);
+  const tabStop = shown.some((r) => r.id === runId) ? runId : shown[0]?.id;
   return (
     <aside className="rail-col" aria-label="Library">
       <section>
@@ -92,6 +101,14 @@ export function Library({ robots, selected, onSelect, runs, runId, onRun, onBuil
       {robot && runs.length > 0 && (
         <section aria-label={`History of ${robot.title} runs`} onKeyDown={moveBetweenRuns}>
           <h2 className="eyebrow">History · {robot.title}</h2>
+          <div className="seg small filters" role="group" aria-label="Show runs">
+            {FILTERS.map((f) => (
+              <button key={f.key} type="button" aria-pressed={filter === f.key} onClick={() => setFilter(f.key)}>
+                {f.label}
+              </button>
+            ))}
+          </div>
+          {shown.length === 0 && <p className="muted small">No runs ended that way.</p>}
           {groups.map((group) => (
             <div key={group.kind} className="run-group">
               <h3>{group.label}</h3>
@@ -119,7 +136,7 @@ export function Library({ robots, selected, onSelect, runs, runId, onRun, onBuil
 
       <section>
         <h2 className="eyebrow">Build your own</h2>
-        <p className="muted small">Bodies you edit part by part, in the classic builder.</p>
+        <p className="muted small">Pick a body, reshape it, and run it.</p>
         <div className="presets">
           {PRESETS.map((p) => (
             <button key={p.key} type="button" className="preset" onClick={() => onBuild(p.key)}>

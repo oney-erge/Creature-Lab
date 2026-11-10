@@ -14,6 +14,8 @@ import {
 import { dotsFor, featuredRun, groupRuns, limitText, outcomeTone, totals } from "./format";
 import { arrowLength, framingFor, pointInConvexPolygon, robotUnit, shoveReference } from "./geometry";
 import { HOLD_S, Playback, SLOW_FACTOR, frameAt, rateAt } from "./playback";
+import { clipFileName, clipWindow } from "./clip";
+import { HOME, hashFor, parseHash } from "./url";
 import type { PolicySummary, RunCard, RunEvents, ShoveRow } from "./types";
 
 const events: RunEvents = {
@@ -199,6 +201,7 @@ const card = (over: Partial<RunCard>): RunCard => ({
   recoveredAt: null,
   distance: 1.7,
   pushN: 0,
+  pair: null,
   ...over,
 });
 
@@ -242,5 +245,40 @@ describe("formatting results", () => {
     ]);
     expect(groups.map((g) => g.label)).toEqual(["Walks", "Shoves", "Slippery floors"]);
     expect(groups[0]?.runs.map((r) => r.id)).toEqual(["a", "c"]);
+  });
+});
+
+describe("the address bar", () => {
+  it("round-trips a robot, a run and the compare flag", () => {
+    const place = { view: "robots" as const, robot: "microduck", run: "3f2a9c01d4e7", compare: true, preset: null };
+    expect(hashFor(place)).toBe("#/robots/microduck/3f2a9c01d4e7/compare");
+    expect(parseHash(hashFor(place))).toEqual(place);
+    expect(parseHash("#/robots/microduck")).toEqual({ ...HOME, robot: "microduck" });
+  });
+  it("knows the builder and falls back to home for anything else", () => {
+    expect(hashFor({ ...HOME, view: "build" })).toBe("#/build");
+    expect(hashFor({ ...HOME, view: "build", preset: "hexapod" })).toBe("#/build/hexapod");
+    expect(parseHash("#/build/hexapod")).toEqual({ ...HOME, view: "build", preset: "hexapod" });
+    expect(parseHash("#/build").view).toBe("build");
+    expect(parseHash("")).toEqual(HOME);
+    expect(parseHash("#/elsewhere/1")).toEqual(HOME);
+  });
+  it("never lets odd characters through into a request path", () => {
+    expect(parseHash("#/robots/../../etc/passwd").robot).toBeNull();
+    expect(parseHash("#/robots/microduck/<script>").run).toBeNull();
+  });
+});
+
+describe("saving a clip", () => {
+  it("covers a moment before the shove to two seconds after the outcome", () => {
+    expect(clipWindow({ ...events, recoveredAt: 5.1 }, 10)).toEqual({ start: 2.8, end: 7.1 });
+    expect(clipWindow(events, 10)).toEqual({ start: 2.8, end: 6.6 }); // fell at 4.6, stayed down
+    expect(clipWindow({ ...events, fallAt: null }, 10)).toEqual({ start: 2.8, end: 7 }); // no fall: a second after the shove
+    expect(clipWindow({ ...events, pushAt: null }, 10)).toEqual({ start: 0, end: 10 });
+    expect(clipWindow({ ...events, recoveredAt: 9.5 }, 10).end).toBe(10); // never past the run
+  });
+  it("names the file after what it shows", () => {
+    expect(clipFileName(["Microduck", "Walk-only policy", "3 N shove"])).toBe("creature-lab-microduck-walk-only-policy-3-n-shove.webm");
+    expect(clipFileName(["", "!!"])).toBe("creature-lab-run.webm");
   });
 });

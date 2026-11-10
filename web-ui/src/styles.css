@@ -13,6 +13,7 @@
   --teal: #2bc4a9;
   --red: #f2645e;
   --amber: #f5c542;
+  --violet: #a99bff;
   --radius: 14px;
   --mono: "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
   color-scheme: dark;
@@ -1076,4 +1077,261 @@ code {
   display: flex;
   gap: 14px;
   flex: none;
+}
+
+/* ---- 3D marker legend ---- */
+.key3d {
+  left: 14px;
+  bottom: 44px;
+  list-style: none;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 8px 12px;
+  font-size: 12px;
+  color: #d5deef;
+}
+.key3d li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.key3d i {
+  flex: none;
+  display: inline-block;
+}
+.key-area {
+  width: 18px;
+  height: 11px;
+  border: 2px solid var(--teal);
+  background: rgba(43, 196, 169, 0.3);
+  transform: skewX(-18deg);
+}
+.key-dot {
+  width: 11px;
+  height: 11px;
+  margin: 0 3px;
+  border-radius: 50%;
+  background: var(--amber);
+}
+.key-arrow {
+  width: 18px;
+  height: 0;
+  border-top: 3px solid var(--accent);
+  position: relative;
+}
+.key-arrow::after {
+  content: "";
+  position: absolute;
+  right: -3px;
+  top: -6px;
+  border: 5px solid transparent;
+  border-left: 7px solid var(--accent);
+}
+@media (max-width: 560px) {
+  .key3d {
+    bottom: 56px;
+  }
+}
+
+/* ---- timeline axis ---- */
+.axis {
+  position: relative;
+  height: 16px;
+  margin-top: 4px;
+  color: var(--soft);
+  font-size: 11px;
+}
+.axis span {
+  position: absolute;
+  transform: translateX(-50%);
+}
+.axis span:first-child {
+  transform: none;
+}
+.axis span:last-child {
+  transform: translateX(-100%);
+}
+
+.hud.lite {
+  left: 50%;
+  top: 14px;
+  transform: translateX(-50%);
+  font-size: 12px;
+  color: #ffe4a8;
+  max-width: 46%;
+  text-align: center;
+}
+@media (max-width: 860px) {
+  .hud.lite {
+    top: 60px;
+    max-width: calc(100% - 28px);
+  }
+}
+
+.swatch.tilt-b {
+  background: var(--violet);
+}
+.tilt.b {
+  stroke: var(--violet);
+}
+.panel.fix {
+  border-color: rgba(255, 122, 48, 0.5);
+  background: linear-gradient(160deg, #1b1a26 0%, var(--panel) 70%);
+}
+.panel.fix .primary,
+.panel.fix .ghost {
+  align-self: flex-start;
+}
+.versus {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.versus li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+.versus-name {
+  font-weight: 600;
+}
+.pair {
+  flex: 1 0 300px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  min-height: 0;
+}
+.pair .stage {
+  height: auto;
+  flex: none;
+  min-height: 300px;
+}
+@media (max-width: 860px) {
+  .pair {
+    grid-template-columns: 1fr;
+  }
+  .pair .stage {
+    height: 52vw;
+    min-height: 240px;
+  }
+}
+
+/* ---- side by side: two small stages share one clock, so keep their overlays quiet ---- */
+.pair .hud.tl {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  max-width: calc(100% - 140px);
+}
+.pair .toolbar,
+.stage.follower .key3d {
+  display: none;
+}
+.pair .hud.bl {
+  max-width: calc(100% - 28px);
+}
+.pair .key3d {
+  bottom: 40px;
+  font-size: 11px;
+  gap: 3px;
+  padding: 6px 9px;
+}
+.axis span {
+  white-space: nowrap;
+}
+
+/* ---- section tabs ---- */
+.tabs {
+  display: flex;
+  gap: 4px;
+  padding: 3px;
+  border-radius: 12px;
+  background: #0d1424;
+  border: 1px solid var(--line);
+}
+.tabs button {
+  min-height: 34px;
+  padding: 6px 14px;
+  border-radius: 9px;
+  border: 0;
+  background: transparent;
+  color: var(--soft);
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+}
+.tabs button.on {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+/* ---- the creature editor ---- */
+.presets.big {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+.preset-card {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  text-align: left;
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  background: var(--panel);
+  border: 2px solid var(--line);
+  color: var(--ink);
+  cursor: pointer;
+}
+.preset-card.selected {
+  border-color: var(--accent);
+}
+.preset-card .name {
+  font-weight: 700;
+}
+.preset-card .sub {
+  font-size: 12px;
+  color: var(--soft);
+}
+.seg.stacked {
+  display: flex;
+  flex-direction: column;
+  margin-top: 10px;
+}
+.row.between {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.sliders {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 10px;
+}
+.slider {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+}
+.slider-head {
+  display: flex;
+  justify-content: space-between;
+  color: var(--soft);
+}
+.slider-head output {
+  color: var(--ink);
+}
+.slider input[type="range"] {
+  width: 100%;
+  accent-color: var(--accent);
 }

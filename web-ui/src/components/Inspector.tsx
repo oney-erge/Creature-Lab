@@ -1,5 +1,5 @@
-import { dotLabel, dotsFor, limitText, outcomeTone, totals } from "../format";
-import type { CheckupSummary, PolicySummary, RobotInfo, RunDetail } from "../types";
+import { compareSentence, dotLabel, dotsFor, limitText, outcomeTone, severity, totals } from "../format";
+import type { CheckupSummary, PolicySummary, RobotInfo, RunCard, RunDetail } from "../types";
 
 interface Props {
   robot: RobotInfo;
@@ -8,6 +8,50 @@ interface Props {
   onPolicy: (key: string) => void;
   run: RunDetail | null;
   onRun: (id: string) => void;
+  /** The same test under the other policy, if the check-up has one. */
+  twin: RunCard | null;
+  compare: boolean;
+  onCompare: (on: boolean) => void;
+}
+
+/** "Can it be fixed?": the same shove under the other policy, one click away. */
+function FixPanel({ run, twin, onCompare }: { run: RunDetail; twin: RunCard; onCompare: (on: boolean) => void }) {
+  const better = severity(twin.outcome) < severity(run.outcome);
+  return (
+    <section className="panel fix" data-testid="fix">
+      <h2 className="eyebrow">{better ? "Can it be fixed?" : "Another policy"}</h2>
+      <p className="body">
+        {better
+          ? `Yes, for this shove. The ${twin.policyTitle.toLowerCase()} met the same push and `
+          : `The ${twin.policyTitle.toLowerCase()} met the same test and `}
+        <strong className={`tone-${outcomeTone(twin.outcome)}`}>{twin.outcomeText.toLowerCase()}</strong>.
+      </p>
+      <button type="button" className={better ? "primary" : "ghost"} onClick={() => onCompare(true)}>
+        See both side by side
+      </button>
+    </section>
+  );
+}
+
+/** The result of the comparison, in words, with the way back. */
+function CompareVerdict({ run, twin, onCompare }: { run: RunDetail; twin: RunCard; onCompare: (on: boolean) => void }) {
+  return (
+    <section className="panel" data-testid="verdict">
+      <h2 className="eyebrow">Same test, two policies</h2>
+      <ul className="versus">
+        {[run, twin].map((r) => (
+          <li key={r.id}>
+            <span className="versus-name">{r.policyTitle}</span>
+            <span className={`chip ${outcomeTone(r.outcome)}`}>{r.outcomeText}</span>
+          </li>
+        ))}
+      </ul>
+      <p className="verdict tone-good">{compareSentence(run, twin)}</p>
+      <button type="button" className="ghost" onClick={() => onCompare(false)}>
+        Back to one view
+      </button>
+    </section>
+  );
 }
 
 function Evidence({ run }: { run: RunDetail }) {
@@ -85,10 +129,11 @@ function ShoveMatrix({ policy, onRun }: { policy: PolicySummary; onRun: (id: str
   );
 }
 
-export function Inspector({ robot, checkup, policyKey, onPolicy, run, onRun }: Props) {
+export function Inspector({ robot, checkup, policyKey, onPolicy, run, onRun, twin, compare, onCompare }: Props) {
   const policy = checkup?.policies.find((p) => p.policy === policyKey) ?? checkup?.policies[0] ?? null;
   return (
     <aside className="side-col" aria-label="Inspector">
+      {run && twin && compare && <CompareVerdict run={run} twin={twin} onCompare={onCompare} />}
       {checkup && checkup.policies.length > 0 && policy && (
         <section className="panel">
           <h2 className="eyebrow">Check-up · {robot.title}</h2>
@@ -122,6 +167,8 @@ export function Inspector({ robot, checkup, policyKey, onPolicy, run, onRun }: P
           )}
         </section>
       )}
+
+      {run && twin && !compare && <FixPanel run={run} twin={twin} onCompare={onCompare} />}
 
       {policy && policy.shoves.length > 0 && <ShoveMatrix policy={policy} onRun={onRun} />}
 

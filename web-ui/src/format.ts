@@ -81,3 +81,40 @@ export function groupRuns(runs: RunCard[]): { kind: string; label: string; runs:
   }
   return groups;
 }
+
+/** How bad an outcome is: 0 stayed up, 1 fell but got up, 2 stayed down. */
+export function severity(outcome: Outcome): number {
+  return outcome === "walked" ? 0 : outcome === "fell_and_got_up" ? 1 : 2;
+}
+
+/** What two policies did on the same shove, in one sentence. `a` is the one being looked at. */
+export function compareSentence(a: RunCard, b: RunCard): string {
+  const left = severity(a.outcome);
+  const right = severity(b.outcome);
+  const name = (run: RunCard) => `The ${run.policyTitle.charAt(0).toLowerCase()}${run.policyTitle.slice(1)}`;
+  const did = (run: RunCard) => {
+    if (run.outcome === "walked") return "stayed on its feet";
+    if (run.outcome === "fell_and_got_up") return `fell and was ${run.outcomeText.toLowerCase()}`;
+    return "fell and stayed down";
+  };
+  if (left === right) return `Both policies ended the same way: ${did(a)}.`;
+  const better = right < left ? b : a;
+  const worse = right < left ? a : b;
+  return `${name(better)} ${did(better)}; ${name(worse).toLowerCase()} ${did(worse)}.`;
+}
+
+export type Filter = "all" | "down" | "got-up" | "up";
+
+/** Whether a run belongs under the history filter (by how it ended). */
+export function matchesFilter(run: RunCard, filter: Filter): boolean {
+  switch (filter) {
+    case "down":
+      return run.outcome === "fell";
+    case "got-up":
+      return run.outcome === "fell_and_got_up";
+    case "up":
+      return run.outcome === "walked";
+    default:
+      return true;
+  }
+}

@@ -20,10 +20,12 @@ function pathFor(tilt: number[]): string {
 interface Props {
   playback: Playback;
   run: RunDetail | null;
+  /** The same shove under the other policy: drawn as a second line, in its own colour. */
+  other?: RunDetail | null;
 }
 
 /** Lean angle over the run, with the shove, the fall, the get-up, and a draggable playhead. */
-export function Timeline({ playback, run }: Props) {
+export function Timeline({ playback, run, other = null }: Props) {
   const state = useSyncExternalStore(playback.subscribe, playback.getSnapshot);
   const duration = run?.duration ?? 0;
   const x = (t: number) => (duration > 0 ? (W * t) / duration : 0);
@@ -110,6 +112,7 @@ export function Timeline({ playback, run }: Props) {
           {events?.fallAt != null && (
             <line x1={x(events.fallAt)} x2={x(events.fallAt)} y1="0" y2={H} className="fall-mark" />
           )}
+          {other && <polyline points={pathFor(other.tilt)} className="tilt b" />}
           {run && <polyline points={pathFor(run.tilt)} className="tilt" />}
           <rect x="0" y={H + 2} width={W} height="5" rx="2.5" className="rail" />
           <rect x="0" y={H + 2} width={x(state.time)} height="5" rx="2.5" className="rail-fill" />
@@ -129,19 +132,42 @@ export function Timeline({ playback, run }: Props) {
         />
       </div>
 
+      <div className="axis" aria-hidden="true">
+        {Array.from({ length: Math.floor(duration / 2) + 1 }, (_, i) => i * 2).map((t) => (
+          <span key={t} style={{ left: `${duration > 0 ? (100 * t) / duration : 0}%` }}>
+            {t} s
+          </span>
+        ))}
+      </div>
+
       <div className="legend">
-        <span>
-          <i className="swatch push" /> Shove
-        </span>
+        {events?.pushAt != null && (
+          <span>
+            <i className="swatch push" /> Shove
+          </span>
+        )}
         <span>
           <i className="swatch fall" /> Fall line (60°)
         </span>
-        <span>
-          <i className="swatch tilt" /> Lean angle
-        </span>
-        <span>
-          <i className="swatch up" /> Back on its feet
-        </span>
+        {other && run ? (
+          <>
+            <span>
+              <i className="swatch tilt" /> {run.policyTitle} lean
+            </span>
+            <span>
+              <i className="swatch tilt-b" /> {other.policyTitle} lean
+            </span>
+          </>
+        ) : (
+          <span>
+            <i className="swatch tilt" /> Lean angle
+          </span>
+        )}
+        {events?.recoveredAt != null && (
+          <span>
+            <i className="swatch up" /> Back on its feet
+          </span>
+        )}
       </div>
     </section>
   );

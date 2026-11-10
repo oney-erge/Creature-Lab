@@ -18,6 +18,7 @@ import {
   shoveReference,
 } from "./geometry";
 import { frameAt } from "./playback";
+import { isSoftwareGL } from "./prefs";
 import type { SceneDescription } from "./types";
 
 // MuJoCo, the server and the films all use Z up; so does this scene.
@@ -64,11 +65,23 @@ export class RobotView {
   private time = 0;
 
   private markers = new THREE.Group();
-  private outline: THREE.LineLoop;
+  /** The area the feet hold up: a translucent fill with a thick edge, teal or red. */
+  private supportFill: THREE.Mesh;
+  private supportEdge: THREE.Mesh;
   private heading: THREE.Mesh;
+  /** A thin line from the floor point up to the trunk, so the dot reads as "weight lands here". */
+  private plumb = new THREE.Group();
+  private plumbLine: THREE.Mesh;
   private arrow = new THREE.Group();
   private tmpA = new THREE.Quaternion();
   private tmpB = new THREE.Quaternion();
+
+  /** True once the view has dropped shadows and extra resolution to keep up (no GPU, or slow). */
+  lite = false;
+  /** Called once, when the view switches itself to the simplified drawing. */
+  onLite: (() => void) | null = null;
+  private lastDraw = 0;
+  private slowDraws = 0;
 
   constructor(private container: HTMLElement) {
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
@@ -107,16 +120,39 @@ export class RobotView {
     this.floor.receiveShadow = true;
     this.scene.add(this.floor);
 
-    this.outline = new THREE.LineLoop(
-      new THREE.BufferGeometry().setAttribute("position", new THREE.BufferAttribute(new Float32Array(8 * 3), 3)),
-      new THREE.LineBasicMaterial({ color: TEAL, transparent: true, opacity: 0.95 }),
+    this.supportFill = new THREE.Mesh(
+      new THREE.BufferGeometry().setAttribute("position", new THREE.BufferAttribute(new Float32Array(6 * 3 * 3), 3)),
+      new THREE.MeshBasicMaterial({
+        color: TEAL,
+        transparent: true,
+        opacity: 0.3,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+      }),
     );
-    this.outline.frustumCulled = false;
+    this.supportEdge = new THREE.Mesh(
+      new THREE.BufferGeometry().setAttribute("position", new THREE.BufferAttribute(new Float32Array(8 * 6 * 3), 3)),
+      new THREE.MeshBasicMaterial({
+        color: TEAL,
+        transparent: true,
+        opacity: 0.95,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+      }),
+    );
+    this.supportFill.frustumCulled = false;
+    this.supportEdge.frustumCulled = false;
     this.heading = new THREE.Mesh(
       new THREE.CylinderGeometry(1, 1, 0.12, 28),
       new THREE.MeshBasicMaterial({ color: AMBER }),
     );
     this.heading.rotation.x = Math.PI / 2; // a disc lying on the floor
+    this.plumbLine = new THREE.Mesh(
+      new THREE.CylinderGeometry(1, 1, 1, 8),
+      new THREE.MeshBasicMaterial({ color: AMBER, transparent: true, opacity: 0.7 }),
+    );
+    this.plumbLine.rotation.x = Math.PI / 2; // along Z, from the floor up
+    this.plumb.add(this.plumbLine);
     const shaft = new THREE.Mesh(
       new THREE.CylinderGeometry(0.1, 0.1, 1, 16),
       new THREE.MeshStandardMaterial({ color: ORANGE, emissive: ORANGE, emissiveIntensity: 0.35 }),
@@ -128,14 +164,31 @@ export class RobotView {
     shaft.name = "shaft";
     head.name = "head";
     this.arrow.add(shaft, head);
-    this.markers.add(this.outline, this.heading, this.arrow);
+    this.markers.add(this.supportFill, this.supportEdge, this.heading, this.plumb, this.arrow);
     this.scene.add(this.markers);
 
     this.controls.addEventListener("change", () => (this.dirty = true));
     this.observer = new ResizeObserver(() => this.resize());
     this.observer.observe(container);
     this.resize();
+    if (isSoftwareGL(this.renderer.getContext())) this.enableLite();
     this.loop();
+  }
+
+  /** Simplified drawing for computers without graphics acceleration: no shadows, 1x resolution. */
+  private enableLite(): void {
+    if (this.lite) return;
+    this.lite = true;
+    this.renderer.setPixelRatio(1);
+    this.renderer.shadowMap.enabled = false;
+    this.key.castShadow = false;
+    this.scene.traverse((object) => {
+      const material = (object as THREE.Mesh).material as THREE.Material | undefined;
+      if (material) material.needsUpdate = true;
+    });
+    this.resize();
+    this.dirty = true;
+    this.onLite?.();
   }
 
   // ---- loading ---------------------------------------------------------------------------
@@ -145,6 +198,7 @@ export class RobotView {
     heightCm: number,
     description: SceneDescription,
     fetchMesh: (id: number) => Promise<ArrayBuffer>,
+    reframe = true,
   ): Promise<void> {
     const geometries = new Map<number, THREE.BufferGeometry>();
     await Promise.all(
@@ -185,7 +239,7 @@ export class RobotView {
     this.scene.add(root);
     this.loaded = { key, unit, bodies, root };
     this.dress(unit);
-    this.frameCamera();
+    if (reframe) this.frameCamera();
     this.dirty = true;
   }
 
@@ -227,7 +281,7 @@ export class RobotView {
     cam.far = 12 * unit + 4;
     cam.updateProjectionMatrix();
     this.markers.scale.setScalar(1);
-    this.heading.scale.set(0.011 * unit, 0.011 * unit, 0.011 * unit);
+    this.heading.scale.set(0.02 * unit, 0.02 * unit, 0.02 * unit);
     this.camera.near = 0.01 * unit;
     this.camera.far = 80 * unit + 30;
     this.camera.updateProjectionMatrix();
@@ -235,14 +289,14 @@ export class RobotView {
     this.controls.maxDistance = 8 * unit;
   }
 
-  setRun(poses: Poses, overlay: Overlay, fps: number): void {
+  setRun(poses: Poses, overlay: Overlay, fps: number, reframe = true): void {
     this.poses = poses;
     this.overlay = overlay;
     this.fps = fps;
     this.lastFocus = null;
     this.dirty = true;
     this.setTime(0);
-    this.frameCamera();
+    if (reframe) this.frameCamera();
   }
 
   setOptions(options: ViewOptions): void {
@@ -294,15 +348,18 @@ export class RobotView {
     const outline = supportAt(overlay, frame);
     const heading = headingAt(overlay, frame);
     const inside = pointInConvexPolygon(heading, outline);
-    const positions = this.outline.geometry.getAttribute("position") as THREE.BufferAttribute;
     const z = 0.0015 * unit;
-    outline.slice(0, 8).forEach(([x, y], i) => positions.setXYZ(i, x, y, z));
-    this.outline.geometry.setDrawRange(0, outline.length);
-    positions.needsUpdate = true;
-    this.outline.visible = outline.length > 1;
-    (this.outline.material as THREE.LineBasicMaterial).color.setHex(inside || outline.length < 3 ? TEAL : RED);
+    const colour = inside || outline.length < 3 ? TEAL : RED;
+    this.drawSupport(outline.slice(0, 8), z, 0.007 * unit, colour);
     this.heading.visible = outline.length > 0;
-    this.heading.position.set(heading[0], heading[1], z * 1.2);
+    this.heading.position.set(heading[0], heading[1], z * 1.6);
+    // The plumb line runs from the balance point up to the trunk's height.
+    const trunkNow = trunkAt(overlay, frame);
+    const height = Math.max(trunkNow[2] ?? 0, 0.02 * unit);
+    this.plumb.visible = outline.length > 0;
+    this.plumb.position.set(heading[0], heading[1], 0);
+    this.plumbLine.scale.set(0.0035 * unit, height, 0.0035 * unit);
+    this.plumbLine.position.z = height / 2;
 
     const force = pushForceAt(overlay, frame);
     this.arrow.visible = force !== 0;
@@ -324,6 +381,51 @@ export class RobotView {
       const trunk = trunkAt(overlay, frame);
       this.arrow.position.set(trunk[0], trunk[1], trunk[2]);
     }
+  }
+
+  /** Fill the foot polygon and give it a thick edge; `colour` says whether the weight is inside. */
+  private drawSupport(points: [number, number][], z: number, width: number, colour: number): void {
+    const fill = this.supportFill.geometry.getAttribute("position") as THREE.BufferAttribute;
+    const edge = this.supportEdge.geometry.getAttribute("position") as THREE.BufferAttribute;
+    const n = points.length;
+    let fillVerts = 0;
+    for (let i = 1; i + 1 < n; i++) {
+      const [x0, y0] = points[0]!;
+      const [x1, y1] = points[i]!;
+      const [x2, y2] = points[i + 1]!;
+      fill.setXYZ(fillVerts++, x0, y0, z);
+      fill.setXYZ(fillVerts++, x1, y1, z);
+      fill.setXYZ(fillVerts++, x2, y2, z);
+    }
+    this.supportFill.geometry.setDrawRange(0, fillVerts);
+    fill.needsUpdate = true;
+    this.supportFill.visible = fillVerts > 0;
+
+    let edgeVerts = 0;
+    const segments = n === 2 ? 1 : n;
+    for (let i = 0; i < segments && n > 1; i++) {
+      const [ax, ay] = points[i]!;
+      const [bx, by] = points[(i + 1) % n]!;
+      const dx = bx - ax;
+      const dy = by - ay;
+      const length = Math.hypot(dx, dy) || 1;
+      const nx = (-dy / length) * (width / 2);
+      const ny = (dx / length) * (width / 2);
+      const quad: [number, number][] = [
+        [ax + nx, ay + ny],
+        [ax - nx, ay - ny],
+        [bx + nx, by + ny],
+        [bx + nx, by + ny],
+        [ax - nx, ay - ny],
+        [bx - nx, by - ny],
+      ];
+      for (const [x, y] of quad) edge.setXYZ(edgeVerts++, x, y, z * 1.15);
+    }
+    this.supportEdge.geometry.setDrawRange(0, edgeVerts);
+    edge.needsUpdate = true;
+    this.supportEdge.visible = edgeVerts > 0;
+    (this.supportFill.material as THREE.MeshBasicMaterial).color.setHex(colour);
+    (this.supportEdge.material as THREE.MeshBasicMaterial).color.setHex(colour);
   }
 
   private follow(focus: THREE.Vector3): void {
@@ -367,9 +469,21 @@ export class RobotView {
     if (this.dirty) {
       this.dirty = false;
       this.renderer.render(this.scene, this.camera);
+      // Back-to-back draws that each take over 66 ms (under 15 a second) mean this machine is
+      // struggling: simplify instead of stuttering.
+      const now = performance.now();
+      const continuous = now - this.lastDraw < 250;
+      this.slowDraws = continuous && now - this.lastDraw > 66 ? this.slowDraws + 1 : 0;
+      this.lastDraw = now;
+      if (this.slowDraws >= 30) this.enableLite();
     }
     this.frame = requestAnimationFrame(this.loop);
   };
+
+  /** The drawing surface, for recording clips. */
+  get canvas(): HTMLCanvasElement {
+    return this.renderer.domElement;
+  }
 
   /** The most recent time passed to setTime (for tests and screenshots). */
   get currentTime(): number {

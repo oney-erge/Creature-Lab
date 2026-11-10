@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "./api";
+import { Editor } from "./components/Editor";
 import { Inspector } from "./components/Inspector";
 import { LicenseDialog } from "./components/LicenseDialog";
 import { Library } from "./components/Library";
-import { Stage } from "./components/Stage";
+import { Stage, robotSource } from "./components/Stage";
 import { Timeline } from "./components/Timeline";
 import { featuredRun } from "./format";
 import { Playback } from "./playback";
+import { prefersReducedMotion } from "./prefs";
+import { hashFor, parseHash } from "./url";
 import type { Job, RobotInfo, RunCard, RunDetail } from "./types";
 
 function errorText(error: unknown): string {
@@ -128,16 +131,33 @@ export default function App() {
   const [loaded, setLoaded] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const [canRetry, setCanRetry] = useState(false);
+  const [compare, setCompare] = useState(false);
+  const [other, setOther] = useState<RunDetail | null>(null);
+  const [ready, setReady] = useState<string | null>(null);
+  const [view, setView] = useState<"robots" | "build">(() => parseHash(window.location.hash).view);
+  const [buildPreset, setBuildPreset] = useState<string>(() => parseHash(window.location.hash).preset ?? "quadruped");
   const jobRunning = useRef(false);
+  /** Set by anything the person does, so the address bar gets a new entry (the back button). */
+  const userNav = useRef(false);
+  /** What async callbacks need to know about the screen right now. */
+  const live = useRef<{ robotKey: string | null; hasStage: boolean; robots: RobotInfo[] }>({
+    robotKey: null,
+    hasStage: false,
+    robots: [],
+  });
 
   const robot = robots.find((r) => r.key === robotKey) ?? null;
+  const source = useMemo(() => (robot ? robotSource(robot) : null), [robot?.key, robot?.heightCm, robot?.title, robot?.credit]);
 
   // On narrow screens the library sits below the 3D view: bring the view back after a pick.
   const showPlayer = useCallback(() => {
-    document.getElementById("player")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    document
+      .getElementById("player")
+      ?.scrollIntoView({ behavior: prefersReducedMotion() ? "auto" : "smooth", block: "start" });
   }, []);
   const watch = useCallback(
     (id: string) => {
+      userNav.current = true;
       setRunId(id);
       showPlayer();
     },
@@ -151,7 +171,7 @@ export default function App() {
     return data.robots;
   }, []);
 
-  const openRobot = useCallback(async (key: string, list: RobotInfo[]) => {
+  const openRobot = useCallback(async (key: string, list: RobotInfo[], preferRun: string | null = null) => {
     setRobotKey(key);
     const info = list.find((r) => r.key === key);
     if (!info?.hasResults) {
@@ -162,7 +182,7 @@ export default function App() {
     }
     const cards = await api.runs(key);
     setRuns(cards);
-    setRunId(featuredRun(cards)?.id ?? null);
+    setRunId(cards.find((c) => c.id === preferRun)?.id ?? featuredRun(cards)?.id ?? null);
   }, []);
 
   // First load: open the first robot that already has results, else the first one.
@@ -170,8 +190,14 @@ export default function App() {
     (async () => {
       try {
         const list = await refresh();
-        const first = list.find((r) => r.hasResults) ?? list.find((r) => r.installed) ?? list[0];
-        if (first) await openRobot(first.key, list);
+        // A link or a reload names a robot and a run; otherwise open the first robot with results.
+        const asked = parseHash(window.location.hash);
+        const wanted = list.find((r) => r.key === asked.robot);
+        const first = wanted ?? list.find((r) => r.hasResults) ?? list.find((r) => r.installed) ?? list[0];
+        if (first) {
+          await openRobot(first.key, list, wanted ? asked.run : null);
+          setCompare(!!wanted && asked.compare);
+        }
       } catch (e) {
         setBanner(`Could not reach the Creature Lab server (${errorText(e)}). Is it still running?`);
         setCanRetry(true);
@@ -180,6 +206,40 @@ export default function App() {
       }
     })();
   }, [refresh, openRobot, attempt]);
+
+  // The address bar follows what is on screen (a new entry when the person chose it).
+  useEffect(() => {
+    if (!loaded) return;
+    const desired =
+      view === "build"
+        ? hashFor({ view: "build", robot: null, run: null, compare: false, preset: buildPreset })
+        : hashFor({ view: "robots", robot: robotKey, run: runId, compare, preset: null });
+    if (window.location.hash === desired) return;
+    if (userNav.current) window.history.pushState(null, "", desired);
+    else window.history.replaceState(null, "", desired);
+    userNav.current = false;
+  }, [loaded, view, buildPreset, robotKey, runId, compare]);
+
+  // Back and forward move between what was on screen.
+  useEffect(() => {
+    const onPop = () => {
+      const place = parseHash(window.location.hash);
+      setView(place.view);
+      if (place.view === "build") {
+        if (place.preset) setBuildPreset(place.preset);
+        return;
+      }
+      const { robotKey: current, robots: list } = live.current;
+      if (place.robot && place.robot !== current && list.some((r) => r.key === place.robot)) {
+        void openRobot(place.robot, list, place.run);
+      } else if (place.run) {
+        setRunId(place.run);
+      }
+      setCompare(place.compare);
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, [openRobot]);
 
   // The selected run's story.
   useEffect(() => {
@@ -200,6 +260,28 @@ export default function App() {
       cancelled = true;
     };
   }, [runId]);
+
+  // The other policy's run of the same test, while the two are shown together.
+  const twin = runs.find((r) => r.id === detail?.pair) ?? null;
+  useEffect(() => {
+    if (!compare) {
+      setOther(null);
+      return;
+    }
+    if (!twin) {
+      // A run with no twin (a different robot, or a one-policy robot) cannot be compared.
+      if (detail) setCompare(false);
+      return;
+    }
+    let cancelled = false;
+    api
+      .run(twin.id)
+      .then((d) => !cancelled && setOther(d))
+      .catch((e) => !cancelled && setBanner(errorText(e)));
+    return () => {
+      cancelled = true;
+    };
+  }, [compare, twin?.id, detail]);
 
   const track = useCallback(
     async (start: () => Promise<Job>, then: (finished: Job) => Promise<void>) => {
@@ -235,10 +317,24 @@ export default function App() {
     void track(
       () => api.startCheckup(target.key),
       async () => {
+        // Someone watching a run is not moved to a different one: they are told, and choose.
+        if (live.current.hasStage && live.current.robotKey === target.key) {
+          setReady(target.key);
+          return;
+        }
         const list = await refresh();
         await openRobot(target.key, list);
       },
     );
+
+  const showNewCheckup = async () => {
+    const key = ready;
+    setReady(null);
+    if (!key) return;
+    userNav.current = true;
+    const list = await refresh();
+    await openRobot(key, list);
+  };
 
   // A page reloaded during a download or check-up follows the running job again.
   useEffect(() => {
@@ -259,6 +355,16 @@ export default function App() {
       .catch(() => undefined);
   }, [loaded, track, refresh, openRobot]);
 
+  const openEditor = (preset: string) => {
+    userNav.current = true;
+    setBuildPreset(preset);
+    setView("build");
+  };
+  const showRobots = () => {
+    userNav.current = true;
+    setView("robots");
+  };
+
   const build = async (preset: string) => {
     setBuildNote("Opening the classic builder…");
     try {
@@ -272,6 +378,17 @@ export default function App() {
 
   const hasStage = !!robot && robot.installed && robot.hasResults;
   const busy = job?.state === "running";
+  live.current = { robotKey, hasStage, robots };
+
+  const setCompareOn = (on: boolean) => {
+    userNav.current = true;
+    setCompare(on);
+    if (on) showPlayer();
+  };
+  // Side by side: the walk-only policy (before) on the left, the one that gets up (after) on the right.
+  const getsUp = (policy: string) => !!robot?.policies.find((p) => p.key === policy)?.getsUp;
+  const pairShown = compare && !!detail && !!other;
+  const mirrored = pairShown && getsUp(detail.policy) && !getsUp(other.policy);
 
   return (
     <div className="app">
@@ -288,28 +405,48 @@ export default function App() {
           </svg>
           <span>Creature Lab</span>
         </div>
-        <nav aria-label="Breadcrumb" className="crumbs">
-          <span>Robots</span>
-          <span aria-hidden="true">›</span>
-          <strong>{robot?.title ?? "…"}</strong>
+        <nav aria-label="Sections" className="tabs">
+          <button
+            type="button"
+            className={view === "robots" ? "on" : ""}
+            aria-current={view === "robots" ? "page" : undefined}
+            onClick={showRobots}
+          >
+            Real robots
+          </button>
+          <button
+            type="button"
+            className={view === "build" ? "on" : ""}
+            aria-current={view === "build" ? "page" : undefined}
+            onClick={() => openEditor(buildPreset)}
+          >
+            Build your own
+          </button>
         </nav>
+        {view === "robots" && (
+          <nav aria-label="Breadcrumb" className="crumbs">
+            <strong>{robot?.title ?? "…"}</strong>
+          </nav>
+        )}
         <div className="spacer" />
-        {robot?.hasResults && (
+        {view === "robots" && robot?.hasResults && (
           <a className="ghost button" href={api.reportUrl(robot.key)} target="_blank" rel="noopener">
             Open report
           </a>
         )}
-        <button
-          type="button"
-          className="primary"
-          disabled={!robot || !robot.installed || busy || missing.length > 0}
-          onClick={() => robot && checkup(robot)}
-        >
-          <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
-            <path d="M4 3 13 8 4 13Z" />
-          </svg>
-          Run check-up
-        </button>
+        {view === "robots" && (
+          <button
+            type="button"
+            className="primary"
+            disabled={!robot || !robot.installed || busy || missing.length > 0}
+            onClick={() => robot && checkup(robot)}
+          >
+            <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+              <path d="M4 3 13 8 4 13Z" />
+            </svg>
+            Run check-up
+          </button>
+        )}
       </header>
 
       {job && !(robot && !hasStage && job.robot === robot.key) && (
@@ -345,24 +482,46 @@ export default function App() {
         </div>
       )}
 
+      {view === "build" && (
+        <Editor
+          preset={buildPreset}
+          onPreset={(p) => {
+            userNav.current = true;
+            setBuildPreset(p);
+          }}
+          onClassic={(p) => void build(p)}
+          classicNote={buildNote}
+        />
+      )}
+
+      {view === "robots" && (
       <div className={`shell${hasStage ? "" : " solo"}`}>
         <Library
           robots={robots}
           selected={robotKey ?? ""}
           onSelect={(key) => {
+            userNav.current = true;
+            setCompare(false);
             void openRobot(key, robots);
             showPlayer();
           }}
           runs={runs}
           runId={runId}
           onRun={watch}
-          onBuild={(preset) => void build(preset)}
+          onBuild={openEditor}
           buildNote={buildNote}
         />
 
         <main className="center" id="player" tabIndex={-1}>
           {!loaded && <div className="stage-note">Loading…</div>}
-          {loaded && robot && hasStage && <Stage robot={robot} run={detail} playback={playback} />}
+          {loaded && robot && source && hasStage && !pairShown && <Stage source={source} run={detail} playback={playback} />}
+          {loaded && robot && source && hasStage && pairShown && detail && other && (
+            <div className="pair" data-testid="pair">
+              {(mirrored ? [other, detail] : [detail, other]).map((r) => (
+                <Stage key={r.id} source={source} run={r} playback={playback} follower={r.id !== detail.id} />
+              ))}
+            </div>
+          )}
           {loaded && robot && !hasStage && (
             <Hero
               robot={robot}
@@ -372,7 +531,7 @@ export default function App() {
               onCheckup={() => checkup(robot)}
             />
           )}
-          {hasStage && <Timeline playback={playback} run={detail} />}
+          {hasStage && <Timeline playback={playback} run={detail} other={pairShown ? other : null} />}
         </main>
 
         {robot && hasStage && (
@@ -383,9 +542,25 @@ export default function App() {
             onPolicy={setPolicyKey}
             run={detail}
             onRun={watch}
+            twin={twin}
+            compare={pairShown}
+            onCompare={setCompareOn}
           />
         )}
       </div>
+      )}
+
+      {ready && (
+        <div className="jobbar ready" role="status">
+          <span>New check-up ready.</span>
+          <button type="button" className="link" onClick={() => void showNewCheckup()}>
+            Show it
+          </button>
+          <button type="button" className="link" onClick={() => setReady(null)}>
+            Not now
+          </button>
+        </div>
+      )}
 
       {licenseFor && (
         <LicenseDialog robot={licenseFor} onAccept={() => download(licenseFor)} onCancel={() => setLicenseFor(null)} />

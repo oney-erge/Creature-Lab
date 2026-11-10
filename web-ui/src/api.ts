@@ -1,5 +1,7 @@
 import type {
+  BuildResponse,
   BuilderInfo,
+  CreatureCatalog,
   Job,
   RobotsResponse,
   RunCard,
@@ -65,4 +67,10 @@ export const api = {
   job: (id: string) => getJSON<Job>(`/api/jobs/${id}`),
   runningJobs: async () => (await getJSON<{ jobs: Job[] }>("/api/jobs")).jobs,
   builder: (preset: string) => postJSON<BuilderInfo>("/api/builder", { preset }),
+  creaturePresets: () => getJSON<CreatureCatalog>("/api/creatures/presets"),
+  buildCreature: (body: { preset: string; params: Record<string, number>; goal: string; simulate: boolean }) =>
+    postJSON<BuildResponse>("/api/creatures/build", body),
+  creatureMesh: (id: string, mesh: number) => getBuffer(`/api/creatures/${id}/mesh/${mesh}`),
+  creaturePoses: (id: string) => getBuffer(`/api/creatures/${id}/poses`),
+  creatureOverlay: (id: string) => getBuffer(`/api/creatures/${id}/overlay`),
 };
