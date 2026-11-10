@@ -429,7 +429,7 @@ if __name__ == "__main__":
             Cut("fall", "play", 0.4, 7.0),
             Cut("whatif", "play", -0.2, 6.8, fade=True),
         ]
-        crop = (452, 99, UI_W, UI_H)  # no robot list, no header
+        crop = (480, 127, 1366, 681)  # the 3D view and the playback bar
         encode_mp4(
             plan,
             OUT / "creature-lab-demo.mp4",
@@ -437,14 +437,14 @@ if __name__ == "__main__":
             crf=27,
             captions=False,
             crop=crop,
-            size=(960, 570),
+            size=(960, 600),
         )
     elif what == "poster":
         sc = Scene("whatif")
         im = (
             sc.at(sc.marks["play"] + 2.2)
-            .crop((452, 99, UI_W, UI_H))
-            .resize((960, 570), Image.LANCZOS)
+            .crop((480, 127, 1366, 681))
+            .resize((960, 600), Image.LANCZOS)
         )
         im.save(OUT / "creature-lab-poster.webp", quality=82)
         print("poster", (OUT / "creature-lab-poster.webp").stat().st_size)
