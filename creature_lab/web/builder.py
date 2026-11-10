@@ -80,8 +80,9 @@ class Builder:
             if self._process.poll() is not None:
                 self._process = None
                 raise BuilderError(
-                    "The classic builder needs the sim and viz extras: "
-                    "uv sync --inexact --extra sim --extra viz"
+                    "The classic builder needs the viz extra and a physics engine "
+                    "(MuJoCo comes with the robots extra): "
+                    "uv sync --inexact --extra viz --extra robots"
                 )
             if self._port_open(self._port):
                 return f"http://localhost:{self._port}"

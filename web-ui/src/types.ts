@@ -58,6 +58,10 @@ export interface RobotInfo {
   nonCommercial: boolean;
   installed: boolean;
   hasResults: boolean;
+  /** Rough time from nothing on disk to a finished first check-up; 0 when unknown. */
+  firstRunSeconds: number;
+  /** A short looping clip bundled with the app, shown before the robot is downloaded. */
+  introClip: string | null;
   policies: PolicyInfo[];
   checkup: CheckupSummary | null;
 }

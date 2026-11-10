@@ -106,6 +106,7 @@ def create_app(
         items = []
         for key, info in ROBOTS.items():
             summary = library.checkup_summary(key) if key in have else None
+            clip = static / "clips" / f"{key}.webp"
             items.append(
                 {
                     "key": key,
@@ -118,6 +119,8 @@ def create_app(
                     "nonCommercial": info.non_commercial,
                     "installed": is_installed(key),
                     "hasResults": key in have,
+                    "firstRunSeconds": info.first_run_s,
+                    "introClip": f"/clips/{key}.webp" if clip.is_file() else None,
                     "policies": [
                         {"key": p.key, "title": p.title, "summary": p.summary, "getsUp": p.gets_up}
                         for p in info.policies

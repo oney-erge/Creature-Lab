@@ -3,12 +3,14 @@ import type { RobotInfo } from "../types";
 
 interface Props {
   robot: RobotInfo;
+  /** The label of the button that downloads; says what happens next if more than a download. */
+  action?: string;
   onAccept: () => void;
   onCancel: () => void;
 }
 
 /** Shows a robot's license before anything is downloaded; accepting is an explicit click. */
-export function LicenseDialog({ robot, onAccept, onCancel }: Props) {
+export function LicenseDialog({ robot, action, onAccept, onCancel }: Props) {
   const [read, setRead] = useState(false);
   const accept = useRef<HTMLButtonElement>(null);
   const box = useRef<HTMLDivElement>(null);
@@ -53,7 +55,7 @@ export function LicenseDialog({ robot, onAccept, onCancel }: Props) {
             Cancel
           </button>
           <button type="button" className="primary" ref={accept} disabled={!read} onClick={onAccept}>
-            Download {robot.title}
+            {action ?? `Download ${robot.title}`}
           </button>
         </div>
       </div>

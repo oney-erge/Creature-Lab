@@ -74,7 +74,10 @@ Enter-InstallLock
 Assert-InstallFreeSpace -Path $PSScriptRoot -RequiredGB 3
 if (-not $uv) { $uv = Ensure-Uv }
 Remove-IncompleteVenv $PSScriptRoot
-$syncArgs = @("sync", "--frozen", "--extra", "sim", "--extra", "viz")
+# The app and the classic editor need only prebuilt wheels (no compiler). PyBullet, the optional
+# `sim` extra, is built from source outside Linux/Python 3.11, so it is left to the people who ask
+# for it. --inexact keeps extras installed by hand instead of uninstalling them on every start.
+$syncArgs = @("sync", "--frozen", "--inexact", "--extra", "viz", "--extra", "web", "--extra", "robots")
 if ($Action -eq "repair") { $syncArgs += "--reinstall" }
 Invoke-InstallRetry "dependency synchronization" {
   $result = Invoke-InstallNative $uv $syncArgs

@@ -80,6 +80,27 @@ def test_health_names_the_service(client):
     assert client.get("/api/health").json()["service"] == "creature-lab"
 
 
+def test_each_robot_says_how_long_a_first_check_up_takes(client):
+    robots = {r["key"]: r for r in client.get("/api/robots").json()["robots"]}
+    # The app opens on the quickest one, so every robot needs a time and the G1 must be quickest.
+    assert all(r["firstRunSeconds"] > 0 for r in robots.values())
+    assert robots["unitree_g1"]["firstRunSeconds"] < robots["microduck"]["firstRunSeconds"]
+
+
+def test_a_bundled_intro_clip_is_offered_only_when_it_exists(results, installed, tmp_path):
+    static = tmp_path / "ui"
+    (static / "clips").mkdir(parents=True)
+    (static / "clips" / "unitree_g1.webp").write_bytes(b"RIFF....WEBP")
+    client = _client(create_app(results, static_dir=static), headers=HEADERS)
+
+    robots = {r["key"]: r for r in client.get("/api/robots").json()["robots"]}
+
+    assert robots["unitree_g1"]["introClip"] == "/clips/unitree_g1.webp"
+    assert robots["microduck"]["introClip"] is None  # CC BY-NC-SA media is never bundled
+    # And the clip really is served from the same place as the app.
+    assert client.get("/clips/unitree_g1.webp").status_code == 200
+
+
 def test_robots_lists_both_robots_with_the_newest_check_up(client):
     data = client.get("/api/robots").json()
     keys = [r["key"] for r in data["robots"]]
@@ -494,7 +515,7 @@ def test_a_builder_that_exits_at_once_explains_the_missing_extra(results, instal
         create_app(results, static_dir=results / "no-ui", builder=builder), headers=HEADERS
     )
     response = client.post("/api/builder", json={"preset": "worm"})
-    assert response.status_code == 409 and "extra sim" in response.json()["detail"]
+    assert response.status_code == 409 and "extra viz" in response.json()["detail"]
 
 
 # ---- policy twins and wording ---------------------------------------------------------------

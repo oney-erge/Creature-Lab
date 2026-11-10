@@ -67,7 +67,10 @@ fi
 install_lock
 install_require_space "$PWD" 3
 [ -n "$uv" ] || uv=$(install_uv)
-sync_args=(sync --frozen --extra sim --extra viz)
+# The app and the classic editor need only prebuilt wheels (no compiler). PyBullet, the optional
+# `sim` extra, is built from source outside Linux/Python 3.11, so it is left to the people who ask
+# for it. --inexact keeps extras installed by hand instead of uninstalling them on every start.
+sync_args=(sync --frozen --inexact --extra viz --extra web --extra robots)
 [ "$action" = repair ] && sync_args+=(--reinstall)
 install_retry "dependency synchronization" "$uv" "${sync_args[@]}"
 install_complete

@@ -11,7 +11,7 @@ import {
   supportAt,
   trunkAt,
 } from "./decode";
-import { dotsFor, featuredRun, groupRuns, limitText, outcomeTone, totals } from "./format";
+import { dotsFor, featuredRun, groupRuns, limitText, outcomeTone, quickestStart, roughDuration, totals } from "./format";
 import { arrowLength, framingFor, pointInConvexPolygon, robotUnit, shoveReference } from "./geometry";
 import { HOLD_S, Playback, SLOW_FACTOR, frameAt, rateAt } from "./playback";
 import { clipFileName, clipWindow } from "./clip";
@@ -280,5 +280,24 @@ describe("saving a clip", () => {
   it("names the file after what it shows", () => {
     expect(clipFileName(["Microduck", "Walk-only policy", "3 N shove"])).toBe("creature-lab-microduck-walk-only-policy-3-n-shove.webm");
     expect(clipFileName(["", "!!"])).toBe("creature-lab-run.webm");
+  });
+});
+
+describe("the first run", () => {
+  it("says how long it takes in words", () => {
+    expect(roughDuration(30)).toBe("under a minute");
+    expect(roughDuration(75)).toBe("about a minute");
+    expect(roughDuration(120)).toBe("about 2 minutes");
+    expect(roughDuration(0)).toBe("a minute or two");
+  });
+  it("opens on the robot whose first check-up is quickest, ignoring unknown times", () => {
+    const robots = [
+      { key: "slow", firstRunSeconds: 120 },
+      { key: "unknown", firstRunSeconds: 0 },
+      { key: "quick", firstRunSeconds: 30 },
+    ];
+    expect(quickestStart(robots)?.key).toBe("quick");
+    expect(quickestStart([{ key: "only", firstRunSeconds: 0 }])?.key).toBe("only");
+    expect(quickestStart([])).toBeUndefined();
   });
 });

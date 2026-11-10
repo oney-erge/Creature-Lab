@@ -118,3 +118,17 @@ export function matchesFilter(run: RunCard, filter: Filter): boolean {
       return true;
   }
 }
+
+/** A time worth saying out loud: "under a minute", "about a minute", "about 2 minutes". */
+export function roughDuration(seconds: number): string {
+  if (seconds <= 0) return "a minute or two";
+  if (seconds < 50) return "under a minute";
+  if (seconds < 100) return "about a minute";
+  return `about ${Math.round(seconds / 60)} minutes`;
+}
+
+/** The robot to open first on a clean machine: the one whose first check-up finishes soonest. */
+export function quickestStart<T extends { firstRunSeconds: number }>(robots: T[]): T | undefined {
+  const timed = robots.filter((r) => r.firstRunSeconds > 0).sort((a, b) => a.firstRunSeconds - b.firstRunSeconds);
+  return timed[0] ?? robots[0];
+}

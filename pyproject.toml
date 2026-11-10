@@ -67,6 +67,11 @@ web = [
     "fastapi>=0.115",
     "uvicorn>=0.30",
 ]
+app = [
+    # `pip install "creature-lab[app]"`: the browser app, the real robots and the classic
+    # editor it opens. Prebuilt wheels everywhere (no compiler); PyBullet stays optional (`sim`).
+    "creature-lab[viz,web,robots]",
+]
 mujoco = [
     "mujoco>=3.0",  # MuJoCo backend + MJCF export round-trip (`run --backend mujoco`)
 ]

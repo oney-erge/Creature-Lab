@@ -48,6 +48,9 @@ class RobotInfo:
     gait_period_s: float
     #: Extra credit lines for the end card of the film.
     film_credits: tuple[str, ...] = ()
+    #: Rough seconds from nothing on disk to a finished first check-up on a laptop (download plus
+    #: the fifty-odd runs), measured on a clean start. The app shows it and opens on the quickest.
+    first_run_s: int = 0
 
     def policy(self, key: str) -> PolicyInfo:
         for policy in self.policies:
@@ -100,6 +103,7 @@ ROBOTS: dict[str, RobotInfo] = {
             "Policies: Pollen Robotics (Apache-2.0) · Servo model: Rhoban BAM (Apache-2.0) · "
             "Physics: MuJoCo",
         ),
+        first_run_s=120,
     ),
     "unitree_g1": RobotInfo(
         key="unitree_g1",
@@ -129,6 +133,7 @@ ROBOTS: dict[str, RobotInfo] = {
         walk_command=0.5,
         gait_period_s=0.8,
         film_credits=("Physics: MuJoCo",),
+        first_run_s=30,
     ),
 }
 

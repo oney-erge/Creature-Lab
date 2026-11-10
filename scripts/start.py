@@ -16,9 +16,23 @@ from _process_utils import port_is_open, taskkill_tree
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_PORT = 8080
 VENV_DIR = ROOT / ".venv"
-#: What the browser app imports. If any is missing the app extras are not installed.
-APP_PROBE = "import fastapi, uvicorn, mujoco, onnxruntime, imageio, PIL"
-APP_EXTRAS = ["--extra", "sim", "--extra", "viz", "--extra", "web", "--extra", "robots"]
+#: What the browser app (and the classic editor it opens) import. If any is missing the extras
+#: are not installed. Everything here ships as prebuilt wheels on Windows, macOS and Linux, so a
+#: first launch never needs a compiler. PyBullet (the `sim` extra) is not in this list on purpose.
+APP_PROBE = "import fastapi, uvicorn, mujoco, onnxruntime, imageio, PIL, viser, trimesh"
+APP_EXTRAS = ["--extra", "viz", "--extra", "web", "--extra", "robots"]
+#: The classic editor runs on MuJoCo when PyBullet is absent, so it needs the same wheels.
+BUILD_PROBE = (
+    "import viser, trimesh\ntry:\n    import pybullet\nexcept ImportError:\n    import mujoco"
+)
+#: The read-only demo viewer simulates with PyBullet.
+DEMO_PROBE = "import viser, trimesh, pybullet"
+DEMO_EXTRAS = ["--extra", "sim", "--extra", "viz"]
+MODE_SETUP = {
+    "app": (APP_PROBE, APP_EXTRAS),
+    "build": (BUILD_PROBE, APP_EXTRAS),
+    "demo": (DEMO_PROBE, DEMO_EXTRAS),
+}
 
 
 def check_python() -> None:
@@ -242,19 +256,26 @@ def run_sync_step(uv: list[str], sync_args: list[str], *, dry_run: bool, auto_ye
             raise
 
 
-def ensure_app_extras(uv: list[str], *, dry_run: bool, auto_yes: bool) -> None:
-    """Install the browser app's extras when the environment lacks them.
+def ensure_mode_extras(uv: list[str], mode: str, *, dry_run: bool, auto_yes: bool) -> None:
+    """Install the extras a launch mode needs when the environment lacks them.
 
-    The shared launchers (run.ps1, run.sh) sync only the build editor's extras and then
-    call this script with --skip-sync, so the app cannot rely on them. `--inexact` keeps
-    the packages the launcher installed, so this only adds.
+    The launchers (run.ps1, run.sh) install the app's extras and then call this script with
+    --skip-sync, so a different mode (the PyBullet demo viewer) may still need more.
+    `--inexact` keeps whatever is installed already, so this only adds.
     """
-    probe = [*uv, "run", "--frozen", "--no-sync", "python", "-c", APP_PROBE]
+    probe_code, extras = MODE_SETUP[mode]
+    probe = [*uv, "run", "--frozen", "--no-sync", "python", "-c", probe_code]
     if not dry_run and subprocess.run(probe, cwd=ROOT, capture_output=True).returncode == 0:
         return
+    if "sim" in extras:
+        print(
+            "\nThis mode simulates with PyBullet. Outside Linux with Python 3.11 it is built "
+            "from source (several minutes) and needs a C++ compiler.",
+            flush=True,
+        )
     run_sync_step(
         uv,
-        ["sync", "--frozen", "--inexact", *APP_EXTRAS],
+        ["sync", "--frozen", "--inexact", *extras],
         dry_run=dry_run,
         auto_yes=auto_yes,
     )
@@ -425,11 +446,11 @@ def main() -> None:
     print("Press Ctrl+C in this terminal to stop.")
 
     if not args.skip_sync:
-        extras = APP_EXTRAS if args.mode == "app" else ["--extra", "sim", "--extra", "viz"]
+        extras = MODE_SETUP[args.mode][1]
         sync_args = ["sync", "--frozen", *(["--all-extras"] if args.full else extras)]
         run_sync_step(uv, sync_args, dry_run=args.dry_run, auto_yes=args.yes)
-    elif args.mode == "app":
-        ensure_app_extras(uv, dry_run=args.dry_run, auto_yes=args.yes)
+    else:
+        ensure_mode_extras(uv, args.mode, dry_run=args.dry_run, auto_yes=args.yes)
 
     if not args.skip_doctor:
         run_step(
