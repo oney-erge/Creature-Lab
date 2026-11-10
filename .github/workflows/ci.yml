@@ -36,6 +36,47 @@ jobs:
         shell: powershell
         run: ./scripts/test-launcher-helpers.ps1
 
+  first-launch:
+    name: first launch (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          cache-suffix: first-launch-${{ matrix.os }}
+      - name: Start the app with the real launcher (Linux and macOS)
+        if: runner.os != 'Windows'
+        run: |
+          nohup ./run.sh --no-browser > launch.log 2>&1 &
+      - name: Start the app with the real launcher (Windows PowerShell 5.1, as run.bat does)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          Start-Process powershell.exe -WindowStyle Hidden -RedirectStandardOutput launch.log -RedirectStandardError launch.err -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-File','run.ps1','-NoBrowser'
+      - name: Wait for the app to answer
+        shell: bash
+        run: |
+          for _ in $(seq 1 180); do
+            if curl -fsS http://127.0.0.1:8080/api/health; then echo; exit 0; fi
+            sleep 2
+          done
+          echo "The app did not come up within 6 minutes."
+          tail -n 80 launch.log || true
+          tail -n 40 launch.err 2>/dev/null || true
+          exit 1
+      - name: The first launch installed no compiled-from-source package
+        shell: bash
+        run: |
+          uv run --no-sync python -c "import importlib.util as u; assert u.find_spec('pybullet') is None, 'PyBullet must stay optional'; import fastapi, mujoco, viser, onnxruntime"
+          curl -fsS http://127.0.0.1:8080/api/robots | python -c "import json, sys; keys = [r['key'] for r in json.load(sys.stdin)['robots']]; assert keys == ['microduck', 'unitree_g1'], keys"
+
   quality-and-package:
     runs-on: ubuntu-latest
     timeout-minutes: 20

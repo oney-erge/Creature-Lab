@@ -60,8 +60,8 @@ from creature_lab.viewers.viser_viewer import DEFAULT_HOST, find_free_port
 
 app = typer.Typer(
     help=(
-        "Tiny local lab for designing, running, diagnosing, and improving "
-        "modular robot-creatures from JSON."
+        "Shove a real robot, see exactly why it fell, and prove the fix. Also a local lab for "
+        "designing, running, diagnosing, and improving modular robot creatures from JSON."
     )
 )
 console = Console()

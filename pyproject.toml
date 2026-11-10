@@ -1,7 +1,7 @@
 [project]
 name = "creature-lab"
 version = "0.2.0"
-description = "Failure-first local workbench for designing, diagnosing, and reproducing modular robot experiments."
+description = "Shove a real robot, see exactly why it fell, and prove the fix: a browser app and CLI that check up published robot policies in MuJoCo, plus a workbench for designing modular robots."
 readme = "README.md"
 requires-python = ">=3.11"
 license = { file = "LICENSE" }
@@ -9,6 +9,10 @@ keywords = [
     "robotics",
     "simulation",
     "robot-design",
+    "humanoid",
+    "legged-locomotion",
+    "push-recovery",
+    "policy-evaluation",
     "morphology",
     "pybullet",
     "mujoco",
