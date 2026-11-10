@@ -27,7 +27,8 @@ uv run creature-lab robots checkup microduck
 - `report latest` summarizes the last saved run.
 - `robots checkup <robot>` shoves a published robot with its trained policy and writes an HTML
   report that explains each fall (`robots list`, `robots fetch`, `robots film` and
-  `robots loop` are its companions). See [Robot check-up](ROBOT_CHECKUP.md).
+  `robots loop` are its companions; `robots compare` and `robots card` read saved results to flag
+  regressions in CI and to write a README robustness card). See [Robot check-up](ROBOT_CHECKUP.md).
 
 ## Launcher Scripts
 
@@ -241,7 +242,8 @@ needs structured output instead of Rich tables.
 
 | Extra | Enables |
 | --- | --- |
-| `sim` | PyBullet backend and physics rendering |
+| `app` | The browser app, the real robots and the classic editor: `pip install "creature-lab[app]"` |
+| `sim` | PyBullet backend (optional; built from source outside Linux with Python 3.11) |
 | `viz` | Viser browser viewer and plotting |
 | `export` | GIF/MP4 writing |
 | `evolve` | `evolve --strategy cmaes` and `optimize` (both CMA-ES-based) |

@@ -180,3 +180,96 @@ def loop_command(
         robot, _ = output_robot(results)
         output = Path("docs/assets") / f"checkup-{robot.replace('_', '-')}.webp"
     console.print(f"Loop: [bold]{make_loop(results, output)}[/bold]")
+
+
+@robots_app.command("compare")
+def compare_command(
+    before: Annotated[Path, typer.Argument(help="Results of the earlier policy or release.")],
+    after: Annotated[Path, typer.Argument(help="Results of the new policy or release.")],
+    policy: Annotated[
+        str | None,
+        typer.Option("--policy", help="Policy to read when a folder holds several."),
+    ] = None,
+    fail_on_regression: Annotated[
+        bool,
+        typer.Option(
+            "--fail-on-regression", help="Exit with status 1 if any test got worse (for CI)."
+        ),
+    ] = False,
+    tolerance: Annotated[
+        int,
+        typer.Option(
+            help="How much a shove strength may get worse before it counts: a shove that leaves "
+            "the robot on the floor costs 2, one it recovers from costs 1."
+        ),
+    ] = 0,
+    json_out: Annotated[
+        Path | None, typer.Option("--json", help="Also write the comparison as JSON.")
+    ] = None,
+    markdown_out: Annotated[
+        Path | None,
+        typer.Option("--markdown", help="Also write a table for a pull-request comment."),
+    ] = None,
+) -> None:
+    """Did a change make the robot more or less robust? Compare two check-ups.
+
+    Reads saved results only, so it needs no simulator. Each argument is a folder holding
+    checkup.json, or a results folder with one policy folder inside (or pick with --policy).
+    """
+    from creature_lab.robots.compare import CompareError, compare_folders, write_json
+
+    try:
+        comparison = compare_folders(before, after, policy=policy, tolerance=tolerance)
+    except (CompareError, FileNotFoundError) as exc:
+        console.print(f"[red]error:[/red] {exc}")
+        raise typer.Exit(code=2) from exc
+
+    table = Table(
+        title=f"{comparison.robot.replace('_', ' ')}: "
+        f"{comparison.before_policy} → {comparison.after_policy}"
+    )
+    for column in ("Test", "Before", "After", ""):
+        table.add_column(column)
+    style = {"better": "[green]better[/green]", "worse": "[red]worse[/red]", "same": ""}
+    for change in comparison.changes:
+        table.add_row(change.label, change.before, change.after, style[change.verdict])
+    console.print(table)
+    if comparison.skipped:
+        console.print(f"Not compared (only one side ran them): {', '.join(comparison.skipped)}")
+    console.print(comparison.summary())
+    if json_out is not None:
+        console.print(f"JSON: {write_json(comparison, json_out)}")
+    if markdown_out is not None:
+        markdown_out.parent.mkdir(parents=True, exist_ok=True)
+        markdown_out.write_text(comparison.to_markdown(), encoding="utf-8")
+        console.print(f"Markdown: {markdown_out}")
+    if fail_on_regression and comparison.regressed:
+        raise typer.Exit(code=1)
+
+
+@robots_app.command("card")
+def card_command(
+    results: Annotated[
+        Path, typer.Argument(help="A folder holding checkup.json, or one holding policy folders.")
+    ],
+    policy: Annotated[
+        str | None, typer.Option("--policy", help="Policy to use when the folder holds several.")
+    ] = None,
+    out: Annotated[Path, typer.Option("--out", help="Where to write the SVG card.")] = Path(
+        "robustness-card.svg"
+    ),
+) -> None:
+    """Write a robustness card (SVG) and a one-line claim for a README or model card."""
+    from creature_lab.robots.card import markdown, write_card
+    from creature_lab.robots.checkup import read_checkup
+    from creature_lab.robots.compare import CompareError, find_checkup
+
+    try:
+        checkup = read_checkup(find_checkup(results, policy))
+    except (CompareError, FileNotFoundError) as exc:
+        console.print(f"[red]error:[/red] {exc}")
+        raise typer.Exit(code=2) from exc
+    path = write_card(checkup, out)
+    console.print(f"Card: [bold]{path}[/bold]\n")
+    console.print("Paste this into your README or model card:\n")
+    console.print(markdown(checkup, path.name), markup=False, highlight=False)

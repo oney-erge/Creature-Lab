@@ -109,6 +109,43 @@ policy falls a little more often, but never stays down, because it gets back up.
 slippery floor (0.15× grip) *both* fail, and the report says that no policy swap fixes that:
 the feet need grip. Re-run it to see the current numbers on your machine.
 
+## Did a change make it more robust?
+
+`robots compare` reads two saved check-ups (no simulator needed) and says, test by test, what got
+better or worse:
+
+```bash
+uv run creature-lab robots compare outputs/checkup/old outputs/checkup/new --policy velstand
+uv run creature-lab robots compare old new --fail-on-regression --json compare.json --markdown compare.md
+```
+
+Each argument is a folder holding `checkup.json`, or a results folder with policy folders inside
+(choose one with `--policy`). A shove strength gets worse when more of its shoves end on the floor
+(a shove that leaves the robot down counts 2, one it recovers from counts 1; `--tolerance N`
+forgives small changes). A floor, battery or payload test gets worse when it passed and now falls.
+`--fail-on-regression` makes the command exit with status 1, so a training pipeline can stop when
+a new policy is less robust than the last one. The Markdown file is a table for a pull-request
+comment. A sketch for a GitHub Actions step, after the new policy is trained:
+
+```yaml
+- run: uv run creature-lab robots checkup unitree-g1 --yes --out new
+- run: uv run creature-lab robots compare baseline/unitree_g1 new/motion --fail-on-regression --markdown compare.md
+```
+
+`--yes` accepts the robot's license for you, so only use it where you have read it. A full check-up
+runs on the CPU in a few minutes. Keep the baseline folder in your repository or a cache.
+
+## A robustness card for your README
+
+```bash
+uv run creature-lab robots card outputs/checkup/microduck-20261110/velstand --out docs/robustness.svg
+```
+
+writes a self-contained SVG (the shove strengths as rows of coloured squares, the grip, battery and
+payload tests, and the credit and "simulation, not hardware" line) and prints a one-sentence claim to
+paste beside it, for example "never fell up to 1 N; never stayed on the floor up to 6 N. 21 of 48
+simulated shoves ended standing...". It is built only from the saved results.
+
 ## Saved runs
 
 Each run is a folder with `robot_run.json` (scenario, hash, versions, policy SHA-256) and
