@@ -31,6 +31,12 @@ build editor.
   of its shove. **Download and check up** shows the license first; nothing is downloaded until you
   tick that you have read it. After the download the check-up starts by itself, and the results
   open when it ends.
+- **Ask "what if…".** Under a run, one click changes one thing (the shove from the other side, a
+  harder or gentler shove, a very slippery floor, half speed or faster walking, a 6 kg load on the
+  G1, a weak battery on the Microduck) and runs the robot again, about a second or two on a laptop.
+  The new run opens next to the original with a sentence saying what the change did. It is saved
+  with the check-up under **What if**, and asking again reuses it. The browser only picks a change
+  from a fixed menu; it never sends numbers.
 - **Watch a run.** The robot is drawn from its real meshes with a follow camera. The first run
   shown is a middle-strength shove that the robot got up from. Playback slows to 0.3x through
   the shove and the fall, as in the films; you can switch that off, pause, scrub, or change speed

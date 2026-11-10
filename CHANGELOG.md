@@ -18,6 +18,15 @@
   downloaded, says how long the first run takes, and **Download and check up** goes straight from
   the license to the results. Measured from an empty package cache with the real Windows launcher:
   about 50 s from the click to a moving, explained robot.
+- **"What if…" in the app.** Under any run, one click changes one thing (the shove from the other
+  side, harder or gentler, a very slippery floor, half speed or faster, a load on the G1, a weak
+  battery on the Microduck), runs it again in a second or two, and opens it beside the original
+  with a sentence saying what the change did. A one-policy robot such as the G1 now has a "does
+  this change the ending?" story too. `POST /api/runs/{id}/whatif` takes a name from a fixed menu,
+  never numbers; the run is saved under the check-up and a repeat reuses it.
+- `robots compare BEFORE AFTER` (with `--fail-on-regression`, `--json`, `--markdown`) says which
+  tests of a saved check-up got better or worse, for CI and pull-request comments, and
+  `robots card` writes an SVG robustness card plus a one-line claim for a README or model card.
 - README leads with the one-command start and the same shove on two policies; stale preview-build
   links are gone.
 

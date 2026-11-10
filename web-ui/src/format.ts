@@ -66,6 +66,7 @@ export const KIND_LABEL: Record<string, string> = {
   grip: "Slippery floors",
   battery: "Weak batteries",
   payload: "Carried loads",
+  whatif: "What if",
   other: "Other runs",
 };
 
@@ -87,16 +88,28 @@ export function severity(outcome: Outcome): number {
   return outcome === "walked" ? 0 : outcome === "fell_and_got_up" ? 1 : 2;
 }
 
+/** How a run ended, in the past tense: "stayed on its feet", "fell and was back up in 1.2 s". */
+export function did(run: RunCard): string {
+  if (run.outcome === "walked") return "stayed on its feet";
+  if (run.outcome === "fell_and_got_up") return `fell and was ${run.outcomeText.toLowerCase()}`;
+  return "fell and stayed down";
+}
+
+/** What changing one thing did to a run, in two sentences. */
+export function whatIfSentence(original: RunCard, changed: RunCard): string {
+  const change = changed.whatIfShort ?? "changed";
+  const lead = `${change.charAt(0).toUpperCase()}${change.slice(1)}`;
+  if (severity(original.outcome) === severity(changed.outcome)) {
+    return `It ended the same way either way: it ${did(changed)}. (${lead}.)`;
+  }
+  return `In the original it ${did(original)}. ${lead}, it ${did(changed)}.`;
+}
+
 /** What two policies did on the same shove, in one sentence. `a` is the one being looked at. */
 export function compareSentence(a: RunCard, b: RunCard): string {
   const left = severity(a.outcome);
   const right = severity(b.outcome);
   const name = (run: RunCard) => `The ${run.policyTitle.charAt(0).toLowerCase()}${run.policyTitle.slice(1)}`;
-  const did = (run: RunCard) => {
-    if (run.outcome === "walked") return "stayed on its feet";
-    if (run.outcome === "fell_and_got_up") return `fell and was ${run.outcomeText.toLowerCase()}`;
-    return "fell and stayed down";
-  };
   if (left === right) return `Both policies ended the same way: ${did(a)}.`;
   const better = right < left ? b : a;
   const worse = right < left ? a : b;

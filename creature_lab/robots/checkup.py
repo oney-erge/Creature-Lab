@@ -34,6 +34,11 @@ _LEVELS = {
 }
 
 
+def tested_levels(robot: str) -> _Levels:
+    """The shove strengths, floors, batteries and loads the check-up tries on ``robot``."""
+    return _LEVELS[robot]
+
+
 class ShoveRow(StrictModel):
     """Results of every shove at one strength."""
 

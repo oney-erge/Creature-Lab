@@ -64,6 +64,8 @@ export const api = {
   reportUrl: (robot: string) => `/api/robots/${robot}/report/`,
   download: (robot: string) => postJSON<Job>(`/api/robots/${robot}/download`, { accept_license: true }),
   startCheckup: (robot: string) => postJSON<Job>(`/api/robots/${robot}/checkup`),
+  whatIf: async (runId: string, change: string) =>
+    (await postJSON<{ run: RunCard }>(`/api/runs/${runId}/whatif`, { change })).run,
   job: (id: string) => getJSON<Job>(`/api/jobs/${id}`),
   runningJobs: async () => (await getJSON<{ jobs: Job[] }>("/api/jobs")).jobs,
   builder: (preset: string) => postJSON<BuilderInfo>("/api/builder", { preset }),

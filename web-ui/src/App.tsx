@@ -143,6 +143,9 @@ export default function App() {
   const [licenseFor, setLicenseFor] = useState<RobotInfo | null>(null);
   const [banner, setBanner] = useState<string | null>(null);
   const [buildNote, setBuildNote] = useState<string | null>(null);
+  // The change being run for a "what if", and the run to open side by side once it has loaded.
+  const [asking, setAsking] = useState<string | null>(null);
+  const wantCompare = useRef<string | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const [canRetry, setCanRetry] = useState(false);
@@ -270,6 +273,10 @@ export default function App() {
         if (cancelled) return;
         setDetail(d);
         setPolicyKey(d.policy);
+        if (wantCompare.current === d.id) {
+          wantCompare.current = null;
+          setCompare(true);
+        }
       })
       .catch((e) => !cancelled && setBanner(errorText(e)));
     return () => {
@@ -354,6 +361,25 @@ export default function App() {
       },
     );
 
+  // "What if…": run the same test with one thing changed, then show it next to the original.
+  const askWhatIf = async (key: string) => {
+    if (!detail || !robotKey) return;
+    setAsking(key);
+    setBanner(null);
+    try {
+      const made = await api.whatIf(detail.id, key);
+      setRuns(await api.runs(robotKey));
+      userNav.current = true;
+      wantCompare.current = made.id;
+      setRunId(made.id);
+      showPlayer();
+    } catch (e) {
+      setBanner(errorText(e));
+    } finally {
+      setAsking(null);
+    }
+  };
+
   const showNewCheckup = async () => {
     const key = ready;
     setReady(null);
@@ -415,7 +441,9 @@ export default function App() {
   // Side by side: the walk-only policy (before) on the left, the one that gets up (after) on the right.
   const getsUp = (policy: string) => !!robot?.policies.find((p) => p.key === policy)?.getsUp;
   const pairShown = compare && !!detail && !!other;
-  const mirrored = pairShown && getsUp(detail.policy) && !getsUp(other.policy);
+  // The original goes on the left of its "what if"; of two policies, the walk-only one goes left.
+  const sameRobot = pairShown && detail.policy === other.policy;
+  const mirrored = pairShown && (sameRobot ? !!detail.whatIf && !other.whatIf : getsUp(detail.policy) && !getsUp(other.policy));
 
   return (
     <div className="app">
@@ -572,6 +600,8 @@ export default function App() {
             twin={twin}
             compare={pairShown}
             onCompare={setCompareOn}
+            onWhatIf={(key) => void askWhatIf(key)}
+            asking={asking}
           />
         )}
       </div>

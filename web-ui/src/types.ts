@@ -1,7 +1,7 @@
 // Shapes of what creature_lab/web/server.py returns. Keep in step with that file.
 
 export type Outcome = "walked" | "fell_and_got_up" | "fell";
-export type RunKind = "baseline" | "shove" | "grip" | "battery" | "payload" | "other";
+export type RunKind = "baseline" | "shove" | "grip" | "battery" | "payload" | "whatif" | "other";
 
 export interface PolicyInfo {
   key: string;
@@ -85,8 +85,20 @@ export interface RunCard {
   recoveredAt: number | null;
   distance: number;
   pushN: number;
-  /** The same test under the robot's other policy, when there is one. */
+  /**
+   * The same test under the robot's other policy, when there is one. For a "what if" run, the
+   * run it was made from.
+   */
   pair: string | null;
+  /** For a "what if" run: what was changed, as a button label ("A harder shove"). */
+  whatIf: string | null;
+  /** The same change inside a sentence ("shoved harder (4.5 N)"). */
+  whatIfShort: string | null;
+}
+
+export interface WhatIfOption {
+  key: string;
+  label: string;
 }
 
 export interface Evidence {
@@ -116,6 +128,8 @@ export interface RunDetail extends RunCard {
   events: RunEvents;
   tilt: number[];
   credit: string;
+  /** One-click changes offered for this run (none for a "what if" run). */
+  whatIfs: WhatIfOption[];
 }
 
 export interface SceneGeom {
