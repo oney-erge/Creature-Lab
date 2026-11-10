@@ -1,7 +1,16 @@
 # Changelog
 
-## Unreleased
+## 0.3.0 (2026-11-10)
 
+- **Published on PyPI** as `creature-lab`: `pip install "creature-lab[app]"`, then `creature-lab`.
+  Releases are built, tested and published by `release.yml` when a GitHub release is published
+  (PyPI trusted publishing; no token in the repository).
+- In a side-by-side "what if" view, each panel and timeline line now says which run it is
+  ("Original: 150 N shove", "What if: gentler than the 150 N original"). Both used to show the same
+  policy name, so the two could not be told apart.
+- README rewritten shorter, around a new screen recording of the app (`docs/assets/creature-lab-demo.gif`)
+  and a 1-minute tour video. `scripts/media/record_app.py` and `compose_app.py` re-record them from
+  the real app (CDP screencast in headless Edge, captions from the runs on screen).
 - **A first launch needs no compiler.** The launchers (`run.ps1`, `run.sh`, `scripts/start.py`)
   install only prebuilt packages (`viz`, `web`, `robots`) and keep extras added by hand
   (`--inexact`). PyBullet, which is built from source on Windows and macOS and cost a clean Windows
@@ -83,6 +92,8 @@
   runs a packaged gait, controller choice is undoable, replay requires the same design) and add
   tests for the replay refusal.
 
+## 0.2.0 (preview, 2026-10-29)
+
 - Skip indistinguishable controller counterfactuals, preserve reference and perturbation
   recordings in verified evidence packs, and report individual trial conditions.
 - Align side-by-side 3D playback by recorded time and render each task's own terrain and target.
@@ -90,7 +101,6 @@
 All notable changes to Creature Lab are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
 
 ### Changed
 

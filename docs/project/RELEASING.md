@@ -1,7 +1,7 @@
 # Releasing Creature Lab
 
-Public publication is intentionally separate from implementation. The release workflow builds
-and uploads distributions for inspection; it does not publish to PyPI automatically.
+Publication is a separate, deliberate step: nothing reaches PyPI until someone publishes a GitHub
+release. Running `release.yml` by hand builds and checks the distributions without publishing.
 
 ## Experimental Windows preview
 
@@ -50,21 +50,30 @@ uv pip install --python .release-venv dist/creature_lab-*.whl
 Use `.release-venv/Scripts/creature-lab.exe` on Windows. Install `[sim,viz]` when testing the full
 first-run editor rather than the dependency-light CLI.
 
-## 3. Public Publication Gate
+## 3. Publish
 
-Before publishing:
+Set up once:
 
-- Configure a protected GitHub `pypi` environment and PyPI trusted publisher.
-- Confirm the repository README, demo media, package metadata, and release notes describe the
-  same measured behavior.
-- Download the CI-built artifacts and compare their hashes with the files to be published.
-- Create the signed `v0.2.0` tag only after every required CI job passes.
-- Publish once, then test the public install from a clean directory:
+- A PyPI trusted publisher for the project `creature-lab`: owner `oney-erge`, repository
+  `Creature-Lab`, workflow `release.yml`, environment `pypi` (for a first release, add it as a
+  "pending publisher" under the PyPI account's Publishing settings).
+- A GitHub environment named `pypi` that only accepts deployments from `v*` tags.
+
+For each release:
+
+1. Merge the version bump (`pyproject.toml`, `creature_lab/__init__.py`, `CITATION.cff`, `uv.lock`)
+   and the changelog section, with every required CI job green. The README, demo media and
+   release notes must describe the same measured behavior.
+2. Publish a GitHub release on `main` tagged `vX.Y.Z`:
+   `gh release create vX.Y.Z --target main --title "Creature Lab X.Y.Z" --notes-file notes.md`.
+3. `release.yml` runs the full suite, checks the tag against the package version, installs the
+   wheel into a clean environment, attaches the wheel and sdist to the release, and publishes
+   them to PyPI. A failed publish can be re-run from the Actions tab.
+4. Test the public install from a clean folder:
 
 ```bash
-uvx --from "creature-lab[sim,viz]" creature-lab doctor
-uvx --from "creature-lab[sim,viz]" creature-lab zoo run quadruped
+uvx --from "creature-lab[app]" creature-lab --help
+uvx --from "creature-lab[app]" creature-lab doctor
 ```
 
-Attach wheel/source distributions and a short autopsy example to the GitHub release. Do not
-commit generated runs, packs, media exports, environments, or provider credentials.
+Do not commit generated runs, packs, media exports, environments, or provider credentials.
