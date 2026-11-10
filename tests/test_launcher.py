@@ -136,3 +136,18 @@ def test_a_failed_install_prints_the_advice_and_keeps_the_exit_code(capsys):
     assert "error MSB3491" in captured.out  # the installer's own output is still shown
     assert "What to do:" in captured.err and "short path" in captured.err
     assert "hint line" in captured.err
+
+
+def test_a_first_install_picks_a_python_with_wheels_but_an_existing_venv_is_kept():
+    start = _load_start()
+    assert start.first_install_python(venv_exists=False) == ["--python", "3.12"]
+    assert start.first_install_python(venv_exists=True) == []
+
+
+@pytest.mark.parametrize("script", ["run.ps1", "run.sh"])
+def test_the_shared_launchers_only_pin_python_for_a_first_install(script):
+    text = (ROOT / script).read_text(encoding="utf-8")
+    line = next(line for line in text.splitlines() if "--python" in line and ".venv" in line)
+    assert "3.12" in line
+    # The pin is conditional on there being no .venv yet, so a developer's own venv is not rebuilt.
+    assert "-not (Test-Path" in line or "[ -d .venv ] ||" in line

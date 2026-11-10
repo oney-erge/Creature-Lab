@@ -29,6 +29,9 @@ BUILD_PROBE = (
 #: The read-only demo viewer simulates with PyBullet.
 DEMO_PROBE = "import viser, trimesh, pybullet"
 DEMO_EXTRAS = ["--extra", "sim", "--extra", "viz"]
+#: The Python a first install asks for: the newest interpreter often has no wheel for some
+#: dependency yet (onnxruntime on Python 3.15), and uv would pick it if it were the only one found.
+PREFERRED_PYTHON = "3.12"
 MODE_SETUP = {
     "app": (APP_PROBE, APP_EXTRAS),
     "build": (BUILD_PROBE, APP_EXTRAS),
@@ -82,6 +85,11 @@ def explain_install_failure(output: str) -> str | None:
         if pattern.search(output):
             return advice
     return None
+
+
+def first_install_python(venv_exists: bool) -> list[str]:
+    """uv arguments that choose the interpreter for a first install; an existing venv is kept."""
+    return [] if venv_exists else ["--python", PREFERRED_PYTHON]
 
 
 def check_python() -> None:
@@ -536,7 +544,12 @@ def main() -> None:
 
     if not args.skip_sync:
         extras = MODE_SETUP[args.mode][1]
-        sync_args = ["sync", "--frozen", *(["--all-extras"] if args.full else extras)]
+        sync_args = [
+            "sync",
+            "--frozen",
+            *first_install_python(VENV_DIR.exists()),
+            *(["--all-extras"] if args.full else extras),
+        ]
         run_sync_step(uv, sync_args, dry_run=args.dry_run, auto_yes=args.yes)
     else:
         ensure_mode_extras(uv, args.mode, dry_run=args.dry_run, auto_yes=args.yes)

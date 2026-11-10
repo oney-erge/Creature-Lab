@@ -78,6 +78,10 @@ Remove-IncompleteVenv $PSScriptRoot
 # `sim` extra, is built from source outside Linux/Python 3.11, so it is left to the people who ask
 # for it. --inexact keeps extras installed by hand instead of uninstalling them on every start.
 $syncArgs = @("sync", "--frozen", "--inexact", "--extra", "viz", "--extra", "web", "--extra", "robots")
+# A first install asks for a Python that has wheels for everything. Left alone, uv uses the newest
+# interpreter it finds, and that one often has no onnxruntime wheel yet. An existing environment
+# is left as it is.
+if (-not (Test-Path -LiteralPath ".venv")) { $syncArgs += @("--python", "3.12") }
 if ($Action -eq "repair") { $syncArgs += "--reinstall" }
 Invoke-InstallRetry "dependency synchronization" {
   $result = Invoke-InstallNative $uv $syncArgs

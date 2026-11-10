@@ -71,6 +71,10 @@ install_require_space "$PWD" 3
 # `sim` extra, is built from source outside Linux/Python 3.11, so it is left to the people who ask
 # for it. --inexact keeps extras installed by hand instead of uninstalling them on every start.
 sync_args=(sync --frozen --inexact --extra viz --extra web --extra robots)
+# A first install asks for a Python that has wheels for everything. Left alone, uv uses the newest
+# interpreter it finds, and that one often has no onnxruntime wheel yet (Python 3.15 on a Mac with
+# current Homebrew). An existing environment is left as it is.
+[ -d .venv ] || sync_args+=(--python 3.12)
 [ "$action" = repair ] && sync_args+=(--reinstall)
 install_retry "dependency synchronization" "$uv" "${sync_args[@]}"
 install_complete
