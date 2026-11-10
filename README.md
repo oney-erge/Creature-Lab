@@ -8,6 +8,7 @@
 
 <p align="center">
   <a href="https://github.com/oney-erge/Creature-Lab/actions/workflows/ci.yml"><img src="https://github.com/oney-erge/Creature-Lab/actions/workflows/ci.yml/badge.svg" alt="CI status" /></a>
+  <a href="https://pypi.org/project/creature-lab/"><img src="https://img.shields.io/pypi/v/creature-lab" alt="PyPI version" /></a>
   <img src="https://img.shields.io/badge/python-3.11%2B-blue" alt="Python 3.11+" />
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="Apache-2.0 license" /></a>
 </p>
@@ -29,12 +30,18 @@ the hardware.
 ## Try it
 
 ```bash
+uvx --from "creature-lab[app]" creature-lab      # or: pip install "creature-lab[app]", then creature-lab
+```
+
+Or from a clone, which also gives you the classic editor and the tests:
+
+```bash
 git clone https://github.com/oney-erge/Creature-Lab.git
 cd Creature-Lab
 ./run.sh            # macOS: ./run.command   Windows: run.bat
 ```
 
-The launcher installs prebuilt packages only (no compiler, about 300 MB) and opens the app. Press
+Either way it installs prebuilt packages only (no compiler, about 300 MB) and opens the app. Press
 **Download and check up** on the Unitree G1 and accept its license. On a laptop, the download and a
 40-shove check-up took 31 s from an empty cache.
 
