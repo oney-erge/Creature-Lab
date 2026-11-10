@@ -73,8 +73,8 @@ function Hero({
             </button>
             {robot.firstRunSeconds > 0 && (
               <p className="muted small">
-                The first time takes {roughDuration(robot.firstRunSeconds)} on a laptop, with no
-                graphics card needed. You can leave this tab open.
+                The first time takes {roughDuration(robot.firstRunSeconds)} on a laptop; the physics
+                runs on your CPU. You can leave this tab open.
               </p>
             )}
           </>

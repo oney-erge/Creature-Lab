@@ -402,9 +402,9 @@ def _default(ctx: typer.Context) -> None:
         return
     console.print(
         "[bold]Creature Lab[/bold]: shove a real robot, see why it fell, and prove the fix.\n\n"
-        "The browser app is not installed in this environment. Install it with one of:\n"
-        f"  [bold]{escape(_APP_INSTALL_FROM_PYPI)}[/bold]          (from PyPI)\n"
-        f"  [bold]{escape(_APP_INSTALL_FROM_CHECKOUT)}[/bold]  (from a checkout)\n"
+        "The browser app is not installed in this environment. Add its extra with one of:\n"
+        f"  [bold]{escape(_APP_INSTALL_FROM_PYPI)}[/bold]          (in a pip environment)\n"
+        f"  [bold]{escape(_APP_INSTALL_FROM_CHECKOUT)}[/bold]  (in a checkout)\n"
         "then run [bold]creature-lab[/bold] again.\n\n"
         "No browser? Try [bold]creature-lab zoo run quadruped[/bold], or "
         "[bold]creature-lab --help[/bold] for every command."

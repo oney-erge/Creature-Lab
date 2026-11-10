@@ -4,7 +4,7 @@
 
 <h1 align="center">Creature Lab</h1>
 
-<p align="center"><strong>Shove a real robot, see exactly why it fell, and prove the fix.</strong></p>
+<p align="center"><strong>Shove a real robot, see exactly why it fell, and prove the fix.<br />On a laptop, in a browser.</strong></p>
 
 <p align="center">
   <a href="https://github.com/oney-erge/Creature-Lab/actions/workflows/ci.yml"><img src="https://github.com/oney-erge/Creature-Lab/actions/workflows/ci.yml/badge.svg" alt="CI status" /></a>
@@ -18,30 +18,24 @@
 
 <p align="center"><sub>The same shove, the same instant, two policies for the same robot (simulation). Microduck model by Pollen Robotics, CC BY-NC-SA 4.0.</sub></p>
 
-Creature Lab is a local workbench for robot experiments. Run a published robot with its real
-trained policy, shove it, make the floor slippery, and get an explanation of every fall backed
-by the recorded evidence. Or design your own modular robot, then explore how its body,
-controller, task, and simulator affect its behavior. Every experiment is saved so you can
-inspect, replay, improve, and share it.
+Creature Lab runs published robots with their **real trained walking policies**, shoves them at
+dozens of strengths and moments, makes the floor slippery or the battery weak, and explains every
+fall from the recorded evidence: where the weight went relative to the feet, how fast the feet
+slid, whether the motors ran out of torque. Then it puts a second policy through the same shove, so
+you can see whether a change actually fixes the fall. The physics runs on the CPU (MuJoCo). It is a
+simulation, not the hardware.
 
-## Browser app
-
-<p align="center">
-  <img src="docs/assets/app-microduck.webp" width="800" alt="The Creature Lab browser app: a Microduck robot on the floor in slow motion after a shove, the run history on the left, and the explanation of the fall and the shove results on the right." />
-</p>
-
-<p align="center"><sub>Simulation. Microduck model by Pollen Robotics, CC BY-NC-SA 4.0.</sub></p>
+## Try it
 
 ```bash
+git clone https://github.com/oney-erge/Creature-Lab.git
+cd Creature-Lab
 ./run.sh            # Linux; macOS: ./run.command; Windows: .\run.bat
 ```
 
-The launcher opens the app. Choose Microduck or the Unitree G1, watch a saved shove in 3D (slowed
-down at the shove and the fall), read why the robot fell, then put the same shove to the other
-policy side by side to see whether the change fixes it. Press **Run check-up** to run a fresh one,
-**Save a clip** to keep a video, or **Build your own** to reshape a quadruped, hexapod, worm or
-humanoid and run it. Robots are downloaded after you accept their license. See
-[Browser app](docs/WEB_APP.md).
+The launcher installs what it needs (prebuilt packages only, no compiler; about 300 MB) and opens
+the app. On a clean machine, press **Download and check up** on the Unitree G1: after you accept
+its license, a first result is on screen in about a minute. Nothing else to set up.
 
 <p align="center">
   <img src="docs/assets/app-compare.webp" width="800" alt="The browser app showing the same 2 N shove on a Microduck twice: with the walk-only policy it stays on the floor, with the walk-and-get-up policy it stays on its feet. The lean angle of both is drawn on one timeline." />
@@ -49,117 +43,75 @@ humanoid and run it. Robots are downloaded after you accept their license. See
 
 <p align="center"><sub>The same shove, two policies, one clock (simulation). Microduck model by Pollen Robotics, CC BY-NC-SA 4.0.</sub></p>
 
-## Robot check-up from the command line
+In the app you can:
+
+- **Watch a saved shove in 3D**, slowed down at the shove and at the fall, with the floor area that
+  holds the robot up and the point where its weight would land drawn on the floor.
+- **Read why it fell** in plain words, with the numbers behind it.
+- **Compare two policies side by side** on the same shove (Microduck: a walk-only policy and Pollen's
+  newer walk-and-get-up policy).
+- **Run a fresh check-up**, **save a clip** (a short video with the credit burned in), or open the
+  **report**.
+- **Build your own** quadruped, hexapod, worm or humanoid with sliders, run it, and see what
+  happens. The classic part-by-part editor is one click away.
+
+See [Browser app](docs/WEB_APP.md). Robots are downloaded after you accept their license, and the
+launcher also accepts `doctor`, `repair`, `docker`, `logs` and `stop`.
+
+## The same check-up from the command line
 
 ```bash
 uv sync --inexact --extra robots
 uv run creature-lab robots checkup microduck      # or: unitree-g1
 ```
 
-It downloads the robot after showing you its license, runs about fifty simulated walks on the
-CPU, and writes an HTML report (add `--film` for a 1080p film). On the Microduck, the older
-walk-only policy is left on the floor by most shoves from 2 N up. Pollen's newer policy falls a
-little more often but always gets back up. On a very slippery floor, neither does, and the
-report says that no policy swap fixes that. See [Robot check-up](docs/ROBOT_CHECKUP.md) for the
-tests, how falls are explained, licenses, and limits. It is a simulation, not the hardware.
+About fifty simulated walks on the CPU, then an HTML report (add `--film` for a 1080p film). On the
+Microduck, the older walk-only policy is left on the floor by most shoves from 2 N up. Pollen's
+newer policy falls a little more often but always gets back up. On a very slippery floor neither
+does, and the report says that no policy swap fixes that. See [Robot check-up](docs/ROBOT_CHECKUP.md)
+for the tests, how falls are explained, licenses, and limits.
 
 <p align="center">
   <img src="docs/assets/checkup-unitree-g1.webp" width="640" alt="A simulated Unitree G1 humanoid walking with Unitree's own policy takes a 100 N sideways shove and falls, shown in slow motion." />
 </p>
 
-Watch the films: [Microduck check-up (1 min)](docs/assets/checkup-microduck.mp4) and
-[Unitree G1 check-up (35 s)](docs/assets/checkup-unitree-g1.mp4). GIF versions of both loops are in
-[docs/assets](docs/assets/MEDIA_LICENSES.md). In the build editor, both robots are the first
-choices in the creature picker too.
+Films: [Microduck check-up (1 min)](docs/assets/checkup-microduck.mp4) and
+[Unitree G1 check-up (35 s)](docs/assets/checkup-unitree-g1.mp4). The media licenses are in
+[docs/assets](docs/assets/MEDIA_LICENSES.md).
 
-Try the [recorded quadruped replay](https://oney-physics-replays.hazycow18.chatgpt.site/creature-lab.html)
-in your browser. An [experimental Windows x64 preview](https://github.com/oney-erge/Creature-Lab/releases/tag/preview-windows-2026-10-30)
-contains the latest editor changes and uses PyBullet. [Older previews](https://github.com/oney-erge/Creature-Lab/releases/tag/preview-0.2.0)
-are available for Linux with PyBullet and macOS with MuJoCo. The macOS previews
-can behave differently and lack PyBullet-only features; Intel uses an older MuJoCo
-version. These archives are unsigned and have not been run on clean machines.
+## Also in the box
+
+Creature Lab began as a workbench for designing modular robots, and that is still here:
 
 ```text
 Design -> simulate -> diagnose -> improve -> verify -> share
 ```
 
-It is designed for education and early prototyping, not hardware qualification,
-a cloud service, or large-scale GPU reinforcement learning.
-
-## Quick start
-
 ```bash
-git clone https://github.com/oney-erge/Creature-Lab.git
-cd Creature-Lab
-./run.sh            # Linux; macOS: ./run.command
-```
-
-On Windows, use `.\run.bat`. The launcher sets up the environment and opens the
-[browser app](docs/WEB_APP.md). To design your own creature, press **Build your own** there. For
-part-by-part editing, use the classic build editor: **Open the classic editor** in the app, or
-`python scripts/start.py --creature quadruped`. In the classic editor, pick a creature and goal,
-then click **Run first simulation**. Watch the replay, inspect the result, and use **Back to
-design** to make a change. Use **Explain failure** to run a
-counterfactual analysis, compare saved runs in History, and download its report
-and experiment pack.
-
-For a guided first investigation, open **Results → Failure lessons**, load **Frozen
-gait**, simulate, change one motor's range in Movement, and simulate again. Compare
-the saved runs in History; the outcome is an experiment, not a promised fix.
-
-PyBullet's current PyPI release has no Windows or macOS wheels. On those
-platforms its first installation builds from source and requires a working C++
-toolchain; it may take several minutes. Linux x86-64 has a Python 3.11 wheel.
-See [Getting Started](docs/GETTING_STARTED.md) for setup and troubleshooting.
-
-Each run produces ordinary JSON: a creature, task, controller, trace, hashes,
-and runtime provenance. That is the project's central unit: a minimum
-reproducible robot experiment.
-
-No browser? After setup, run the built-in demo from a terminal:
-
-```bash
-uv run creature-lab
-```
-
-If launch fails, try `python scripts/start.py --dry-run` and
-`uv run creature-lab doctor`.
-
-The launchers also accept `doctor`, `repair`, `docker`, `logs`, and `stop`.
-Docker serves the browser app on localhost and keeps runs, outputs and downloaded robots in named
-volumes.
-
-## Next steps
-
-```bash
-uv run creature-lab zoo list
-uv run creature-lab zoo run quadruped
+uv run creature-lab zoo run quadruped          # a curated creature and gait, in the terminal
 uv run creature-lab autopsy examples/quadruped.json --task examples/crawl_forward.json
 uv run creature-lab evolve examples/quadruped.json --task examples/crawl_forward.json --attempts 20
+uv run creature-lab quick                      # one built-in episode, no browser
 ```
 
-- `zoo run` runs a curated creature and controller.
-- `autopsy` proposes an explanation and writes the recorded evidence in verified packs.
-- `evolve` searches for a better body and gait.
+- A **Creature Zoo** with working and deliberately broken examples, and a **Failure Lab** that
+  teaches diagnosis.
+- A browser **build editor** for parts, motors, validation, simulation, and URDF import/export.
+- Physics traces, replay, root-cause diagnosis, robustness tests, and GIF/MP4 export.
+- Local search for better bodies and gaits (`evolve`), and portable JSON for creatures, tasks,
+  controllers and traces. Every run is saved with hashes and runtime provenance, so it can be
+  reproduced.
 
-The [Getting Started guide](docs/GETTING_STARTED.md) walks through a complete
-first session. Try the [two-gait lesson](docs/GAIT_LESSON.md) to compare two
-saved quadruped runs. The [CLI reference](docs/CLI_REFERENCE.md) covers every
-command.
+The default engine for the command line is PyBullet when it is installed, and MuJoCo otherwise. The
+JSON specifications and saved traces are portable, but exact physics behavior differs by engine.
+PyBullet is optional (`uv sync --inexact --extra sim`): outside Linux with Python 3.11 it is built
+from source and needs a C++ compiler, which is why the launcher does not install it.
 
-## What it includes
+## What it is not
 
-- A browser app for published robots (Microduck, Unitree G1): 3D replays, shoves, slippery
-  floors, weak batteries, explained falls, an HTML report and a film.
-- A Creature Zoo with working and deliberately broken examples.
-- A browser editor for presets, parts, motors, validation, simulation, and
-  URDF import/export.
-- Physics traces, replay, diagnosis, robustness tests, and GIF/MP4 export.
-- Local improvement tools for search and validated design edits.
-- Portable JSON contracts for creatures, tasks, controllers, and traces.
-
-PyBullet is the default simulator. The JSON specifications and saved traces are
-portable, but exact physics behavior can differ by backend.
+A teaching and prototyping tool. It is not hardware qualification, not a cloud service, and not
+large-scale GPU reinforcement learning. Check-ups are deterministic simulations of published
+models; a robot that passes here can still fall on a real floor.
 
 ## Documentation
 
@@ -167,14 +119,18 @@ portable, but exact physics behavior can differ by backend.
 |---|---|
 | [Browser app](docs/WEB_APP.md) | The app that opens first: robots, replays, check-ups |
 | [Robot check-up](docs/ROBOT_CHECKUP.md) | Shoving real robots and explaining their falls |
-| [Getting Started](docs/GETTING_STARTED.md) | A complete first experiment |
+| [Getting Started](docs/GETTING_STARTED.md) | A complete first experiment, and troubleshooting |
 | [Build Editor](docs/BUILD_EDITOR.md) | Creating and editing creatures in the browser |
 | [Concepts](docs/CONCEPTS.md) | Creatures, tasks, traces, simulators, and improvement |
 | [Zoo](docs/ZOO.md) | Bundled creatures, tasks, and challenge packs |
 | [Failure Lab](docs/FAILURE_LAB.md) | Intentional failures and diagnostic lessons |
-| [CLI reference](docs/CLI_REFERENCE.md) | Advanced commands and exports |
+| [Gait lesson](docs/GAIT_LESSON.md) | Compare two saved quadruped runs |
+| [CLI reference](docs/CLI_REFERENCE.md) | Every command and export |
 | [Known issues](docs/KNOWN_ISSUES.md) | Current limitations |
 | [Documentation home](docs/README.md) | JSON schemas, run artifacts, and advanced guides |
 | [Contributing](CONTRIBUTING.md) | Development and verification |
+
+If the launcher fails, try `python scripts/start.py --dry-run` and `uv run creature-lab doctor`.
+Docker serves the same app on localhost: `./run.sh docker`.
 
 Apache-2.0. Built by [Oney Erge](https://oneyerge.com).

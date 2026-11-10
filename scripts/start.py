@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -33,6 +34,54 @@ MODE_SETUP = {
     "build": (BUILD_PROBE, APP_EXTRAS),
     "demo": (DEMO_PROBE, DEMO_EXTRAS),
 }
+
+
+#: What a failed install usually means, matched against the installer's own output.
+INSTALL_ADVICE: list[tuple[re.Pattern[str], str]] = [
+    (
+        re.compile(
+            r"os error 206|path too long|filename or extension is too long|MAX_PATH|"
+            r"MSB3491|path, file name, or both are too long|fatal error C1083|Filename too long",
+            re.IGNORECASE,
+        ),
+        "A file path inside this folder is longer than Windows allows (260 characters). Move the "
+        "Creature Lab folder somewhere with a short path, for example C:\\creature-lab, and run "
+        "the launcher again. (Or turn on Windows long paths.)",
+    ),
+    (
+        re.compile(
+            r"Microsoft Visual C\+\+|vcvarsall|CMAKE_CXX_COMPILER|gcc: (command )?not found|"
+            r"command 'gcc' failed|xcrun: error|Python\.h: No such file|Failed to build",
+            re.IGNORECASE,
+        ),
+        "A package had to be compiled and this computer has no C++ build tools. The browser app "
+        "and the editor do not need that: they use prebuilt packages. Only PyBullet (the optional "
+        "`sim` extra) compiles. Skip it, or install build tools first (Windows: Microsoft C++ "
+        "Build Tools; macOS: `xcode-select --install`; Linux: `sudo apt install build-essential`).",
+    ),
+    (
+        re.compile(r"No space left on device|os error 112|not enough space", re.IGNORECASE),
+        "The disk is full. Free a few GB and run the launcher again; what already downloaded is "
+        "kept.",
+    ),
+    (
+        re.compile(
+            r"dns error|error sending request|connection (refused|reset|closed)|timed out|"
+            r"certificate verify|failed to download",
+            re.IGNORECASE,
+        ),
+        "The installer could not download packages. Check your network or proxy and run the "
+        "launcher again; what already downloaded is kept.",
+    ),
+]
+
+
+def explain_install_failure(output: str) -> str | None:
+    """Plain advice for the first known cause in an installer's output, or None."""
+    for pattern, advice in INSTALL_ADVICE:
+        if pattern.search(output):
+            return advice
+    return None
 
 
 def check_python() -> None:
@@ -65,21 +114,51 @@ def format_exit_code(code: int) -> str:
     return str(code)
 
 
+def _run_streaming(command: list[str]) -> tuple[int, str]:
+    """Run a command, show its output as it arrives, and return (exit code, the last lines)."""
+    tail: list[str] = []
+    with subprocess.Popen(
+        command,
+        cwd=ROOT,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    ) as proc:
+        assert proc.stdout is not None
+        for line in proc.stdout:
+            print(line, end="", flush=True)
+            tail.append(line)
+            del tail[:-400]
+        return proc.wait(), "".join(tail)
+
+
 def run_step(
     title: str,
     command: list[str],
     *,
     dry_run: bool = False,
     failure_hint: str,
+    explain: bool = False,
 ) -> None:
-    """Run one setup/check step with readable context and failure hints."""
+    """Run one setup/check step with readable context and failure hints.
+
+    ``explain`` also reads the command's output, so a failure it recognizes (a path too long for
+    Windows, a missing compiler, a full disk, no network) is explained in plain words.
+    """
     print_header(title)
     print(f"$ {command_text(command)}", flush=True)
     if dry_run:
         return
 
     try:
-        subprocess.run(command, cwd=ROOT, check=True)
+        if explain:
+            code, output = _run_streaming(command)
+            if code != 0:
+                raise subprocess.CalledProcessError(code, command, output=output)
+        else:
+            subprocess.run(command, cwd=ROOT, check=True)
     except FileNotFoundError as exc:
         print(f"\nCould not find executable: {command[0]}", file=sys.stderr)
         print(failure_hint, file=sys.stderr)
@@ -89,6 +168,9 @@ def run_step(
             f"\nThe '{title}' step failed with exit code {format_exit_code(exc.returncode)}.",
             file=sys.stderr,
         )
+        advice = explain_install_failure(exc.output) if isinstance(exc.output, str) else None
+        if advice:
+            print(f"\nWhat to do: {advice}", file=sys.stderr)
         print(failure_hint, file=sys.stderr)
         raise SystemExit(exc.returncode if 0 <= exc.returncode < 256 else 1) from exc
 
@@ -225,7 +307,13 @@ def run_sync_step(uv: list[str], sync_args: list[str], *, dry_run: bool, auto_ye
         "`uv sync` command shown above manually."
     )
     try:
-        run_step("Install dependencies", [*uv, *sync_args], dry_run=dry_run, failure_hint=hint)
+        run_step(
+            "Install dependencies",
+            [*uv, *sync_args],
+            dry_run=dry_run,
+            failure_hint=hint,
+            explain=True,
+        )
     except SystemExit:
         if dry_run or sys.platform != "win32":
             raise
@@ -246,6 +334,7 @@ def run_sync_step(uv: list[str], sync_args: list[str], *, dry_run: bool, auto_ye
                 [*uv, *sync_args],
                 dry_run=dry_run,
                 failure_hint=hint,
+                explain=True,
             )
         else:
             print(

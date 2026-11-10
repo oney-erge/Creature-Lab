@@ -133,7 +133,7 @@ ROBOTS: dict[str, RobotInfo] = {
         walk_command=0.5,
         gait_period_s=0.8,
         film_credits=("Physics: MuJoCo",),
-        first_run_s=30,
+        first_run_s=45,
     ),
 }
 

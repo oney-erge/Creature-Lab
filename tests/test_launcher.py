@@ -86,3 +86,53 @@ def test_the_shared_launchers_keep_hand_installed_extras_and_skip_pybullet(scrip
     assert "--inexact" in sync
     assert "web" in sync and "robots" in sync
     assert '"sim"' not in sync and "--extra sim" not in sync
+
+
+@pytest.mark.parametrize(
+    ("output", "expected"),
+    [
+        (
+            "error: Failed to build `pybullet==3.2.7`\n  fatal error C1083: Cannot open include "
+            "file: 'btBulletCollisionCommon.h': No such file or directory",
+            "path",
+        ),
+        ("error MSB3491: Could not write lines to file", "path"),
+        ("Caused by: failed to create directory (os error 206)", "path"),
+        (
+            "error: Microsoft Visual C++ 14.0 or greater is required. Get it with 'Microsoft "
+            "C++ Build Tools'",
+            "C++ build tools",
+        ),
+        ("gcc: command not found\nerror: command 'gcc' failed", "C++ build tools"),
+        ("xcrun: error: invalid active developer path", "C++ build tools"),
+        ("No space left on device (os error 28)", "disk is full"),
+        ("error: Request failed after 3 retries: dns error: failed to lookup", "network"),
+    ],
+)
+def test_known_install_failures_are_explained_in_plain_words(output, expected):
+    start = _load_start()
+    advice = start.explain_install_failure(output)
+    assert advice is not None and expected in advice
+
+
+def test_an_unknown_failure_is_left_alone():
+    start = _load_start()
+    assert start.explain_install_failure("error: something nobody has seen before") is None
+    assert start.explain_install_failure("") is None
+
+
+def test_a_failed_install_prints_the_advice_and_keeps_the_exit_code(capsys):
+    start = _load_start()
+    script = "import sys; print('error MSB3491: path too long'); sys.exit(3)"
+    with pytest.raises(SystemExit) as stopped:
+        start.run_step(
+            "Install dependencies",
+            [sys.executable, "-c", script],
+            failure_hint="hint line",
+            explain=True,
+        )
+    captured = capsys.readouterr()
+    assert stopped.value.code == 3
+    assert "error MSB3491" in captured.out  # the installer's own output is still shown
+    assert "What to do:" in captured.err and "short path" in captured.err
+    assert "hint line" in captured.err

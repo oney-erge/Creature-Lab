@@ -115,6 +115,11 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["creature_lab"]
 
+[tool.hatch.build.targets.sdist]
+# The 6 MB loop GIFs and the MP4 films live in the repository for the README; the source
+# distribution does not need them.
+exclude = ["docs/assets/*.gif", "docs/assets/*.mp4"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]

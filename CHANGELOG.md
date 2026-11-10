@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+- **A first launch needs no compiler.** The launchers (`run.ps1`, `run.sh`, `scripts/start.py`)
+  install only prebuilt packages (`viz`, `web`, `robots`) and keep extras added by hand
+  (`--inexact`). PyBullet, which is built from source on Windows and macOS and cost a clean Windows
+  start about three minutes (or a failure on a long folder path), is now optional: the classic
+  editor and the new `creature-lab quick` fall back to MuJoCo and say so, `doctor` reports it as
+  optional, and the error for a missing PyBullet names `--backend mujoco` and the compiler caveat.
+  A cold start from an empty cache measured about 16 s on a fast connection.
+- When an install does fail, the launcher says what to do for the usual causes (a path too long for
+  Windows, no C++ build tools, a full disk, no network) instead of leaving raw build errors.
+- A bare `creature-lab` now opens the browser app (or says how to install it). The old terminal
+  demo is `creature-lab quick`. New `app` extra for pip installs: `pip install "creature-lab[app]"`.
+- **The first run is one click.** The app opens on the robot whose first check-up is quickest (the
+  G1, about 45 s from nothing), shows a bundled looping clip of its shove before anything is
+  downloaded, says how long the first run takes, and **Download and check up** goes straight from
+  the license to the results. Measured from an empty package cache with the real Windows launcher:
+  about 50 s from the click to a moving, explained robot.
+- README leads with the one-command start and the same shove on two policies; stale preview-build
+  links are gone.
+
 - Add the robot check-up (`creature-lab robots ...`, `robots` extra): run Pollen Robotics'
   Microduck and the Unitree G1 with their published policies in CPU MuJoCo, shove them at eight
   points of the stride, vary grip, battery and load, and explain each fall from the recorded
