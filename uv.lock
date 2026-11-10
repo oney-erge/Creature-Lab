@@ -501,6 +501,19 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
+app = [
+    { name = "fastapi" },
+    { name = "imageio" },
+    { name = "imageio-ffmpeg" },
+    { name = "matplotlib" },
+    { name = "mujoco" },
+    { name = "numpy" },
+    { name = "onnxruntime" },
+    { name = "pillow" },
+    { name = "trimesh" },
+    { name = "uvicorn" },
+    { name = "viser" },
+]
 browser = [
     { name = "playwright" },
 ]
@@ -555,6 +568,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "cmaes", marker = "extra == 'evolve'", specifier = ">=0.10" },
+    { name = "creature-lab", extras = ["viz", "web", "robots"], marker = "extra == 'app'" },
     { name = "fastapi", marker = "extra == 'web'", specifier = ">=0.115" },
     { name = "gymnasium", marker = "extra == 'rl'", specifier = ">=0.29" },
     { name = "imageio", marker = "extra == 'export'", specifier = ">=2.31" },
@@ -581,7 +595,7 @@ requires-dist = [
     { name = "uvicorn", marker = "extra == 'web'", specifier = ">=0.30" },
     { name = "viser", marker = "extra == 'viz'", specifier = ">=1.0" },
 ]
-provides-extras = ["sim", "viz", "export", "llm", "evolve", "robots", "web", "mujoco", "browser", "rl"]
+provides-extras = ["sim", "viz", "export", "llm", "evolve", "robots", "web", "app", "mujoco", "browser", "rl"]
 
 [package.metadata.requires-dev]
 dev = [

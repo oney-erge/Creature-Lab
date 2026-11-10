@@ -11,7 +11,7 @@ import {
   supportAt,
   trunkAt,
 } from "./decode";
-import { dotsFor, featuredRun, groupRuns, limitText, outcomeTone, totals } from "./format";
+import { dotsFor, featuredRun, groupRuns, limitText, outcomeTone, quickestStart, roughDuration, totals, whatIfSentence } from "./format";
 import { arrowLength, framingFor, pointInConvexPolygon, robotUnit, shoveReference } from "./geometry";
 import { HOLD_S, Playback, SLOW_FACTOR, frameAt, rateAt } from "./playback";
 import { clipFileName, clipWindow } from "./clip";
@@ -202,6 +202,8 @@ const card = (over: Partial<RunCard>): RunCard => ({
   distance: 1.7,
   pushN: 0,
   pair: null,
+  whatIf: null,
+  whatIfShort: null,
   ...over,
 });
 
@@ -280,5 +282,45 @@ describe("saving a clip", () => {
   it("names the file after what it shows", () => {
     expect(clipFileName(["Microduck", "Walk-only policy", "3 N shove"])).toBe("creature-lab-microduck-walk-only-policy-3-n-shove.webm");
     expect(clipFileName(["", "!!"])).toBe("creature-lab-run.webm");
+  });
+});
+
+describe("the first run", () => {
+  it("says how long it takes in words", () => {
+    expect(roughDuration(30)).toBe("under a minute");
+    expect(roughDuration(75)).toBe("about a minute");
+    expect(roughDuration(120)).toBe("about 2 minutes");
+    expect(roughDuration(0)).toBe("a minute or two");
+  });
+  it("opens on the robot whose first check-up is quickest, ignoring unknown times", () => {
+    const robots = [
+      { key: "slow", firstRunSeconds: 120 },
+      { key: "unknown", firstRunSeconds: 0 },
+      { key: "quick", firstRunSeconds: 30 },
+    ];
+    expect(quickestStart(robots)?.key).toBe("quick");
+    expect(quickestStart([{ key: "only", firstRunSeconds: 0 }])?.key).toBe("only");
+    expect(quickestStart([])).toBeUndefined();
+  });
+});
+
+describe("what if", () => {
+  const changed = (outcome: RunCard["outcome"], outcomeText: string, whatIfShort: string): RunCard =>
+    card({ outcome, outcomeText, kind: "whatif", whatIf: "A change", whatIfShort });
+
+  it("says what the change did when the ending differs", () => {
+    const sentence = whatIfSentence(card({}), changed("fell", "Stayed down", "shoved harder (4.5 N)"));
+    expect(sentence).toBe("In the original it stayed on its feet. Shoved harder (4.5 N), it fell and stayed down.");
+  });
+  it("says so when it ended the same way", () => {
+    const sentence = whatIfSentence(
+      card({ outcome: "fell", outcomeText: "Stayed down" }),
+      changed("fell", "Stayed down", "on a very slippery floor"),
+    );
+    expect(sentence).toBe("It ended the same way either way: it fell and stayed down. (On a very slippery floor.)");
+  });
+  it("counts getting back up as a way of falling", () => {
+    const sentence = whatIfSentence(card({}), changed("fell_and_got_up", "Back up in 1.2 s", "walking faster"));
+    expect(sentence).toContain("fell and was back up in 1.2 s");
   });
 });

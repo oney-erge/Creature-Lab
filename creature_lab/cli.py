@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import random
 from collections.abc import Callable, Iterator
 from pathlib import Path
@@ -13,6 +14,7 @@ from xml.etree.ElementTree import ParseError as ET_PARSE_ERROR
 import typer
 from pydantic import BaseModel, ValidationError
 from rich.console import Console
+from rich.markup import escape
 from rich.table import Table
 
 from creature_lab import VERSION, qualification
@@ -58,8 +60,8 @@ from creature_lab.viewers.viser_viewer import DEFAULT_HOST, find_free_port
 
 app = typer.Typer(
     help=(
-        "Tiny local lab for designing, running, diagnosing, and improving "
-        "modular robot-creatures from JSON."
+        "Shove a real robot, see exactly why it fell, and prove the fix. Also a local lab for "
+        "designing, running, diagnosing, and improving modular robot creatures from JSON."
     )
 )
 console = Console()
@@ -165,15 +167,34 @@ def _check_inputs(creature: CreatureSpec, task: TaskSpec) -> None:
         console.print(f"[yellow]warning:[/yellow] {warning}")
 
 
+def _installed_engine(preferred: str) -> str:
+    """``preferred`` when its engine is installed; the other engine (said aloud) when only that is.
+
+    Used where nobody named an engine, so a fresh install that has MuJoCo (it ships as a
+    wheel everywhere) but not PyBullet (built from source outside Linux/Python 3.11) still works.
+    """
+    other = "mujoco" if preferred == "pybullet" else "pybullet"
+    if importlib.util.find_spec(preferred) is None and importlib.util.find_spec(other) is not None:
+        console.print(f"[yellow]note:[/yellow] {preferred} is not installed; using {other}.")
+        return other
+    return preferred
+
+
 def _require_backend(name: str = "pybullet") -> tuple[type, str]:
     """Resolve a backend class + version string by name, exiting if it is missing."""
     if name == "pybullet":
         try:
             from creature_lab.backends.pybullet_backend import PyBulletBackend, backend_version
         except ImportError as exc:
+            hint = (
+                "Or add `--backend mujoco`, which is already installed."
+                if importlib.util.find_spec("mujoco") is not None
+                else "Or install MuJoCo (prebuilt everywhere) with `uv sync --extra mujoco`."
+            )
             console.print(
                 "[red]error:[/red] pybullet is not installed. Install it with "
-                "`uv sync --extra sim`."
+                "`uv sync --inexact --extra sim` (outside Linux with Python 3.11 it is built "
+                f"from source and needs a C++ compiler). {hint}"
             )
             raise typer.Exit(code=2) from exc
         return PyBulletBackend, backend_version()
@@ -183,7 +204,7 @@ def _require_backend(name: str = "pybullet") -> tuple[type, str]:
         except ImportError as exc:
             console.print(
                 "[red]error:[/red] mujoco is not installed. Install it with "
-                "`uv sync --extra mujoco`."
+                "`uv sync --inexact --extra mujoco`."
             )
             raise typer.Exit(code=2) from exc
         return MuJoCoBackend, backend_version()
@@ -353,22 +374,59 @@ def _simulate(
     return _trace_from_frames(creature, task, frames, meta=meta, backend=backend)
 
 
+_APP_INSTALL_FROM_CHECKOUT = "uv sync --inexact --extra viz --extra web --extra robots"
+_APP_INSTALL_FROM_PYPI = 'pip install "creature-lab[app]"'
+
+
+def _app_is_installed() -> bool:
+    return all(importlib.util.find_spec(name) is not None for name in ("fastapi", "uvicorn"))
+
+
 @app.callback(invoke_without_command=True)
 def _default(ctx: typer.Context) -> None:
-    """Run a quick built-in episode and print its score and diagnosis.
+    """Creature Lab: shove a real robot, see why it fell, and prove the fix.
 
-    With no subcommand, this loads the built-in quadruped, runs its measured gait, and
-    shows what happened - no browser, no arguments, nothing beyond `uv sync --extra sim`.
-    Use `creature-lab build` for the visual editor, or `--help` for every command.
+    With no subcommand this opens the browser app. Use `creature-lab quick` for a
+    terminal-only demo, `creature-lab build` for the classic editor, or `--help` for
+    every command.
     """
     if ctx.invoked_subcommand is not None:
         return
+    if _app_is_installed():
+        _serve_app(
+            8080,
+            os.environ.get("CREATURE_LAB_HOST", DEFAULT_HOST),
+            True,
+            Path("outputs") / "checkup",
+        )
+        return
+    console.print(
+        "[bold]Creature Lab[/bold]: shove a real robot, see why it fell, and prove the fix.\n\n"
+        "The browser app is not installed in this environment. Add its extra with one of:\n"
+        f"  [bold]{escape(_APP_INSTALL_FROM_PYPI)}[/bold]          (in a pip environment)\n"
+        f"  [bold]{escape(_APP_INSTALL_FROM_CHECKOUT)}[/bold]  (in a checkout)\n"
+        "then run [bold]creature-lab[/bold] again.\n\n"
+        "No browser? Try [bold]creature-lab zoo run quadruped[/bold], or "
+        "[bold]creature-lab --help[/bold] for every command."
+    )
+    raise typer.Exit(code=2)
+
+
+@app.command("quick", rich_help_panel="Start Here")
+def quick() -> None:
+    """Run the built-in quadruped once in the terminal and print its score and diagnosis.
+
+    No browser and no arguments; needs a physics engine (`uv sync --extra sim` or
+    `--extra mujoco`).
+    """
     from creature_lab.diagnosis import diagnose as run_diagnosis
 
     creature = default_creature()
     task_spec = default_task()
     _check_inputs(creature, task_spec)
-    trace = _simulate(creature, task_spec, controller="curated")
+    trace = _simulate(
+        creature, task_spec, controller="curated", backend=_installed_engine("pybullet")
+    )
     run_dir = save_run(creature, trace, task=task_spec)
 
     console.print(
@@ -419,6 +477,31 @@ def _claim_port(host: str, port: int) -> int:
     return free
 
 
+def _serve_app(port: int, host: str, open_browser: bool, checkups: Path) -> None:
+    """Serve the browser app until Ctrl+C."""
+    import threading
+    import webbrowser
+
+    try:
+        import uvicorn
+
+        from creature_lab.web.server import create_app
+    except ImportError as exc:
+        console.print(
+            "[red]error:[/red] the browser app needs its extras. Install them with "
+            f"`{_APP_INSTALL_FROM_CHECKOUT}`."
+        )
+        raise typer.Exit(code=2) from exc
+
+    _warn_if_network_exposed(host)
+    port = _claim_port(host, port)
+    url = f"http://localhost:{port}"
+    console.print(f"[green]serving[/green] Creature Lab on {url} (Ctrl+C to stop)")
+    if open_browser:
+        threading.Timer(1.2, webbrowser.open, args=(url,)).start()
+    uvicorn.run(create_app(checkups), host=host, port=port, log_level="warning")
+
+
 @app.command("app", rich_help_panel="Start Here")
 def web_app(
     port: Annotated[int, typer.Option(help="Port to serve on (the next free one if busy).")] = 8080,
@@ -431,27 +514,7 @@ def web_app(
     ] = Path("outputs") / "checkup",
 ) -> None:
     """Open the Creature Lab browser app: real robots, check-ups, and replays."""
-    import threading
-    import webbrowser
-
-    try:
-        import uvicorn
-
-        from creature_lab.web.server import create_app
-    except ImportError as exc:
-        console.print(
-            "[red]error:[/red] the browser app needs its extras. Install them with "
-            "`uv sync --inexact --extra web --extra robots`."
-        )
-        raise typer.Exit(code=2) from exc
-
-    _warn_if_network_exposed(host)
-    port = _claim_port(host, port)
-    url = f"http://localhost:{port}"
-    console.print(f"[green]serving[/green] Creature Lab on {url} (Ctrl+C to stop)")
-    if open_browser:
-        threading.Timer(1.2, webbrowser.open, args=(url,)).start()
-    uvicorn.run(create_app(checkups), host=host, port=port, log_level="warning")
+    _serve_app(port, host, open_browser, checkups)
 
 
 @app.command(rich_help_panel="Start Here")
@@ -798,6 +861,8 @@ def build(
     # project launch without overrides resumes the same experiment.
     chosen_controller = controller if controller is not None else session.controller
     chosen_backend = backend if backend is not None else session.backend
+    if backend is None and project is None:
+        chosen_backend = _installed_engine(chosen_backend)
     chosen_seed = seed if seed is not None else session.seed
     if (chosen_controller, chosen_backend, chosen_seed) != (
         session.controller,

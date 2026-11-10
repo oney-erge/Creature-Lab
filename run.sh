@@ -67,12 +67,21 @@ fi
 install_lock
 install_require_space "$PWD" 3
 [ -n "$uv" ] || uv=$(install_uv)
-sync_args=(sync --frozen --extra sim --extra viz)
+# The app and the classic editor need only prebuilt wheels (no compiler). PyBullet, the optional
+# `sim` extra, is built from source outside Linux/Python 3.11, so it is left to the people who ask
+# for it. --inexact keeps extras installed by hand instead of uninstalling them on every start.
+sync_args=(sync --frozen --inexact --extra viz --extra web --extra robots)
+# A first install asks for a Python that has wheels for everything. Left alone, uv uses the newest
+# interpreter it finds, and that one often has no onnxruntime wheel yet (Python 3.15 on a Mac with
+# current Homebrew). An existing environment is left as it is.
+[ -d .venv ] || sync_args+=(--python 3.12)
 [ "$action" = repair ] && sync_args+=(--reinstall)
 install_retry "dependency synchronization" "$uv" "${sync_args[@]}"
 install_complete
 
 args=(run --frozen --no-sync python scripts/start.py --skip-sync)
 [ "$no_browser" -eq 1 ] && args+=(--no-open-browser)
-args+=("${forward[@]}")
+# ${forward[@]+...} and not "${forward[@]}": macOS ships Bash 3.2, where expanding an empty array under
+# `set -u` aborts with "unbound variable", which stopped a plain ./run.sh after the install.
+args+=(${forward[@]+"${forward[@]}"})
 exec "$uv" "${args[@]}"

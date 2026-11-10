@@ -6,6 +6,7 @@
 | `app-microduck.webp`, `app-compare.webp` | Screenshots of the browser app showing Pollen Robotics' Microduck model | **CC BY-NC-SA 4.0** |
 | `app-build.webp` | Screenshot of the browser app's creature designer (Creature Lab's own shapes) | Apache-2.0 |
 | `checkup-unitree-g1.webp`, `.gif`, `.mp4` | Unitree Robotics' G1 model, rendered by Creature Lab | BSD 3-Clause model; renders Apache-2.0 |
+| `social-preview.png` | The image for the GitHub link card (a frame of the G1 render plus text) | BSD 3-Clause model; image Apache-2.0 |
 | `creature-lab-logo.svg`, `demo.gif`, `quickstart.ipynb` | Creature Lab's own work | Apache-2.0 |
 
 The Microduck files (including the app screenshot) are adaptations (renders) of the Microduck 3D meshes by
@@ -17,6 +18,10 @@ rendered with lighting, camera motion and on-screen labels.
 
 The G1 model comes from [unitreerobotics/unitree_rl_gym](https://github.com/unitreerobotics/unitree_rl_gym)
 (BSD 3-Clause, Copyright Unitree Robotics).
+
+The app also ships one of these, `unitree_g1.webp`, as the looping clip on its first screen (in
+`creature_lab/web/static/clips`). Only the G1 clip is bundled; the Microduck media are CC BY-NC-SA and
+are never part of the package.
 
 All of these are simulations, not footage of the hardware. Neither company is affiliated with
 or endorses Creature Lab.

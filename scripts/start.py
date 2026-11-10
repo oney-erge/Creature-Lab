@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -16,9 +17,79 @@ from _process_utils import port_is_open, taskkill_tree
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_PORT = 8080
 VENV_DIR = ROOT / ".venv"
-#: What the browser app imports. If any is missing the app extras are not installed.
-APP_PROBE = "import fastapi, uvicorn, mujoco, onnxruntime, imageio, PIL"
-APP_EXTRAS = ["--extra", "sim", "--extra", "viz", "--extra", "web", "--extra", "robots"]
+#: What the browser app (and the classic editor it opens) import. If any is missing the extras
+#: are not installed. Everything here ships as prebuilt wheels on Windows, macOS and Linux, so a
+#: first launch never needs a compiler. PyBullet (the `sim` extra) is not in this list on purpose.
+APP_PROBE = "import fastapi, uvicorn, mujoco, onnxruntime, imageio, PIL, viser, trimesh"
+APP_EXTRAS = ["--extra", "viz", "--extra", "web", "--extra", "robots"]
+#: The classic editor runs on MuJoCo when PyBullet is absent, so it needs the same wheels.
+BUILD_PROBE = (
+    "import viser, trimesh\ntry:\n    import pybullet\nexcept ImportError:\n    import mujoco"
+)
+#: The read-only demo viewer simulates with PyBullet.
+DEMO_PROBE = "import viser, trimesh, pybullet"
+DEMO_EXTRAS = ["--extra", "sim", "--extra", "viz"]
+#: The Python a first install asks for: the newest interpreter often has no wheel for some
+#: dependency yet (onnxruntime on Python 3.15), and uv would pick it if it were the only one found.
+PREFERRED_PYTHON = "3.12"
+MODE_SETUP = {
+    "app": (APP_PROBE, APP_EXTRAS),
+    "build": (BUILD_PROBE, APP_EXTRAS),
+    "demo": (DEMO_PROBE, DEMO_EXTRAS),
+}
+
+
+#: What a failed install usually means, matched against the installer's own output.
+INSTALL_ADVICE: list[tuple[re.Pattern[str], str]] = [
+    (
+        re.compile(
+            r"os error 206|path too long|filename or extension is too long|MAX_PATH|"
+            r"MSB3491|path, file name, or both are too long|fatal error C1083|Filename too long",
+            re.IGNORECASE,
+        ),
+        "A file path inside this folder is longer than Windows allows (260 characters). Move the "
+        "Creature Lab folder somewhere with a short path, for example C:\\creature-lab, and run "
+        "the launcher again. (Or turn on Windows long paths.)",
+    ),
+    (
+        re.compile(
+            r"Microsoft Visual C\+\+|vcvarsall|CMAKE_CXX_COMPILER|gcc: (command )?not found|"
+            r"command 'gcc' failed|xcrun: error|Python\.h: No such file|Failed to build",
+            re.IGNORECASE,
+        ),
+        "A package had to be compiled and this computer has no C++ build tools. The browser app "
+        "and the editor do not need that: they use prebuilt packages. Only PyBullet (the optional "
+        "`sim` extra) compiles. Skip it, or install build tools first (Windows: Microsoft C++ "
+        "Build Tools; macOS: `xcode-select --install`; Linux: `sudo apt install build-essential`).",
+    ),
+    (
+        re.compile(r"No space left on device|os error 112|not enough space", re.IGNORECASE),
+        "The disk is full. Free a few GB and run the launcher again; what already downloaded is "
+        "kept.",
+    ),
+    (
+        re.compile(
+            r"dns error|error sending request|connection (refused|reset|closed)|timed out|"
+            r"certificate verify|failed to download",
+            re.IGNORECASE,
+        ),
+        "The installer could not download packages. Check your network or proxy and run the "
+        "launcher again; what already downloaded is kept.",
+    ),
+]
+
+
+def explain_install_failure(output: str) -> str | None:
+    """Plain advice for the first known cause in an installer's output, or None."""
+    for pattern, advice in INSTALL_ADVICE:
+        if pattern.search(output):
+            return advice
+    return None
+
+
+def first_install_python(venv_exists: bool) -> list[str]:
+    """uv arguments that choose the interpreter for a first install; an existing venv is kept."""
+    return [] if venv_exists else ["--python", PREFERRED_PYTHON]
 
 
 def check_python() -> None:
@@ -51,21 +122,51 @@ def format_exit_code(code: int) -> str:
     return str(code)
 
 
+def _run_streaming(command: list[str]) -> tuple[int, str]:
+    """Run a command, show its output as it arrives, and return (exit code, the last lines)."""
+    tail: list[str] = []
+    with subprocess.Popen(
+        command,
+        cwd=ROOT,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    ) as proc:
+        assert proc.stdout is not None
+        for line in proc.stdout:
+            print(line, end="", flush=True)
+            tail.append(line)
+            del tail[:-400]
+        return proc.wait(), "".join(tail)
+
+
 def run_step(
     title: str,
     command: list[str],
     *,
     dry_run: bool = False,
     failure_hint: str,
+    explain: bool = False,
 ) -> None:
-    """Run one setup/check step with readable context and failure hints."""
+    """Run one setup/check step with readable context and failure hints.
+
+    ``explain`` also reads the command's output, so a failure it recognizes (a path too long for
+    Windows, a missing compiler, a full disk, no network) is explained in plain words.
+    """
     print_header(title)
     print(f"$ {command_text(command)}", flush=True)
     if dry_run:
         return
 
     try:
-        subprocess.run(command, cwd=ROOT, check=True)
+        if explain:
+            code, output = _run_streaming(command)
+            if code != 0:
+                raise subprocess.CalledProcessError(code, command, output=output)
+        else:
+            subprocess.run(command, cwd=ROOT, check=True)
     except FileNotFoundError as exc:
         print(f"\nCould not find executable: {command[0]}", file=sys.stderr)
         print(failure_hint, file=sys.stderr)
@@ -75,6 +176,9 @@ def run_step(
             f"\nThe '{title}' step failed with exit code {format_exit_code(exc.returncode)}.",
             file=sys.stderr,
         )
+        advice = explain_install_failure(exc.output) if isinstance(exc.output, str) else None
+        if advice:
+            print(f"\nWhat to do: {advice}", file=sys.stderr)
         print(failure_hint, file=sys.stderr)
         raise SystemExit(exc.returncode if 0 <= exc.returncode < 256 else 1) from exc
 
@@ -211,7 +315,13 @@ def run_sync_step(uv: list[str], sync_args: list[str], *, dry_run: bool, auto_ye
         "`uv sync` command shown above manually."
     )
     try:
-        run_step("Install dependencies", [*uv, *sync_args], dry_run=dry_run, failure_hint=hint)
+        run_step(
+            "Install dependencies",
+            [*uv, *sync_args],
+            dry_run=dry_run,
+            failure_hint=hint,
+            explain=True,
+        )
     except SystemExit:
         if dry_run or sys.platform != "win32":
             raise
@@ -232,6 +342,7 @@ def run_sync_step(uv: list[str], sync_args: list[str], *, dry_run: bool, auto_ye
                 [*uv, *sync_args],
                 dry_run=dry_run,
                 failure_hint=hint,
+                explain=True,
             )
         else:
             print(
@@ -242,19 +353,26 @@ def run_sync_step(uv: list[str], sync_args: list[str], *, dry_run: bool, auto_ye
             raise
 
 
-def ensure_app_extras(uv: list[str], *, dry_run: bool, auto_yes: bool) -> None:
-    """Install the browser app's extras when the environment lacks them.
+def ensure_mode_extras(uv: list[str], mode: str, *, dry_run: bool, auto_yes: bool) -> None:
+    """Install the extras a launch mode needs when the environment lacks them.
 
-    The shared launchers (run.ps1, run.sh) sync only the build editor's extras and then
-    call this script with --skip-sync, so the app cannot rely on them. `--inexact` keeps
-    the packages the launcher installed, so this only adds.
+    The launchers (run.ps1, run.sh) install the app's extras and then call this script with
+    --skip-sync, so a different mode (the PyBullet demo viewer) may still need more.
+    `--inexact` keeps whatever is installed already, so this only adds.
     """
-    probe = [*uv, "run", "--frozen", "--no-sync", "python", "-c", APP_PROBE]
+    probe_code, extras = MODE_SETUP[mode]
+    probe = [*uv, "run", "--frozen", "--no-sync", "python", "-c", probe_code]
     if not dry_run and subprocess.run(probe, cwd=ROOT, capture_output=True).returncode == 0:
         return
+    if "sim" in extras:
+        print(
+            "\nThis mode simulates with PyBullet. Outside Linux with Python 3.11 it is built "
+            "from source (several minutes) and needs a C++ compiler.",
+            flush=True,
+        )
     run_sync_step(
         uv,
-        ["sync", "--frozen", "--inexact", *APP_EXTRAS],
+        ["sync", "--frozen", "--inexact", *extras],
         dry_run=dry_run,
         auto_yes=auto_yes,
     )
@@ -425,11 +543,16 @@ def main() -> None:
     print("Press Ctrl+C in this terminal to stop.")
 
     if not args.skip_sync:
-        extras = APP_EXTRAS if args.mode == "app" else ["--extra", "sim", "--extra", "viz"]
-        sync_args = ["sync", "--frozen", *(["--all-extras"] if args.full else extras)]
+        extras = MODE_SETUP[args.mode][1]
+        sync_args = [
+            "sync",
+            "--frozen",
+            *first_install_python(VENV_DIR.exists()),
+            *(["--all-extras"] if args.full else extras),
+        ]
         run_sync_step(uv, sync_args, dry_run=args.dry_run, auto_yes=args.yes)
-    elif args.mode == "app":
-        ensure_app_extras(uv, dry_run=args.dry_run, auto_yes=args.yes)
+    else:
+        ensure_mode_extras(uv, args.mode, dry_run=args.dry_run, auto_yes=args.yes)
 
     if not args.skip_doctor:
         run_step(

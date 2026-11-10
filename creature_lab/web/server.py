@@ -19,6 +19,7 @@ from creature_lab.web.jobs import Jobs, known_robot
 from creature_lab.web.library import Library
 from creature_lab.web.scene import load_scene, overlay_payload
 from creature_lab.web.thumbs import Thumbnails, pick_time
+from creature_lab.web.whatif import WhatIfError, is_what_if, options, run_what_if
 
 STATIC_DIR = Path(__file__).parent / "static"
 #: Browsers send this host name for pages served from this machine; anything else is another
@@ -48,6 +49,12 @@ class DownloadRequest(BaseModel):
 
 class BuilderRequest(BaseModel):
     preset: str
+
+
+class WhatIfRequest(BaseModel):
+    """A change from the fixed menu in ``web/whatif.py``; never numbers or paths."""
+
+    change: str
 
 
 class BuildRequest(BaseModel):
@@ -106,6 +113,7 @@ def create_app(
         items = []
         for key, info in ROBOTS.items():
             summary = library.checkup_summary(key) if key in have else None
+            clip = static / "clips" / f"{key}.webp"
             items.append(
                 {
                     "key": key,
@@ -118,6 +126,8 @@ def create_app(
                     "nonCommercial": info.non_commercial,
                     "installed": is_installed(key),
                     "hasResults": key in have,
+                    "firstRunSeconds": info.first_run_s,
+                    "introClip": f"/clips/{key}.webp" if clip.is_file() else None,
                     "policies": [
                         {"key": p.key, "title": p.title, "summary": p.summary, "getsUp": p.gets_up}
                         for p in info.policies
@@ -207,7 +217,38 @@ def create_app(
             },
             "tilt": _tilt_series(run),
             "credit": info.credit,
+            "whatIfs": _what_ifs(entry),
         }
+
+    def _what_ifs(entry: Any) -> list[dict]:
+        """The one-click changes offered for a run (none for a what-if run or a missing robot)."""
+        if entry.what_if is not None or not is_installed(entry.robot) or missing_extra():
+            return []
+        return [{"key": o.key, "label": o.label} for o in options(entry.scenario, entry.robot)]
+
+    @app.post("/api/runs/{run_id}/whatif")
+    def what_if(run_id: str, body: WhatIfRequest) -> dict:
+        try:
+            entry = library.run(run_id)
+        except KeyError:
+            raise HTTPException(404, "no such run") from None
+        _require_installed(entry.robot)
+        if missing_extra():
+            raise HTTPException(409, f"missing packages: {', '.join(missing_extra())}")
+        if is_what_if(entry.name):
+            raise HTTPException(409, "ask from the original run, not from a what-if")
+        try:
+            folder = run_what_if(
+                entry.folder, entry.scenario, entry.robot, entry.title, body.change
+            )
+        except WhatIfError as error:
+            raise HTTPException(422, str(error)) from error
+        except Exception as error:
+            raise HTTPException(503, f"could not run that here: {error}") from error
+        made = next((e for e in library.runs(entry.robot) if e.folder == folder), None)
+        if made is None:
+            raise HTTPException(500, "the run was saved but cannot be listed")
+        return {"run": made.card()}
 
     @app.get("/api/runs/{run_id}/poses")
     def run_poses(run_id: str) -> Response:

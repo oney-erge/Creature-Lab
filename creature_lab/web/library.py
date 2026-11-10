@@ -17,7 +17,7 @@ from creature_lab.robots.checkup import Checkup
 from creature_lab.robots.types import RobotRun
 
 #: Run folders in the order they are listed: the walk, shoves, then bad conditions.
-_ORDER = ("baseline", "shove", "grip", "battery", "payload")
+_ORDER = ("baseline", "shove", "grip", "battery", "payload", "whatif")
 
 
 def _run_id(folder: Path) -> str:
@@ -38,8 +38,11 @@ class RunEntry:
     analysis: RunAnalysis
     scenario: dict
     mtime: float
-    #: The same test run with the robot's other policy (same shove, floor, battery, load).
+    #: The same test run with the robot's other policy (same shove, floor, battery, load). For a
+    #: "what if" run it is the run it was made from, so the two can be shown together.
     pair: str | None = None
+    #: For a "what if" run: what was changed (``label``, ``short``, ``change``, ``from``).
+    what_if: dict | None = None
 
     def card(self) -> dict:
         info = robot_info(self.robot)
@@ -59,6 +62,8 @@ class RunEntry:
             "distance": round(a.distance_m, 2),
             "pushN": self.scenario.get("push_n", 0.0),
             "pair": self.pair,
+            "whatIf": self.what_if["label"] if self.what_if else None,
+            "whatIfShort": self.what_if["short"] if self.what_if else None,
         }
 
 
@@ -88,11 +93,20 @@ def _pair_key(entry: RunEntry) -> tuple:
 
 
 def _link_pairs(entries: list[RunEntry]) -> None:
-    """Point each run at its twin under the other policy, so the app can show them together."""
+    """Point each run at its twin under the other policy, so the app can show them together.
+
+    A "what if" run points at the run it was made from instead.
+    """
     groups: dict[tuple, list[RunEntry]] = {}
     for entry in entries:
-        groups.setdefault(_pair_key(entry), []).append(entry)
+        if entry.what_if is None:
+            groups.setdefault(_pair_key(entry), []).append(entry)
+    by_folder = {(entry.policy, entry.folder.name): entry for entry in entries}
     for entry in entries:
+        if entry.what_if is not None:
+            source = by_folder.get((entry.policy, str(entry.what_if.get("from"))))
+            entry.pair = source.id if source else None
+            continue
         twins = [e for e in groups[_pair_key(entry)] if e.policy != entry.policy]
         entry.pair = twins[0].id if len(twins) == 1 else None
 
@@ -151,6 +165,7 @@ class Library:
             analysis=self._analysis_cache[key],
             scenario=scenario,
             mtime=stamp,
+            what_if=(meta.get("provenance") or {}).get("what_if"),
         )
         self._runs[entry.id] = entry
         return entry

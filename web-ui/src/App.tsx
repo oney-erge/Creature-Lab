@@ -6,7 +6,7 @@ import { LicenseDialog } from "./components/LicenseDialog";
 import { Library } from "./components/Library";
 import { Stage, robotSource } from "./components/Stage";
 import { Timeline } from "./components/Timeline";
-import { featuredRun } from "./format";
+import { featuredRun, quickestStart, roughDuration } from "./format";
 import { Playback } from "./playback";
 import { prefersReducedMotion } from "./prefs";
 import { hashFor, parseHash } from "./url";
@@ -69,8 +69,14 @@ function Hero({
               the license first.
             </p>
             <button type="button" className="primary big" disabled={busy} onClick={onDownload}>
-              Download {robot.title}
+              Download and check up
             </button>
+            {robot.firstRunSeconds > 0 && (
+              <p className="muted small">
+                The first time takes {roughDuration(robot.firstRunSeconds)} on a laptop; the physics
+                runs on your CPU. You can leave this tab open.
+              </p>
+            )}
           </>
         ) : (
           <>
@@ -102,14 +108,23 @@ function Hero({
           src={api.robotThumbnail(robot.key)}
           alt={`${robot.title} standing in the studio (simulation)`}
         />
+      ) : robot.introClip && !prefersReducedMotion() ? (
+        <figure className="hero-clip">
+          <img
+            className="hero-photo"
+            src={robot.introClip}
+            alt={`A recorded check-up of the ${robot.title}: a shove, shown in slow motion (simulation)`}
+          />
+          <figcaption className="muted small">Simulation. {robot.credit}</figcaption>
+        </figure>
       ) : (
-      <svg className="hero-art" viewBox="0 0 220 220" aria-hidden="true">
-        <ellipse cx="110" cy="196" rx="70" ry="9" fill="rgba(0,0,0,.35)" />
-        <rect x="62" y="70" width="96" height="58" rx="22" fill="none" stroke="currentColor" strokeWidth="5" />
-        <path d="M84 128 74 182M136 128l10 54M110 70V34" stroke="currentColor" strokeWidth="5" strokeLinecap="round" fill="none" />
-        <circle cx="90" cy="98" r="7" fill="currentColor" />
-        <circle cx="130" cy="98" r="7" fill="currentColor" />
-      </svg>
+        <svg className="hero-art" viewBox="0 0 220 220" aria-hidden="true">
+          <ellipse cx="110" cy="196" rx="70" ry="9" fill="rgba(0,0,0,.35)" />
+          <rect x="62" y="70" width="96" height="58" rx="22" fill="none" stroke="currentColor" strokeWidth="5" />
+          <path d="M84 128 74 182M136 128l10 54M110 70V34" stroke="currentColor" strokeWidth="5" strokeLinecap="round" fill="none" />
+          <circle cx="90" cy="98" r="7" fill="currentColor" />
+          <circle cx="130" cy="98" r="7" fill="currentColor" />
+        </svg>
       )}
     </div>
   );
@@ -128,6 +143,9 @@ export default function App() {
   const [licenseFor, setLicenseFor] = useState<RobotInfo | null>(null);
   const [banner, setBanner] = useState<string | null>(null);
   const [buildNote, setBuildNote] = useState<string | null>(null);
+  // The change being run for a "what if", and the run to open side by side once it has loaded.
+  const [asking, setAsking] = useState<string | null>(null);
+  const wantCompare = useRef<string | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const [canRetry, setCanRetry] = useState(false);
@@ -193,7 +211,8 @@ export default function App() {
         // A link or a reload names a robot and a run; otherwise open the first robot with results.
         const asked = parseHash(window.location.hash);
         const wanted = list.find((r) => r.key === asked.robot);
-        const first = wanted ?? list.find((r) => r.hasResults) ?? list.find((r) => r.installed) ?? list[0];
+        const first =
+          wanted ?? list.find((r) => r.hasResults) ?? list.find((r) => r.installed) ?? quickestStart(list);
         if (first) {
           await openRobot(first.key, list, wanted ? asked.run : null);
           setCompare(!!wanted && asked.compare);
@@ -254,6 +273,10 @@ export default function App() {
         if (cancelled) return;
         setDetail(d);
         setPolicyKey(d.policy);
+        if (wantCompare.current === d.id) {
+          wantCompare.current = null;
+          setCompare(true);
+        }
       })
       .catch((e) => !cancelled && setBanner(errorText(e)));
     return () => {
@@ -284,33 +307,44 @@ export default function App() {
   }, [compare, twin?.id, detail]);
 
   const track = useCallback(
-    async (start: () => Promise<Job>, then: (finished: Job) => Promise<void>) => {
-      if (jobRunning.current) return;
+    async (start: () => Promise<Job>, then: (finished: Job) => Promise<void>): Promise<boolean> => {
+      if (jobRunning.current) return false;
       jobRunning.current = true;
       setBanner(null);
+      let succeeded = false;
       try {
         const finished = await follow(await start(), setJob);
-        if (finished.state === "failed") setBanner(finished.error ?? "The job failed.");
-        else await then(finished);
+        if (finished.state === "failed") {
+          setBanner(finished.error ?? "The job failed.");
+        } else {
+          await then(finished);
+          succeeded = true;
+        }
       } catch (e) {
         setBanner(errorText(e));
       } finally {
         jobRunning.current = false;
         setTimeout(() => setJob((j) => (j && j.state !== "running" ? null : j)), 2500);
       }
+      return succeeded;
     },
     [],
   );
 
+  // The first run is one click: download, then straight into the check-up, so a robot is shoved
+  // and moving as soon as it can be.
   const download = (target: RobotInfo) => {
     setLicenseFor(null);
-    void track(
-      () => api.download(target.key),
-      async () => {
-        const list = await refresh();
-        await openRobot(target.key, list);
-      },
-    );
+    void (async () => {
+      const downloaded = await track(
+        () => api.download(target.key),
+        async () => {
+          const list = await refresh();
+          await openRobot(target.key, list);
+        },
+      );
+      if (downloaded) checkup(target);
+    })();
   };
 
   const checkup = (target: RobotInfo) =>
@@ -326,6 +360,25 @@ export default function App() {
         await openRobot(target.key, list);
       },
     );
+
+  // "What if…": run the same test with one thing changed, then show it next to the original.
+  const askWhatIf = async (key: string) => {
+    if (!detail || !robotKey) return;
+    setAsking(key);
+    setBanner(null);
+    try {
+      const made = await api.whatIf(detail.id, key);
+      setRuns(await api.runs(robotKey));
+      userNav.current = true;
+      wantCompare.current = made.id;
+      setRunId(made.id);
+      showPlayer();
+    } catch (e) {
+      setBanner(errorText(e));
+    } finally {
+      setAsking(null);
+    }
+  };
 
   const showNewCheckup = async () => {
     const key = ready;
@@ -388,7 +441,9 @@ export default function App() {
   // Side by side: the walk-only policy (before) on the left, the one that gets up (after) on the right.
   const getsUp = (policy: string) => !!robot?.policies.find((p) => p.key === policy)?.getsUp;
   const pairShown = compare && !!detail && !!other;
-  const mirrored = pairShown && getsUp(detail.policy) && !getsUp(other.policy);
+  // The original goes on the left of its "what if"; of two policies, the walk-only one goes left.
+  const sameRobot = pairShown && detail.policy === other.policy;
+  const mirrored = pairShown && (sameRobot ? !!detail.whatIf && !other.whatIf : getsUp(detail.policy) && !getsUp(other.policy));
 
   return (
     <div className="app">
@@ -545,6 +600,8 @@ export default function App() {
             twin={twin}
             compare={pairShown}
             onCompare={setCompareOn}
+            onWhatIf={(key) => void askWhatIf(key)}
+            asking={asking}
           />
         )}
       </div>
@@ -563,7 +620,12 @@ export default function App() {
       )}
 
       {licenseFor && (
-        <LicenseDialog robot={licenseFor} onAccept={() => download(licenseFor)} onCancel={() => setLicenseFor(null)} />
+        <LicenseDialog
+          robot={licenseFor}
+          action="Download and run the check-up"
+          onAccept={() => download(licenseFor)}
+          onCancel={() => setLicenseFor(null)}
+        />
       )}
     </div>
   );

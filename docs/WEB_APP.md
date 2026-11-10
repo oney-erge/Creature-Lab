@@ -16,7 +16,8 @@ fell, and run a fresh check-up, all in one tab.
 uv run creature-lab app           # after `uv sync --inexact --extra web --extra robots`
 ```
 
-The launcher adds the `web` and `robots` extras by itself the first time. The app opens at
+A bare `creature-lab` opens the app too. The launcher installs the `viz`, `web` and `robots` extras
+by itself the first time (prebuilt packages only; no compiler, no PyBullet). The app opens at
 `http://localhost:8080` (the next free port if that one is busy). It reads and writes check-up
 folders under `outputs/checkup`; pass `--checkups DIR` to use another one.
 
@@ -25,9 +26,17 @@ build editor.
 
 ## What you can do
 
-- **Choose a robot.** Microduck and the Unitree G1 are the first choices. A robot that is not
-  downloaded yet shows its license first. Nothing is downloaded until you tick that you have
-  read it.
+- **Choose a robot.** Microduck and the Unitree G1 are the first choices. On a clean machine the
+  app opens on the one whose first check-up is quickest (the G1, about 45 s), with a looping clip
+  of its shove. **Download and check up** shows the license first; nothing is downloaded until you
+  tick that you have read it. After the download the check-up starts by itself, and the results
+  open when it ends.
+- **Ask "what if…".** Under a run, one click changes one thing (the shove from the other side, a
+  harder or gentler shove, a very slippery floor, half speed or faster walking, a 6 kg load on the
+  G1, a weak battery on the Microduck) and runs the robot again, about a second or two on a laptop.
+  The new run opens next to the original with a sentence saying what the change did. It is saved
+  with the check-up under **What if**, and asking again reuses it. The browser only picks a change
+  from a fixed menu; it never sends numbers.
 - **Watch a run.** The robot is drawn from its real meshes with a follow camera. The first run
   shown is a middle-strength shove that the robot got up from. Playback slows to 0.3x through
   the shove and the fall, as in the films; you can switch that off, pause, scrub, or change speed

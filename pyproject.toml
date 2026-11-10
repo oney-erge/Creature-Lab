@@ -1,7 +1,7 @@
 [project]
 name = "creature-lab"
 version = "0.2.0"
-description = "Failure-first local workbench for designing, diagnosing, and reproducing modular robot experiments."
+description = "Shove a real robot, see exactly why it fell, and prove the fix: a browser app and CLI that check up published robot policies in MuJoCo, plus a workbench for designing modular robots."
 readme = "README.md"
 requires-python = ">=3.11"
 license = { file = "LICENSE" }
@@ -9,6 +9,10 @@ keywords = [
     "robotics",
     "simulation",
     "robot-design",
+    "humanoid",
+    "legged-locomotion",
+    "push-recovery",
+    "policy-evaluation",
     "morphology",
     "pybullet",
     "mujoco",
@@ -67,6 +71,11 @@ web = [
     "fastapi>=0.115",
     "uvicorn>=0.30",
 ]
+app = [
+    # `pip install "creature-lab[app]"`: the browser app, the real robots and the classic
+    # editor it opens. Prebuilt wheels everywhere (no compiler); PyBullet stays optional (`sim`).
+    "creature-lab[viz,web,robots]",
+]
 mujoco = [
     "mujoco>=3.0",  # MuJoCo backend + MJCF export round-trip (`run --backend mujoco`)
 ]
@@ -109,6 +118,11 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["creature_lab"]
+
+[tool.hatch.build.targets.sdist]
+# The 6 MB loop GIFs and the MP4 films live in the repository for the README; the source
+# distribution does not need them.
+exclude = ["docs/assets/*.gif", "docs/assets/*.mp4"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

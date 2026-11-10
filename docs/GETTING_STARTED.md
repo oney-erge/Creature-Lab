@@ -15,12 +15,13 @@ Use the launcher from the repository root:
 ./run.sh       # Linux
 ```
 
-The first run installs what it needs; later runs reuse the current environment.
-If setup fails, inspect `.setup/install.log` in the checkout.
-PyBullet 3.2.7 has no Windows or macOS PyPI wheels. A first install there builds
-the 80 MB source distribution and requires a working C++ compiler; it can take
-several minutes. Linux x86-64 has a Python 3.11 wheel, while other Python and
-platform combinations may also need a source build.
+The first run installs what it needs (about 300 MB of prebuilt packages, no compiler, about half
+a minute on a fast connection); later runs reuse the current environment. If setup fails, the
+launcher explains the usual causes (a folder path too long for Windows, no network, a full disk)
+and keeps a log in `.setup/install.log`.
+PyBullet, the optional `sim` extra, is not installed by default: its current release has no Windows
+or macOS wheels, so there it is built from an 80 MB source distribution and needs a C++ compiler.
+The app, the classic editor and `creature-lab quick` run on MuJoCo without it.
 For direct control after installation, use:
 
 ```bash
@@ -77,7 +78,9 @@ uv sync --inexact --extra sim --extra viz
 uv run creature-lab demo --open-browser
 ```
 
-The `sim` extra installs PyBullet. The `viz` extra installs the browser viewer. The demo runs the
+The `sim` extra installs PyBullet (built from source outside Linux with Python 3.11), which the
+demo viewer uses; the launcher offers to install it for `--mode demo`. The `viz` extra installs the
+browser viewer. The demo runs the
 built-in quadruped on the built-in `crawl_forward` task with no setup step. Add `--no-hold` if
 you want the command to save a trace and exit after one pass.
 
@@ -179,5 +182,6 @@ Common fixes:
 
 - Browser did not open: copy the printed `http://localhost:<port>` URL into your browser.
 - Port is busy: rerun with `python scripts/start.py --port 8090`.
-- Dependencies failed to install: run `uv sync --inexact --extra sim --extra viz --extra web --extra robots` and retry.
+- Dependencies failed to install: read the "What to do" line the launcher prints, then run
+  `uv sync --inexact --extra viz --extra web --extra robots` and retry.
 - You only want a quick verification run: use `python scripts/start.py --once --no-open-browser`.

@@ -1,9 +1,12 @@
 """Tests for the command-line interface."""
 
+import importlib.util
 import json
+import sys
 from pathlib import Path
 
 import pytest
+import typer
 from typer.testing import CliRunner
 
 from creature_lab.cli import app
@@ -20,18 +23,79 @@ def test_version():
     assert "creature-lab" in result.stdout
 
 
-def test_bare_invocation_runs_a_quick_episode(tmp_path, monkeypatch):
-    """No subcommand should give an instant, terminal-only result (no browser/args)."""
-    pytest.importorskip("pybullet")
-    monkeypatch.chdir(tmp_path)
+def test_bare_invocation_opens_the_browser_app(monkeypatch):
+    from creature_lab import cli
+
+    served = []
+    monkeypatch.setattr(cli, "_app_is_installed", lambda: True)
+    monkeypatch.setattr(cli, "_serve_app", lambda *args: served.append(args))
+    monkeypatch.delenv("CREATURE_LAB_HOST", raising=False)
 
     result = runner.invoke(app, [])
+
+    assert result.exit_code == 0, result.stdout
+    assert served == [(8080, "127.0.0.1", True, Path("outputs") / "checkup")]
+
+
+def test_bare_invocation_without_the_app_says_how_to_install_it(monkeypatch):
+    from creature_lab import cli
+
+    monkeypatch.setattr(cli, "_app_is_installed", lambda: False)
+    monkeypatch.setattr(cli, "_serve_app", lambda *args: pytest.fail("must not serve"))
+
+    result = runner.invoke(app, [])
+
+    assert result.exit_code == 2
+    assert "creature-lab[app]" in result.stdout
+    assert "--extra web" in result.stdout
+    assert "creature-lab zoo run quadruped" in result.stdout
+
+
+def test_quick_runs_a_terminal_episode(tmp_path, monkeypatch):
+    """`quick` gives an instant, terminal-only result (no browser, no arguments)."""
+    if importlib.util.find_spec("pybullet") is None:
+        pytest.importorskip("mujoco")
+    monkeypatch.chdir(tmp_path)
+
+    result = runner.invoke(app, ["quick"])
 
     assert result.exit_code == 0, result.stdout
     assert "score=" in result.stdout
     assert "quadruped" in result.stdout
     assert "creature-lab build" in result.stdout
     assert (tmp_path / "runs").exists()
+
+
+def test_the_engine_falls_back_to_the_one_that_is_installed(monkeypatch):
+    from creature_lab import cli
+
+    installed = {"mujoco"}
+    monkeypatch.setattr(
+        cli.importlib.util, "find_spec", lambda name: object() if name in installed else None
+    )
+    assert cli._installed_engine("pybullet") == "mujoco"
+    assert cli._installed_engine("mujoco") == "mujoco"
+    installed.update({"pybullet"})
+    assert cli._installed_engine("pybullet") == "pybullet"
+    installed.clear()
+    assert cli._installed_engine("pybullet") == "pybullet"  # nothing to fall back to
+
+
+def test_missing_pybullet_points_to_mujoco_and_the_compiler_caveat(monkeypatch):
+    from creature_lab import cli
+
+    monkeypatch.setitem(sys.modules, "creature_lab.backends.pybullet_backend", None)
+    monkeypatch.setattr(
+        cli.importlib.util, "find_spec", lambda name: object() if name == "mujoco" else None
+    )
+    messages = []
+    monkeypatch.setattr(cli.console, "print", lambda text, *a, **k: messages.append(str(text)))
+
+    with pytest.raises(typer.Exit):
+        cli._require_backend("pybullet")
+
+    text = " ".join(messages)
+    assert "--backend mujoco" in text and "C++ compiler" in text
 
 
 def test_bare_invocation_does_not_swallow_subcommands():

@@ -80,6 +80,27 @@ def test_health_names_the_service(client):
     assert client.get("/api/health").json()["service"] == "creature-lab"
 
 
+def test_each_robot_says_how_long_a_first_check_up_takes(client):
+    robots = {r["key"]: r for r in client.get("/api/robots").json()["robots"]}
+    # The app opens on the quickest one, so every robot needs a time and the G1 must be quickest.
+    assert all(r["firstRunSeconds"] > 0 for r in robots.values())
+    assert robots["unitree_g1"]["firstRunSeconds"] < robots["microduck"]["firstRunSeconds"]
+
+
+def test_a_bundled_intro_clip_is_offered_only_when_it_exists(results, installed, tmp_path):
+    static = tmp_path / "ui"
+    (static / "clips").mkdir(parents=True)
+    (static / "clips" / "unitree_g1.webp").write_bytes(b"RIFF....WEBP")
+    client = _client(create_app(results, static_dir=static), headers=HEADERS)
+
+    robots = {r["key"]: r for r in client.get("/api/robots").json()["robots"]}
+
+    assert robots["unitree_g1"]["introClip"] == "/clips/unitree_g1.webp"
+    assert robots["microduck"]["introClip"] is None  # CC BY-NC-SA media is never bundled
+    # And the clip really is served from the same place as the app.
+    assert client.get("/clips/unitree_g1.webp").status_code == 200
+
+
 def test_robots_lists_both_robots_with_the_newest_check_up(client):
     data = client.get("/api/robots").json()
     keys = [r["key"] for r in data["robots"]]
@@ -494,7 +515,7 @@ def test_a_builder_that_exits_at_once_explains_the_missing_extra(results, instal
         create_app(results, static_dir=results / "no-ui", builder=builder), headers=HEADERS
     )
     response = client.post("/api/builder", json={"preset": "worm"})
-    assert response.status_code == 409 and "extra sim" in response.json()["detail"]
+    assert response.status_code == 409 and "extra viz" in response.json()["detail"]
 
 
 # ---- policy twins and wording ---------------------------------------------------------------
@@ -519,3 +540,153 @@ def test_a_walk_that_went_nowhere_is_not_called_a_walk():
     assert _outcome_text(walked(1.7)) == "Walked 1.7 m"
     assert _outcome_text(walked(-0.2)) == "Stayed up, barely moved"
     assert _outcome_text(walked(0.1)) == "Stayed up, barely moved"
+
+
+# ---- what if --------------------------------------------------------------------------------
+
+
+def _microduck_run(client, policy="velstand", title="3 N shove"):
+    runs = client.get("/api/robots/microduck/runs").json()["runs"]
+    return next(r for r in runs if r["title"] == title and r["policy"] == policy)
+
+
+@pytest.fixture
+def simulated(monkeypatch):
+    """Stand in for the simulator: record each scenario asked for and return a synthetic run."""
+    from robot_helpers import synthetic_run
+
+    import creature_lab.robots.api as api_module
+
+    asked = []
+
+    def fake(scenario, save_to=None):
+        asked.append(scenario)
+        # The same walk, but it falls and stays down: so the change is visible in the result.
+        return synthetic_run(
+            robot=scenario.robot,
+            policy=scenario.policy,
+            qpos_width=8,
+            fall_at=4.6,
+            push_n=scenario.push_n,
+            pushed_outside=True,
+            title=scenario.title,
+        )
+
+    monkeypatch.setattr(api_module, "run_scenario", fake)
+    return asked
+
+
+def test_a_shove_run_offers_changes_that_make_sense_for_it(client):
+    run = _microduck_run(client)
+    detail = client.get(f"/api/runs/{run['id']}").json()
+
+    keys = [option["key"] for option in detail["whatIfs"]]
+
+    assert keys == ["other_side", "harder", "gentler", "ice", "slower", "faster", "weak_battery"]
+    assert {o["label"] for o in detail["whatIfs"]} >= {
+        "Shoved from the other side",
+        "A harder shove",
+    }
+
+
+def test_a_plain_walk_offers_no_shove_changes(client):
+    baseline = client.get("/api/robots/microduck/runs").json()["runs"][0]
+
+    keys = [o["key"] for o in client.get(f"/api/runs/{baseline['id']}").json()["whatIfs"]]
+
+    assert keys == ["ice", "slower", "faster", "weak_battery"]
+
+
+def test_asking_what_if_runs_the_changed_scenario_and_pairs_it_with_the_original(client, simulated):
+    original = _microduck_run(client)
+
+    response = client.post(f"/api/runs/{original['id']}/whatif", json={"change": "other_side"})
+
+    assert response.status_code == 200, response.text
+    made = response.json()["run"]
+    assert made["kind"] == "whatif" and made["whatIf"] == "Shoved from the other side"
+    assert made["pair"] == original["id"]  # shown together with the run it came from
+    assert made["policy"] == "velstand"
+    (scenario,) = simulated
+    assert scenario.push_side == "right" and scenario.push_n == 3.0  # only the side changed
+    assert scenario.title == "3 N shove, shoved from the other side"
+    listed = client.get("/api/robots/microduck/runs").json()["runs"]
+    assert made["id"] in [r["id"] for r in listed]
+    # The original is untouched and still points at its twin under the other policy.
+    assert next(r for r in listed if r["id"] == original["id"])["pair"] == original["pair"]
+
+
+def test_asking_twice_reuses_the_saved_run(client, simulated):
+    original = _microduck_run(client)
+    path = f"/api/runs/{original['id']}/whatif"
+
+    first = client.post(path, json={"change": "ice"}).json()["run"]
+    second = client.post(path, json={"change": "ice"}).json()["run"]
+
+    assert first["id"] == second["id"] and len(simulated) == 1
+    assert simulated[0].grip == 0.15
+
+
+def test_what_if_runs_are_grouped_last_and_offer_nothing_further(client, simulated):
+    original = _microduck_run(client)
+    made = client.post(f"/api/runs/{original['id']}/whatif", json={"change": "harder"}).json()[
+        "run"
+    ]
+
+    kinds = [r["kind"] for r in client.get("/api/robots/microduck/runs").json()["runs"]]
+    assert kinds[-1] == "whatif"
+    assert client.get(f"/api/runs/{made['id']}").json()["whatIfs"] == []
+    again = client.post(f"/api/runs/{made['id']}/whatif", json={"change": "ice"})
+    assert again.status_code == 409
+    assert simulated[0].push_n == 4.5  # 3 N shoved 50% harder
+    # The title must not keep saying "3 N shove" for a 4.5 N shove.
+    assert simulated[0].title == "4.5 N shove, harder than the 3 N original"
+
+
+def test_what_if_refuses_changes_that_do_not_apply_and_unknown_runs(client, simulated):
+    baseline = client.get("/api/robots/microduck/runs").json()["runs"][0]
+
+    no_shove = client.post(f"/api/runs/{baseline['id']}/whatif", json={"change": "other_side"})
+    unknown = client.post("/api/runs/nope/whatif", json={"change": "ice"})
+    made_up = client.post(f"/api/runs/{baseline['id']}/whatif", json={"change": "teleport"})
+
+    assert no_shove.status_code == 422 and "does not apply" in no_shove.json()["detail"]
+    assert unknown.status_code == 404
+    assert made_up.status_code == 422
+    assert simulated == []
+
+
+def test_what_if_needs_the_robot_and_the_custom_header(results, installed, monkeypatch, simulated):
+    app = create_app(results, static_dir=results / "no-ui")
+    plain = _client(app)  # no X-Creature-Lab header
+    guarded = _client(app, headers=HEADERS)
+    run = _microduck_run(guarded)
+
+    assert plain.post(f"/api/runs/{run['id']}/whatif", json={"change": "ice"}).status_code == 403
+    monkeypatch.setattr(server_module, "is_installed", lambda key: False)
+    offered = guarded.get(f"/api/runs/{run['id']}").json()["whatIfs"]
+    assert offered == []  # nothing to offer without the robot's files
+    missing = guarded.post(f"/api/runs/{run['id']}/whatif", json={"change": "ice"})
+    assert missing.status_code == 409
+
+
+def test_the_changes_for_each_robot_use_what_its_check_up_tests():
+    from creature_lab.web.whatif import options
+
+    base = {
+        "push_n": 0.0,
+        "push_side": "left",
+        "grip": 1.0,
+        "command": 0.5,
+        "payload_kg": 0.0,
+        "battery_v": 7.4,
+    }
+    g1 = {o.key: o for o in options(base, "unitree_g1")}
+    duck = {o.key: o for o in options(base, "microduck")}
+
+    assert g1["load"].change == {"payload_kg": 6} and "weak_battery" not in g1
+    assert duck["weak_battery"].change == {"battery_v": 6.0} and "load" not in duck
+    slippery = {o.key for o in options({**base, "grip": 0.15, "command": 1.0}, "microduck")}
+    assert "ice" not in slippery and "faster" not in slippery  # already as bad / as fast as it goes
+    weak = {o.key for o in options({**base, "battery_v": 6.0}, "microduck")}
+    assert "weak_battery" not in weak

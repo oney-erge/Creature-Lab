@@ -30,6 +30,7 @@ Dockerfile    text eol=lf
 # Never touched: conversion corrupts these.
 *.png         binary
 *.gif         binary
+*.webp        binary
 *.jpg         binary
 *.ico         binary
 *.woff        binary
@@ -38,3 +39,13 @@ Dockerfile    text eol=lf
 *.msi         binary
 *.exe         binary
 *.pdf         binary
+
+# The front end is built into a committed bundle that CI rebuilds on Linux and compares byte for
+# byte. Its sources must be LF on every machine: Vite copies index.html's line endings, so a
+# Windows checkout with CRLF produced a bundle a few bytes different from CI's.
+web-ui/index.html  text eol=lf
+web-ui/src/**      text eol=lf
+
+# The built bundle is generated: never convert its line endings, so a Windows checkout, a Linux
+# checkout and CI's rebuild are the same bytes.
+creature_lab/web/static/**  -text

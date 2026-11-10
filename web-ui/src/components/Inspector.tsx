@@ -1,4 +1,4 @@
-import { compareSentence, dotLabel, dotsFor, limitText, outcomeTone, severity, totals } from "../format";
+import { compareSentence, did, dotLabel, dotsFor, limitText, outcomeTone, severity, totals, whatIfSentence } from "../format";
 import type { CheckupSummary, PolicySummary, RobotInfo, RunCard, RunDetail } from "../types";
 
 interface Props {
@@ -12,10 +12,30 @@ interface Props {
   twin: RunCard | null;
   compare: boolean;
   onCompare: (on: boolean) => void;
+  /** Ask for the same run with one thing changed (a key from `run.whatIfs`). */
+  onWhatIf: (key: string) => void;
+  /** The change being run right now, if any. */
+  asking: string | null;
 }
+
+/** A pair is a "what if" when both runs are the same policy: the same robot with one change. */
+const isWhatIf = (a: RunCard, b: RunCard) => a.policy === b.policy;
 
 /** "Can it be fixed?": the same shove under the other policy, one click away. */
 function FixPanel({ run, twin, onCompare }: { run: RunDetail; twin: RunCard; onCompare: (on: boolean) => void }) {
+  if (isWhatIf(run, twin)) {
+    return (
+      <section className="panel fix" data-testid="fix">
+        <h2 className="eyebrow">Against the original</h2>
+        <p className="body">
+          The original run {did(twin)}.
+        </p>
+        <button type="button" className="primary" onClick={() => onCompare(true)}>
+          See both side by side
+        </button>
+      </section>
+    );
+  }
   const better = severity(twin.outcome) < severity(run.outcome);
   return (
     <section className="panel fix" data-testid="fix">
@@ -35,21 +55,57 @@ function FixPanel({ run, twin, onCompare }: { run: RunDetail; twin: RunCard; onC
 
 /** The result of the comparison, in words, with the way back. */
 function CompareVerdict({ run, twin, onCompare }: { run: RunDetail; twin: RunCard; onCompare: (on: boolean) => void }) {
+  const same = isWhatIf(run, twin);
+  const [original, changed] = run.whatIf ? [twin, run] : [run, twin];
   return (
     <section className="panel" data-testid="verdict">
-      <h2 className="eyebrow">Same test, two policies</h2>
+      <h2 className="eyebrow">{same ? "Same run, one change" : "Same test, two policies"}</h2>
       <ul className="versus">
-        {[run, twin].map((r) => (
+        {(same ? [original, changed] : [run, twin]).map((r) => (
           <li key={r.id}>
-            <span className="versus-name">{r.policyTitle}</span>
+            <span className="versus-name">{same ? (r.whatIf ?? "The original run") : r.policyTitle}</span>
             <span className={`chip ${outcomeTone(r.outcome)}`}>{r.outcomeText}</span>
           </li>
         ))}
       </ul>
-      <p className="verdict tone-good">{compareSentence(run, twin)}</p>
+      <p className="verdict tone-good">{same ? whatIfSentence(original, changed) : compareSentence(run, twin)}</p>
       <button type="button" className="ghost" onClick={() => onCompare(false)}>
         Back to one view
       </button>
+    </section>
+  );
+}
+
+/** "What if…": the same run with one thing changed, one click each. */
+function WhatIfPanel({
+  run,
+  asking,
+  onWhatIf,
+}: {
+  run: RunDetail;
+  asking: string | null;
+  onWhatIf: (key: string) => void;
+}) {
+  return (
+    <section className="panel" data-testid="whatif">
+      <h2 className="eyebrow">What if…</h2>
+      <p className="body">
+        Change one thing and run it again. It takes a second or two and is saved with this check-up.
+      </p>
+      <div className="whatifs">
+        {run.whatIfs.map((option) => (
+          <button
+            key={option.key}
+            type="button"
+            className="ghost"
+            disabled={asking !== null}
+            aria-busy={asking === option.key}
+            onClick={() => onWhatIf(option.key)}
+          >
+            {asking === option.key ? "Running…" : option.label}
+          </button>
+        ))}
+      </div>
     </section>
   );
 }
@@ -129,7 +185,7 @@ function ShoveMatrix({ policy, onRun }: { policy: PolicySummary; onRun: (id: str
   );
 }
 
-export function Inspector({ robot, checkup, policyKey, onPolicy, run, onRun, twin, compare, onCompare }: Props) {
+export function Inspector({ robot, checkup, policyKey, onPolicy, run, onRun, twin, compare, onCompare, onWhatIf, asking }: Props) {
   const policy = checkup?.policies.find((p) => p.policy === policyKey) ?? checkup?.policies[0] ?? null;
   return (
     <aside className="side-col" aria-label="Inspector">
@@ -169,6 +225,8 @@ export function Inspector({ robot, checkup, policyKey, onPolicy, run, onRun, twi
       )}
 
       {run && twin && !compare && <FixPanel run={run} twin={twin} onCompare={onCompare} />}
+
+      {run && run.whatIfs.length > 0 && <WhatIfPanel run={run} asking={asking} onWhatIf={onWhatIf} />}
 
       {policy && policy.shoves.length > 0 && <ShoveMatrix policy={policy} onRun={onRun} />}
 

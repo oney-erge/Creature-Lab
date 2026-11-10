@@ -76,7 +76,20 @@ def _extra_check(name: str, module: str, hint: str) -> DoctorCheck:
 
 
 def _sim_check() -> DoctorCheck:
-    return _extra_check("sim (pybullet)", "pybullet", "uv sync --extra sim")
+    if _installed("pybullet"):
+        return DoctorCheck("sim (pybullet)", "ok", "pybullet importable")
+    if _installed("mujoco"):
+        # MuJoCo ships as a wheel on every platform, so a launcher install has it already;
+        # PyBullet is built from source outside Linux/Python 3.11 and is left to the people
+        # who want it.
+        return DoctorCheck(
+            "sim (pybullet)",
+            "info",
+            "not installed (optional): the app and the editor use MuJoCo. "
+            "`uv sync --inexact --extra sim` adds it; outside Linux with Python 3.11 it is built "
+            "from source and needs a C++ compiler",
+        )
+    return DoctorCheck("sim (pybullet)", "missing", "not installed — `uv sync --extra sim`")
 
 
 def _mujoco_check() -> DoctorCheck:
@@ -144,20 +157,27 @@ def _examples_check() -> DoctorCheck:
     task = default_task()
     validate_episode_inputs(creature, task)  # raises only on hard errors (none expected)
 
-    if not _installed("pybullet"):
+    if _installed("pybullet"):
+        from creature_lab.backends.pybullet_backend import PyBulletBackend
+
+        backend = PyBulletBackend()
+        engine = "pybullet"
+    elif _installed("mujoco"):
+        from creature_lab.backends.mujoco_backend import MuJoCoBackend
+
+        backend = MuJoCoBackend()
+        engine = "mujoco"
+    else:
         return DoctorCheck(
             "examples run", "ok", "built-in creature/task validate (install sim to simulate)"
         )
 
-    from creature_lab.backends.pybullet_backend import PyBulletBackend
-
-    backend = PyBulletBackend()
     try:
         backend.build(creature, task)
         backend.step(task.timestep)
     finally:
         backend.close()
-    return DoctorCheck("examples run", "ok", "built-in creature simulates one step")
+    return DoctorCheck("examples run", "ok", f"built-in creature simulates one step ({engine})")
 
 
 def summarize_episode(
