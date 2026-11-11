@@ -18,6 +18,8 @@ uv run creature-lab robots checkup microduck
 
 - `app` opens the [browser app](WEB_APP.md): real robots, 3D replays and check-ups (`web` and
   `robots` extras). `--checkups DIR` chooses the results folder, `--port` the port.
+  `--export-static DIR` instead writes the app and those check-ups as plain files for a web site
+  (a recorded demo that needs no Python; see [Host a recorded demo](WEB_APP.md)).
 - `demo` runs a built-in creature in the live browser viewer.
 - `build` opens the browser setup screen for visual creature editing and simulation.
 - `zoo list` distinguishes measured showcases from intentionally difficult challenges.

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { api } from "./api";
+import { STATIC, api } from "./api";
 import { Editor } from "./components/Editor";
 import { Inspector } from "./components/Inspector";
 import { AddRobotDialog } from "./components/AddRobotDialog";
@@ -11,6 +11,12 @@ import { featuredRun, pairName, quickestStart, roughDuration } from "./format";
 import { Playback } from "./playback";
 import { prefersReducedMotion } from "./prefs";
 import { hashFor, parseHash } from "./url";
+
+/** The place in the address bar. An exported copy has no designer, so it always opens robots. */
+function placeFromHash(hash: string) {
+  const place = parseHash(hash);
+  return STATIC && place.view === "build" ? { ...place, view: "robots" as const } : place;
+}
 import type { Job, RobotInfo, RunCard, RunDetail } from "./types";
 
 function errorText(error: unknown): string {
@@ -188,8 +194,8 @@ export default function App() {
   const [compare, setCompare] = useState(false);
   const [other, setOther] = useState<RunDetail | null>(null);
   const [ready, setReady] = useState<string | null>(null);
-  const [view, setView] = useState<"robots" | "build">(() => parseHash(window.location.hash).view);
-  const [buildPreset, setBuildPreset] = useState<string>(() => parseHash(window.location.hash).preset ?? "quadruped");
+  const [view, setView] = useState<"robots" | "build">(() => placeFromHash(window.location.hash).view);
+  const [buildPreset, setBuildPreset] = useState<string>(() => placeFromHash(window.location.hash).preset ?? "quadruped");
   const jobRunning = useRef(false);
   /** Set by anything the person does, so the address bar gets a new entry (the back button). */
   const userNav = useRef(false);
@@ -245,7 +251,7 @@ export default function App() {
       try {
         const list = await refresh();
         // A link or a reload names a robot and a run; otherwise open the first robot with results.
-        const asked = parseHash(window.location.hash);
+        const asked = placeFromHash(window.location.hash);
         const wanted = list.find((r) => r.key === asked.robot);
         const first =
           wanted ?? list.find((r) => r.hasResults) ?? list.find((r) => r.installed) ?? quickestStart(list);
@@ -278,7 +284,7 @@ export default function App() {
   // Back and forward move between what was on screen.
   useEffect(() => {
     const onPop = () => {
-      const place = parseHash(window.location.hash);
+      const place = placeFromHash(window.location.hash);
       setView(place.view);
       if (place.view === "build") {
         if (place.preset) setBuildPreset(place.preset);
@@ -521,14 +527,16 @@ export default function App() {
           >
             Real robots
           </button>
-          <button
-            type="button"
-            className={view === "build" ? "on" : ""}
-            aria-current={view === "build" ? "page" : undefined}
-            onClick={() => openEditor(buildPreset)}
-          >
-            Build your own
-          </button>
+          {!STATIC && (
+            <button
+              type="button"
+              className={view === "build" ? "on" : ""}
+              aria-current={view === "build" ? "page" : undefined}
+              onClick={() => openEditor(buildPreset)}
+            >
+              Build your own
+            </button>
+          )}
         </nav>
         {view === "robots" && (
           <nav aria-label="Breadcrumb" className="crumbs">
@@ -536,12 +544,12 @@ export default function App() {
           </nav>
         )}
         <div className="spacer" />
-        {view === "robots" && robot?.hasResults && (
+        {view === "robots" && !STATIC && robot?.hasResults && (
           <a className="ghost button" href={api.reportUrl(robot.key)} target="_blank" rel="noopener">
             Open report
           </a>
         )}
-        {view === "robots" && (
+        {view === "robots" && !STATIC && (
           <button
             type="button"
             className="primary"
@@ -555,6 +563,18 @@ export default function App() {
           </button>
         )}
       </header>
+
+      {STATIC && (
+        <div className="static-note" role="note" data-testid="static-note">
+          <span>
+            A recorded demo: every shove here was run on a laptop and saved. To shove a robot yourself,
+            run <code>uvx --from "creature-lab[app]" creature-lab</code>.
+          </span>
+          <a href="https://github.com/oney-erge/Creature-Lab" target="_blank" rel="noopener noreferrer">
+            Creature Lab on GitHub
+          </a>
+        </div>
+      )}
 
       {job && !(robot && !hasStage && job.robot === robot.key) && (
         <div className={`jobbar ${job.state}`} role="status" aria-live="polite">
