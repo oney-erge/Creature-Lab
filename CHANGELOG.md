@@ -12,6 +12,11 @@
   the file ([docs/ROBOT_PACKS.md](docs/ROBOT_PACKS.md), example in `examples/robot-pack/`). The
   Unitree G1 written as a pack runs bit for bit like the built-in adapter. Per-robot staging and
   test levels moved from tables in `render.py` and `checkup.py` onto `RobotInfo`.
+- **`robots init FOLDER` drafts `robot.toml`** from a MuJoCo model and its policies: the trunk, mass,
+  height, physics step, actuator kind and sensors from the model, and the joint order, gains,
+  default pose, action scales and observation layout from an ONNX policy's metadata (mjlab and
+  Pollen Robotics write it). Whatever only a person knows is left as `TODO`, and `robots validate`
+  warns until it is filled in. A joint can now have its own `action_scale`.
 - **Add a robot in the app.** Under the robot cards, **Add your own robot** takes a folder, checks
   it (`POST /api/robots/validate`), shows each problem in plain words and adds it (`/api/robots/add`);
   an added robot has a **Your robot** badge and **Remove from the list**

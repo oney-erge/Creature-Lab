@@ -26,6 +26,7 @@ Add `--film` for a 1080p film of the same results (about 5 minutes to encode).
 | `creature-lab robots list` | The robots, their policies, and whether they are downloaded |
 | `creature-lab robots fetch ROBOT` | Download a robot's files, verified against pinned SHA-256 hashes |
 | `creature-lab robots checkup ROBOT` | Run every test, write the HTML report (`--film` for the video) |
+| `creature-lab robots init FOLDER` | Draft `robot.toml` from your model and policy (see [Bring your own robot](ROBOT_PACKS.md)) |
 | `creature-lab robots validate FOLDER` | Check your own robot and policy, then walk it for two seconds |
 | `creature-lab robots add FOLDER` / `remove ROBOT` | Add or forget your own robot (see [Bring your own robot](ROBOT_PACKS.md)) |
 | `creature-lab robots film RESULTS` | Encode the film for an existing results folder |

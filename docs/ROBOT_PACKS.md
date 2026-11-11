@@ -25,6 +25,24 @@ uv run creature-lab robots remove stick-biped             # forgets it; your fil
 Copy the folder, replace the model and the policy with yours, and edit `robot.toml`.
 `validate` lists every problem in plain words; fix them and run it again.
 
+### Start from your own files
+
+Put your MuJoCo model and your policy in a folder and let Creature Lab draft the file:
+
+```bash
+uv run creature-lab robots init my-robot     # writes my-robot/robot.toml
+uv run creature-lab robots validate my-robot
+```
+
+`init` reads what your files already say. From the model: the trunk (the body with the free
+joint), the mass, the standing height, the physics step, whether the actuators are position servos,
+and which sensors it has. From an ONNX policy's metadata (mjlab writes it, and so do Pollen
+Robotics' policies): the joint order, the gains, the default pose, the action scales and the
+observation layout. Anything it cannot know is left as `TODO` (who made the robot, its license,
+the walking speed and stride), and `validate` warns until those are filled in. mjlab rounds the
+numbers in its metadata to three decimals; if you need exact gains or scales, use the training
+config's values.
+
 In the [browser app](WEB_APP.md), **Add your own robot** (under the robot cards) does the same:
 type the folder, press **Check it**, read what it found, then **Add**. An added robot gets a
 **Your robot** badge, runs the same check-up, and **Remove from the list** forgets it again.

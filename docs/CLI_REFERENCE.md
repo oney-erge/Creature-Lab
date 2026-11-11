@@ -29,8 +29,8 @@ uv run creature-lab robots checkup microduck
   report that explains each fall (`robots list`, `robots fetch`, `robots film` and
   `robots loop` are its companions; `robots compare` and `robots card` read saved results to flag
   regressions in CI and to write a README robustness card). See [Robot check-up](ROBOT_CHECKUP.md).
-- `robots validate <folder>`, `robots add <folder>` and `robots remove <robot>` check up your own
-  MuJoCo robot and trained policy: [Bring your own robot](ROBOT_PACKS.md).
+- `robots init <folder>`, `robots validate <folder>`, `robots add <folder>` and `robots remove
+  <robot>` check up your own MuJoCo robot and trained policy: [Bring your own robot](ROBOT_PACKS.md).
 
 ## Launcher Scripts
 
