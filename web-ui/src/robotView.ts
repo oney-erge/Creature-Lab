@@ -11,15 +11,18 @@ import {
   trunkAt,
 } from "./decode";
 import {
+  type TopFace,
   arrowLength,
   framingFor,
+  groundHeight,
   pointInConvexPolygon,
   robotUnit,
   shoveReferenceFor,
+  topFaces,
 } from "./geometry";
 import { frameAt } from "./playback";
 import { isSoftwareGL } from "./prefs";
-import type { SceneDescription } from "./types";
+import type { SceneDescription, TerrainDescription } from "./types";
 
 // MuJoCo, the server and the films all use Z up; so does this scene.
 THREE.Object3D.DEFAULT_UP.set(0, 0, 1);
@@ -67,6 +70,10 @@ export class RobotView {
   private time = 0;
 
   private markers = new THREE.Group();
+  /** Stairs, a ramp, rough ground or stepping stones: one instanced box mesh. */
+  private terrain: THREE.InstancedMesh | null = null;
+  private faces: TopFace[] = [];
+  private floorZ = 0;
   /** The area the feet hold up: a translucent fill with a thick edge, teal or red. */
   private supportFill: THREE.Mesh;
   private supportEdge: THREE.Mesh;
@@ -292,14 +299,73 @@ export class RobotView {
     this.controls.maxDistance = 8 * unit;
   }
 
-  setRun(poses: Poses, overlay: Overlay, fps: number, reframe = true): void {
+  setRun(
+    poses: Poses,
+    overlay: Overlay,
+    fps: number,
+    reframe = true,
+    terrain: TerrainDescription | null = null,
+  ): void {
     this.poses = poses;
     this.overlay = overlay;
     this.fps = fps;
-    this.lastFocus = null;
+    this.setTerrain(terrain);
+    // Same robot: keep the last focus, so following carries the camera (same angle and zoom) to
+    // where this run starts. A new robot is framed afresh around its start.
+    if (reframe) this.lastFocus = null;
     this.dirty = true;
     this.setTime(0);
     if (reframe) this.frameCamera();
+  }
+
+  /** Build the run's ground (or clear it for a flat floor). */
+  private setTerrain(terrain: TerrainDescription | null): void {
+    if (this.terrain) {
+      this.scene.remove(this.terrain);
+      this.terrain.geometry.dispose();
+      (this.terrain.material as THREE.Material).dispose();
+      this.terrain = null;
+    }
+    this.faces = terrain ? topFaces(terrain.boxes) : [];
+    this.floorZ = terrain?.floorZ ?? 0;
+    this.floor.position.z = this.floorZ;
+    this.dirty = true;
+    if (!terrain || terrain.boxes.length === 0) return;
+    const mesh = new THREE.InstancedMesh(
+      new THREE.BoxGeometry(2, 2, 2), // scaled by each box's half sizes
+      new THREE.MeshStandardMaterial({ roughness: 0.7, metalness: 0.04 }),
+      terrain.boxes.length,
+    );
+    const matrix = new THREE.Matrix4();
+    const position = new THREE.Vector3();
+    const rotation = new THREE.Quaternion();
+    const scale = new THREE.Vector3();
+    const colour = new THREE.Color();
+    terrain.boxes.forEach((box, i) => {
+      position.set(...box.pos);
+      rotation.set(box.quat[1], box.quat[2], box.quat[3], box.quat[0]);
+      scale.set(...box.half);
+      mesh.setMatrixAt(i, matrix.compose(position, rotation, scale));
+      mesh.setColorAt(i, colour.setRGB(box.rgba[0], box.rgba[1], box.rgba[2], THREE.SRGBColorSpace));
+    });
+    mesh.castShadow = !this.lite;
+    mesh.receiveShadow = true;
+    this.terrain = mesh;
+    this.scene.add(mesh);
+  }
+
+  /** Height of the ground under a point (the floor's height on a flat floor). */
+  private groundAt(x: number, y: number): number {
+    return this.faces.length ? groundHeight(this.faces, this.floorZ, x, y) : this.floorZ;
+  }
+
+  /** Ground height the camera follows: averaged along the walk so a step does not jolt it, and
+   * never down into a pit. */
+  private followHeight(x: number, y: number, unit: number): number {
+    if (!this.faces.length) return 0;
+    let sum = 0;
+    for (let k = -4; k <= 4; k++) sum += Math.max(this.groundAt(x + k * 0.025 * unit, y), 0);
+    return sum / 9;
   }
 
   setOptions(options: ViewOptions): void {
@@ -333,11 +399,9 @@ export class RobotView {
     });
     const trunk = trunkAt(overlay, i0);
     const trunkNext = trunkAt(overlay, i1);
-    const focus = new THREE.Vector3(
-      lerp(trunk[0], trunkNext[0], w),
-      lerp(trunk[1], trunkNext[1], w),
-      0,
-    );
+    const fx = lerp(trunk[0], trunkNext[0], w);
+    const fy = lerp(trunk[1], trunkNext[1], w);
+    const focus = new THREE.Vector3(fx, fy, this.followHeight(fx, fy, loaded.unit));
     this.updateMarkers(i0, loaded.unit);
     this.follow(focus);
     // Keep the key light and its shadow box over the robot.
@@ -355,12 +419,13 @@ export class RobotView {
     const colour = inside || outline.length < 3 ? TEAL : RED;
     this.drawSupport(outline.slice(0, 8), z, 0.007 * unit, colour);
     this.heading.visible = outline.length > 0;
-    this.heading.position.set(heading[0], heading[1], z * 1.6);
-    // The plumb line runs from the balance point up to the trunk's height.
+    const ground = this.groundAt(heading[0], heading[1]);
+    this.heading.position.set(heading[0], heading[1], ground + z * 1.6);
+    // The plumb line runs from the balance point on the ground up to the trunk's height.
     const trunkNow = trunkAt(overlay, frame);
-    const height = Math.max(trunkNow[2] ?? 0, 0.02 * unit);
+    const height = Math.max((trunkNow[2] ?? 0) - ground, 0.02 * unit);
     this.plumb.visible = outline.length > 0;
-    this.plumb.position.set(heading[0], heading[1], 0);
+    this.plumb.position.set(heading[0], heading[1], ground);
     this.plumbLine.scale.set(0.0035 * unit, height, 0.0035 * unit);
     this.plumbLine.position.z = height / 2;
 
@@ -392,13 +457,15 @@ export class RobotView {
     const edge = this.supportEdge.geometry.getAttribute("position") as THREE.BufferAttribute;
     const n = points.length;
     let fillVerts = 0;
+    // Each corner sits on the ground under it (a foot on each of two steps tilts the outline).
+    const at = (x: number, y: number) => this.groundAt(x, y) + z;
     for (let i = 1; i + 1 < n; i++) {
       const [x0, y0] = points[0]!;
       const [x1, y1] = points[i]!;
       const [x2, y2] = points[i + 1]!;
-      fill.setXYZ(fillVerts++, x0, y0, z);
-      fill.setXYZ(fillVerts++, x1, y1, z);
-      fill.setXYZ(fillVerts++, x2, y2, z);
+      fill.setXYZ(fillVerts++, x0, y0, at(x0, y0));
+      fill.setXYZ(fillVerts++, x1, y1, at(x1, y1));
+      fill.setXYZ(fillVerts++, x2, y2, at(x2, y2));
     }
     this.supportFill.geometry.setDrawRange(0, fillVerts);
     fill.needsUpdate = true;
@@ -422,7 +489,7 @@ export class RobotView {
         [ax - nx, ay - ny],
         [bx - nx, by - ny],
       ];
-      for (const [x, y] of quad) edge.setXYZ(edgeVerts++, x, y, z * 1.15);
+      for (const [x, y] of quad) edge.setXYZ(edgeVerts++, x, y, this.groundAt(x, y) + z * 1.15);
     }
     this.supportEdge.geometry.setDrawRange(0, edgeVerts);
     edge.needsUpdate = true;
@@ -499,6 +566,7 @@ export class RobotView {
     this.observer.disconnect();
     this.controls.dispose();
     this.clearRobot();
+    this.setTerrain(null);
     this.renderer.dispose();
     this.renderer.domElement.remove();
   }

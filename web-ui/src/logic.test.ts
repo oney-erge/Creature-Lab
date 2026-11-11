@@ -29,12 +29,15 @@ import {
   whatIfSentence,
 } from "./format";
 import {
+  type GroundBox,
   arrowLength,
   framingFor,
+  groundHeight,
   pointInConvexPolygon,
   robotUnit,
   shoveReference,
   shoveReferenceFor,
+  topFaces,
 } from "./geometry";
 import { HOLD_S, Playback, SLOW_FACTOR, frameAt, rateAt } from "./playback";
 import { clipFileName, clipWindow } from "./clip";
@@ -432,5 +435,39 @@ describe("where an exported copy keeps what the live app serves", () => {
   it("leaves a path the export does not hold as it is, so a stray request fails plainly", () => {
     expect(staticUrl("/api/jobs")).toBe("/api/jobs");
     expect(staticUrl("/api/runs/..%2Fsecret")).toBe("/api/runs/..%2Fsecret");
+  });
+});
+
+describe("ground height under a course", () => {
+  const box = (pos: number[], half: number[], quat = [1, 0, 0, 0]): GroundBox => ({
+    pos: pos as [number, number, number],
+    half: half as [number, number, number],
+    quat: quat as [number, number, number, number],
+    rgba: [0.4, 0.4, 0.4, 1],
+  });
+  // What creature_lab/robots/terrain.py lays out for a 20 degree ramp (unit 0.2 m, starting at
+  // 0.5 m) and gives as the ground's height at x = 0.4, 0.75, 1.2, 1.55, 2.0 and 2.9 m.
+  const ramp = [
+    box([1.06988, 0, -0.01], [0.53209, 0.8, 0.20431], [0.984808, 0, -0.173648, 0]),
+    box([1.8, 0, 0.18199], [0.3, 0.8, 0.18199]),
+    box([2.53012, 0, -0.01], [0.53209, 0.8, 0.20431], [0.984808, 0, 0.173648, 0]),
+  ];
+  const xs = [0.4, 0.75, 1.2, 1.55, 2.0, 2.9];
+
+  it("matches the server along a ramp up, its flat top and the way down", () => {
+    const faces = topFaces(ramp);
+    const heights = xs.map((x) => groundHeight(faces, 0, x, 0));
+    [0.0, 0.091, 0.2548, 0.364, 0.364, 0.0728].forEach((want, i) =>
+      expect(heights[i]).toBeCloseTo(want, 3),
+    );
+  });
+
+  it("is the floor beside the course and the highest step on it", () => {
+    const steps = [box([0.65, 0, 0.05], [0.15, 1.2, 0.05]), box([0.95, 0, 0.1], [0.15, 1.2, 0.1])];
+    const faces = topFaces(steps);
+    expect(groundHeight(faces, 0, 0.75, 0)).toBeCloseTo(0.1, 6);
+    expect(groundHeight(faces, 0, 0.9, 0)).toBeCloseTo(0.2, 6);
+    expect(groundHeight(faces, 0, 0.9, 2)).toBe(0); // off to the side
+    expect(groundHeight(faces, -0.5, 3, 0)).toBe(-0.5); // past the end, down in a pit
   });
 });

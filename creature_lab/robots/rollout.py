@@ -9,6 +9,7 @@ import mujoco
 import numpy as np
 
 from creature_lab import VERSION
+from creature_lab.robots.terrain import GEOM_PREFIX
 from creature_lab.robots.types import CONTROL_HZ, SUPPORT_VERTICES, RobotRun, Scenario
 
 #: Contacts pressing less than this (newtons) are ignored when outlining the support area.
@@ -17,6 +18,9 @@ _MIN_CONTACT_N = 0.02
 _SOLE_HEIGHT_M = 0.006
 #: A mesh footprint is reduced to its outermost points in this many directions.
 _SOLE_DIRECTIONS = 16
+#: A ground contact whose surface normal leans more than 45 degrees from straight up is pressing
+#: on the side or edge of a step, stone or tile rather than on its top.
+_EDGE_NORMAL_Z = math.cos(math.radians(45.0))
 
 
 class MujocoRobot(ABC):
@@ -56,6 +60,14 @@ class MujocoRobot(ABC):
             model.body_mass[self.trunk] += scenario.payload_kg
             mujoco.mj_setConst(model, self.data)
         self._floor = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, "floor")
+        # The ground: the floor plus any stairs, ramp, tiles or stones the scenario added.
+        self._ground = {self._floor} | {
+            index
+            for index in range(model.ngeom)
+            if (mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_GEOM, index) or "").startswith(
+                GEOM_PREFIX
+            )
+        }
         self._root = int(model.body_rootid[self.trunk])
         self._contact_buffer = np.zeros(6)
 
@@ -102,21 +114,28 @@ def _sole_footprint(model: mujoco.MjModel, data: mujoco.MjData, geom: int) -> np
     return sole[np.unique(np.argmax(sole @ directions, axis=0))]
 
 
-def _ground_contacts(robot: MujocoRobot) -> tuple[np.ndarray, float]:
-    """Support outline (NaN-padded) and the fastest contact-point slide this frame (m/s)."""
-    model, data = robot.model, robot.data
+def _ground_contacts(robot: MujocoRobot) -> tuple[np.ndarray, float, float, float]:
+    """This frame's support outline (NaN-padded), fastest contact-point slide (m/s), lowest
+    touching point (m, NaN if none) and force on the sides and edges of the terrain (N)."""
+    model, data, ground = robot.model, robot.data, robot._ground
     points = []
     slide = 0.0
+    lowest = math.inf
+    edge = 0.0
     velocity = np.zeros(6)
     soles: set[int] = set()
     for index in range(data.ncon):
         contact = data.contact[index]
-        if robot._floor not in (contact.geom1, contact.geom2):
+        on_ground = contact.geom1 in ground
+        if not on_ground and contact.geom2 not in ground:
             continue
         mujoco.mj_contactForce(model, data, index, robot._contact_buffer)
         if robot._contact_buffer[0] < _MIN_CONTACT_N:
             continue
-        geom = contact.geom2 if contact.geom1 == robot._floor else contact.geom1
+        geom = contact.geom2 if on_ground else contact.geom1
+        lowest = min(lowest, float(contact.pos[2]))
+        if abs(contact.frame[2]) < _EDGE_NORMAL_Z:
+            edge += float(robot._contact_buffer[0])
         if model.geom_type[geom] == mujoco.mjtGeom.mjGEOM_MESH:
             if geom not in soles:
                 soles.add(geom)
@@ -134,7 +153,7 @@ def _ground_contacts(robot: MujocoRobot) -> tuple[np.ndarray, float]:
         if len(hull) > SUPPORT_VERTICES:
             hull = hull[np.linspace(0, len(hull) - 1, SUPPORT_VERTICES).astype(int)]
         outline[: len(hull)] = hull
-    return outline, slide
+    return outline, slide, (lowest if points else math.nan), edge
 
 
 def run_robot(robot: MujocoRobot) -> RobotRun:
@@ -144,7 +163,7 @@ def run_robot(robot: MujocoRobot) -> RobotRun:
     columns: dict[str, list] = {
         name: [] for name in ("qpos", "qvel", "load", "upright", "trunk_pos", "com", "com_vel")
     }
-    support, slide_speed, push_force = [], [], []
+    support, slide_speed, push_force, lowest_z, edge_force = [], [], [], [], []
     push_on = scenario.push_at_s
     push_off = scenario.push_at_s + scenario.push_for_s
     for step in range(steps):
@@ -157,7 +176,7 @@ def run_robot(robot: MujocoRobot) -> RobotRun:
             robot.physics_step()
         data.xfrc_applied[robot.trunk, 1] = 0.0
         mujoco.mj_subtreeVel(model, data)
-        outline, slide = _ground_contacts(robot)
+        outline, slide, lowest, edge = _ground_contacts(robot)
         columns["qpos"].append(data.qpos.copy())
         columns["qvel"].append(data.qvel.copy())
         columns["load"].append(robot.servo_load())
@@ -168,6 +187,8 @@ def run_robot(robot: MujocoRobot) -> RobotRun:
         support.append(outline)
         slide_speed.append(slide)
         push_force.append(force)
+        lowest_z.append(lowest)
+        edge_force.append(edge)
     return RobotRun(
         scenario=scenario,
         joint_names=robot.joint_names,
@@ -175,10 +196,13 @@ def run_robot(robot: MujocoRobot) -> RobotRun:
         support=np.array(support),
         slide_speed=np.array(slide_speed),
         push_force=np.array(push_force),
+        lowest_contact_z=np.array(lowest_z),
+        edge_force=np.array(edge_force),
         provenance={
             "creature_lab": VERSION,
             "mujoco": mujoco.__version__,
             "scenario_hash": scenario.digest(),
+            "mass_kg": round(float(sum(model.body_mass)), 3),
             **robot.provenance(),
         },
         **{name: np.array(values) for name, values in columns.items()},

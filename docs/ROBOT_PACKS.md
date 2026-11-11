@@ -115,9 +115,22 @@ List the terms in the order your policy was trained on. `scale` is one number or
 | `last_action` | The policy's previous output | one per joint |
 | `gait_phase` | `sin` and `cos` of a stride clock (`period_s` = seconds per stride) | 2 |
 | `sensor` | A named MuJoCo sensor (`sensor = "imu_gyro"`) | the sensor's width |
+| `height_scan` | Height of a body above the ground at each point of a grid that turns with the robot's heading (below) | one per point |
 
 The policy's input size must equal the total. `validate` shows the layout and the two numbers when
 they disagree.
+
+`height_scan` is what a policy trained on rough ground reads to see the ground ahead. It gives the
+same numbers as mjlab's `height_scan` (a grid of rays cast straight down onto the ground only,
+ordered with x changing fastest): the body's height minus the ground's height under each point,
+capped at `max_distance_m`. `grid_m` is the grid's length along the heading and its width,
+`spacing_m` the gap between points, and `body` the body it is centred on (the trunk when left out).
+mjlab's G1 uses `grid_m = [1.6, 1.0]`, `spacing_m = 0.1` (187 points), `max_distance_m = 5.0` and
+`scale = 0.2`.
+
+When one policy reads a different list from the others, give that policy its own
+`[[policies.observation]]` entries; the pack's `[[observation]]` list is used by every policy that
+does not.
 
 ### Actions, torque and limits
 

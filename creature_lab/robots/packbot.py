@@ -11,7 +11,8 @@ import numpy as np
 from creature_lab.robots.pack import Pack, PackError, pack_info, sensor_widths
 from creature_lab.robots.policies import load_policy
 from creature_lab.robots.rollout import MujocoRobot
-from creature_lab.robots.scene import write_studio_scene
+from creature_lab.robots.scene import load_model, write_studio_scene
+from creature_lab.robots.terrain import ground_height, layout
 from creature_lab.robots.types import Scenario
 
 Term = Callable[[float], np.ndarray]
@@ -31,7 +32,7 @@ class PackRobot(MujocoRobot):
         scene = write_studio_scene(
             model_path.parent, staging.scene_name, model_path.name, tile_m=staging.tile_m
         )
-        model = mujoco.MjModel.from_xml_path(str(scene))
+        model = load_model(scene, scenario.terrain)
         model.opt.timestep = spec.physics_dt
         self.model = model
         self.data = mujoco.MjData(model)
@@ -86,7 +87,7 @@ class PackRobot(MujocoRobot):
         model, data, spec = self.model, self.data, self.pack.spec
         widths = sensor_widths(model)
         terms: list[Term] = []
-        for term in spec.observation:
+        for term in spec.observation_for(self.scenario.policy):
             scale = np.asarray(term.scale, dtype=np.float64)
             kind = term.term
             if kind == "base_ang_vel":
@@ -125,6 +126,8 @@ class PackRobot(MujocoRobot):
                     return np.array([np.sin(angle), np.cos(angle)]) * s
 
                 terms.append(phase)
+            elif kind == "height_scan":
+                terms.append(self._height_scan(term, scale))
             else:  # sensor
                 name = term.sensor or ""
                 if name not in widths:
@@ -134,6 +137,37 @@ class PackRobot(MujocoRobot):
                 end = start + widths[name]
                 terms.append(lambda t, s=scale, a=start, b=end: data.sensordata[a:b] * s)
         return terms
+
+    def _height_scan(self, term, scale: np.ndarray) -> Term:
+        """Height of a body above the ground at each point of a grid that turns with its heading.
+
+        The same numbers as mjlab's ``height_scan`` from a yaw-aligned grid of rays cast straight
+        down onto the terrain only (never the robot): the body's height minus the ground's height
+        under each point, capped at ``max_distance_m``. The ground is the floor plus the boxes of
+        the scenario's terrain, so its height is worked out exactly instead of by casting rays.
+        """
+        data = self.data
+        body = _body(self.model, term.body or self.pack.spec.trunk)
+        points = term.scan_points
+        cap = float(term.max_distance_m)
+        lay = layout(self.scenario.terrain) if self.scenario.terrain is not None else None
+
+        def scan(t: float, s=scale) -> np.ndarray:
+            pos = data.xpos[body]
+            frame = data.xmat[body].reshape(3, 3)
+            fx, fy = frame[0, 0], frame[1, 0]  # the body's x axis, flattened onto the floor
+            norm = float(np.hypot(fx, fy))
+            if norm < 0.1:  # x axis nearly vertical: turn the y axis a quarter turn instead
+                yx, yy = frame[0, 1], frame[1, 1]
+                side = float(np.hypot(yx, yy)) or 1e-6
+                fx, fy, norm = yy / side, -yx / side, 1.0
+            fx, fy = fx / norm, fy / norm
+            x = pos[0] + points[:, 0] * fx - points[:, 1] * fy
+            y = pos[1] + points[:, 0] * fy + points[:, 1] * fx
+            ground = ground_height(lay, x, y) if lay is not None else np.zeros(len(points))
+            return np.minimum(pos[2] - ground, cap) * s
+
+        return scan
 
     def _gravity(self, q: int) -> np.ndarray:
         """Where "down" is in the trunk's frame, from the free joint's quaternion."""

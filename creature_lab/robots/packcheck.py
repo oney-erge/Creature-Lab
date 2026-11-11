@@ -98,20 +98,22 @@ def _check_policies(pack: Pack, report: PackReport) -> None:
                 f"policy {policy.key} outputs {loaded.action_len} actions but robot.toml lists "
                 f"{joints} joints (one action per joint, in the same order)"
             )
-        want = pack.spec.observation_length()
+        want = pack.spec.observation_length(policy=policy.key)
         if want is not None and loaded.obs_len is not None and loaded.obs_len != want:
             report.errors.append(
                 f"policy {policy.key} expects {loaded.obs_len} observation numbers but the "
-                f"observation list gives {want}: {_layout(pack.spec)}"
+                f"observation list gives {want}: {_layout(pack.spec, policy=policy.key)}"
             )
 
 
-def _layout(spec: PackSpec, sensor_widths: dict[str, int] | None = None) -> str:
+def _layout(
+    spec: PackSpec, sensor_widths: dict[str, int] | None = None, policy: str | None = None
+) -> str:
     """The observation terms and how many numbers each adds, e.g. "joint_pos 29, command 3"."""
     from creature_lab.robots.pack import _term_width
 
     parts = []
-    for term in spec.observation:
+    for term in spec.observation_for(policy):
         name = f"sensor {term.sensor}" if term.term == "sensor" else term.term
         width = _term_width(term, len(spec.joints), sensor_widths)
         parts.append(f"{name} {'?' if width is None else width}")
@@ -182,20 +184,27 @@ def _check_wiring(pack: Pack, model, report: PackReport) -> None:
             f"{', '.join(loose)} (list every actuated joint, in the policy's order)"
         )
     widths = sensor_widths(model)
-    for index, term in enumerate(spec.observation):
-        if term.term != "sensor":
-            continue
-        name = term.sensor or ""
-        if name not in widths:
-            known = ", ".join(sorted(widths)) or "none"
-            report.errors.append(
-                f"observation[{index}]: the model has no sensor {name!r} (sensors: {known})"
-            )
-        elif isinstance(term.scale, list) and len(term.scale) != widths[name]:
-            report.errors.append(
-                f"observation[{index}]: sensor {name!r} has {widths[name]} numbers but scale "
-                f"lists {len(term.scale)}"
-            )
+    lists = [("observation", spec.observation)] + [
+        (f"policies.{p.key}.observation", p.observation) for p in spec.policies if p.observation
+    ]
+    for where, terms in lists:
+        for index, term in enumerate(terms):
+            if term.term == "height_scan" and term.body:
+                if mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, term.body) < 0:
+                    report.errors.append(f"{where}[{index}]: the model has no body {term.body!r}")
+            if term.term != "sensor":
+                continue
+            name = term.sensor or ""
+            if name not in widths:
+                known = ", ".join(sorted(widths)) or "none"
+                report.errors.append(
+                    f"{where}[{index}]: the model has no sensor {name!r} (sensors: {known})"
+                )
+            elif isinstance(term.scale, list) and len(term.scale) != widths[name]:
+                report.errors.append(
+                    f"{where}[{index}]: sensor {name!r} has {widths[name]} numbers but scale "
+                    f"lists {len(term.scale)}"
+                )
     if root >= 0:
         mass = float(model.body_subtreemass[trunk])
         if abs(mass - spec.mass_kg) > _MASS_TOLERANCE * spec.mass_kg:

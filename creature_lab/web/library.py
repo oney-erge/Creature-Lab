@@ -13,11 +13,11 @@ from pathlib import Path
 
 from creature_lab.robots.analysis import RunAnalysis, analyze
 from creature_lab.robots.catalog import all_robots, robot_info
-from creature_lab.robots.checkup import Checkup
+from creature_lab.robots.checkup import TWIN_FIELDS, Checkup
 from creature_lab.robots.types import RobotRun
 
 #: Run folders in the order they are listed: the walk, shoves, then bad conditions.
-_ORDER = ("baseline", "shove", "grip", "battery", "payload", "whatif")
+_ORDER = ("baseline", "shove", "terrain", "grip", "battery", "payload", "whatif")
 
 
 def _run_id(folder: Path) -> str:
@@ -85,11 +85,12 @@ def _kind(name: str) -> str:
     return "other"
 
 
-_PAIR_FIELDS = ("push_n", "push_side", "push_at_s", "push_for_s", "grip", "battery_v", "payload_kg")
-
-
 def _pair_key(entry: RunEntry) -> tuple:
-    return (entry.kind, *(entry.scenario.get(field) for field in _PAIR_FIELDS))
+    # Terrain is a dict; its JSON text makes it comparable and hashable.
+    return (
+        entry.kind,
+        *(json.dumps(entry.scenario.get(field), sort_keys=True) for field in TWIN_FIELDS),
+    )
 
 
 def _link_pairs(entries: list[RunEntry]) -> None:

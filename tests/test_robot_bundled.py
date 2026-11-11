@@ -180,14 +180,15 @@ mujoco = pytest.importorskip("mujoco")
 
 
 @pytest.mark.parametrize("key", BUNDLED)
-def test_unitrees_policy_walks_the_robot_without_falling(key):
+def test_every_bundled_policy_walks_the_robot_without_falling(key):
     if not fetch.is_installed(key):
         pytest.skip(f"{key} not downloaded")
     from creature_lab.robots.analysis import analyze
     from creature_lab.robots.api import run_scenario
     from creature_lab.robots.types import Scenario
 
-    run = run_scenario(Scenario(robot=key, policy="motion", command=0.5))
-    result = analyze(run)
-    assert not result.fell and result.distance_m > 2.0
+    for policy in bundled_pack(key).spec.policies:
+        run = run_scenario(Scenario(robot=key, policy=policy.key, command=0.5))
+        result = analyze(run)
+        assert not result.fell and result.distance_m > 2.0, policy.key
     assert run.provenance["robot"] == key and len(run.provenance["policy_sha256"]) == 64
