@@ -58,11 +58,13 @@ def primitive_geoms(model: Any) -> list[int]:
     """
     import mujoco
 
-    kinds = {getattr(mujoco.mjtGeom, f"mjGEOM_{name}") for name in _PRIMITIVES}
+    # Plain integers: an enum member and the int in ``geom_type`` compare equal but do not
+    # always hash alike, so a set of enum members can miss.
+    kinds = {int(getattr(mujoco.mjtGeom, f"mjGEOM_{name}")) for name in _PRIMITIVES}
     return [
         geom
         for geom in range(model.ngeom)
-        if model.geom_type[geom] in kinds
+        if int(model.geom_type[geom]) in kinds
         and model.geom_rgba[geom][3] > 0
         and model.geom_group[geom] <= _VISIBLE_GROUPS
     ]
