@@ -104,7 +104,8 @@ they disagree.
 ### Actions, torque and limits
 
 The policy outputs one action per joint. The target pose is
-`default + action x action_scale` (after an optional `action_clip`).
+`default + action x action_scale` (after an optional `action_clip`). A joint can set its own
+`action_scale`, which replaces the pack's for that joint; the pack-level one may then be left out.
 
 - **`actuator = "pd"`**: the model's actuators are plain motors and Creature Lab computes
   `torque = kp x (target - angle) - kd x velocity` at every physics step, with the `kp` and `kd`
