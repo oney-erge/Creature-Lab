@@ -106,10 +106,15 @@ def _check_policies(pack: Pack, report: PackReport) -> None:
             )
 
 
-def _layout(spec: PackSpec) -> str:
+def _layout(spec: PackSpec, sensor_widths: dict[str, int] | None = None) -> str:
+    """The observation terms and how many numbers each adds, e.g. "joint_pos 29, command 3"."""
     from creature_lab.robots.pack import _term_width
 
-    parts = [f"{term.term} {_term_width(term, len(spec.joints))}" for term in spec.observation]
+    parts = []
+    for term in spec.observation:
+        name = f"sensor {term.sensor}" if term.term == "sensor" else term.term
+        width = _term_width(term, len(spec.joints), sensor_widths)
+        parts.append(f"{name} {'?' if width is None else width}")
     return ", ".join(parts)
 
 
@@ -201,7 +206,7 @@ def _check_wiring(pack: Pack, model, report: PackReport) -> None:
     report.facts["joints"] = str(len(spec.joints))
     length = spec.observation_length(widths)
     if length is not None:
-        report.facts["observation"] = f"{length} numbers: {_layout(spec)}"
+        report.facts["observation"] = f"{length} numbers: {_layout(spec, widths)}"
 
 
 def _has_limit(model, joint: int, actuator: int) -> bool:
