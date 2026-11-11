@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+import pytest
 from robot_helpers import saved_checkup, synthetic_run
 
 from creature_lab.robots.checkup import add_twins
 from creature_lab.web.library import Library
+
+# The fake simulator replaces run_scenario in creature_lab.robots.api, which imports MuJoCo.
+pytest.importorskip("mujoco")
 
 
 def _fake_simulator(monkeypatch):

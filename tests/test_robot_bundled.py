@@ -44,6 +44,8 @@ def test_a_bundled_pack_describes_a_policy_that_fits_it(key):
     from importlib import resources
 
     for entry in spec.policies:
+        if entry.file.endswith(".onnx"):
+            pytest.importorskip("onnxruntime")
         weights = resources.files("creature_lab.robots").joinpath("data", "packs", key, entry.file)
         with resources.as_file(weights) as file:
             policy = load_policy(file)
