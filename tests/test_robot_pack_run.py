@@ -103,7 +103,11 @@ def test_a_check_up_runs_on_a_pack_and_saves_its_results(cache, pack_copy, tmp_p
     assert [row.force_n for row in result.shoves] == [10, 500]
     assert result.shoves[0].stayed_up == result.shoves[0].total
     assert result.shoves[1].stayed_up < result.shoves[1].total
-    assert {c.key for c in result.conditions} == {"grip_0.4", "payload_2kg"}
+    from creature_lab.robots.catalog import robot_info
+    from creature_lab.robots.terrain import course, key
+
+    terrain = {key(t) for t in course(robot_info("stick_biped").height_cm)}
+    assert {c.key for c in result.conditions} == {"grip_0.4", "payload_2kg", *terrain}
     assert (tmp_path / "out" / "checkup.json").is_file()
 
 

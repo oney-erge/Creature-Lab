@@ -174,7 +174,8 @@ def compare_checkups(before: Checkup, after: Checkup, *, tolerance: int = 0) -> 
 
     before_conditions = {c.key: c for c in before.conditions}
     after_conditions = {c.key: c for c in after.conditions}
-    for key in before_conditions.keys() | after_conditions.keys():
+    # In the check-up's own order (a set would shuffle the rows from run to run).
+    for key in dict.fromkeys([*before_conditions, *after_conditions]):
         old_c, new_c = before_conditions.get(key), after_conditions.get(key)
         if old_c is None or new_c is None:
             skipped.append((old_c or new_c).label)  # type: ignore[union-attr]

@@ -12,6 +12,7 @@ from pydantic import Field
 
 from creature_lab.hashing import spec_hash
 from creature_lab.io_utils import atomic_write_text
+from creature_lab.robots.terrain import Terrain
 from creature_lab.schema.base import StrictModel
 
 #: Both robots are controlled at 50 Hz.
@@ -39,10 +40,13 @@ class Scenario(StrictModel):
     battery_v: float = Field(default=7.4, ge=5.0, le=9.0)
     #: Extra mass added to the trunk, in kilograms.
     payload_kg: float = Field(default=0.0, ge=0.0, le=50.0)
+    #: Stairs, a ramp, rough ground or stepping stones ahead of the robot; None is a flat floor.
+    terrain: Terrain | None = None
     title: str = ""
 
     def digest(self) -> str:
-        return spec_hash(self)
+        # A flat-floor scenario hashes as it did before terrain existed.
+        return spec_hash(self, exclude={"terrain"} if self.terrain is None else None)
 
     @property
     def push_sign(self) -> float:
@@ -71,7 +75,20 @@ class RobotRun:
     slide_speed: np.ndarray
     #: Sideways push force applied each frame, in newtons (signed).
     push_force: np.ndarray
+    #: Height of the lowest point touching the ground each frame, in metres (NaN when nothing
+    #: touches). A foot that drops into a gap between stepping stones shows up here.
+    lowest_contact_z: np.ndarray | None = None
+    #: Force pressing on the side or edge of a step, stone or tile each frame, in newtons: a toe
+    #: catching a step shows up here. Always 0 on a flat floor.
+    edge_force: np.ndarray | None = None
     provenance: dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        # Runs saved before these were recorded read as "flat floor, nothing caught".
+        if self.lowest_contact_z is None:
+            self.lowest_contact_z = np.zeros(len(self.time))
+        if self.edge_force is None:
+            self.edge_force = np.zeros(len(self.time))
 
     ARRAYS = (
         "time",
@@ -85,7 +102,11 @@ class RobotRun:
         "support",
         "slide_speed",
         "push_force",
+        "lowest_contact_z",
+        "edge_force",
     )
+    #: Arrays a run saved by an earlier version may not have (``__post_init__`` fills them).
+    OPTIONAL = ("lowest_contact_z", "edge_force")
 
     def __len__(self) -> int:
         return len(self.time)
@@ -111,7 +132,11 @@ class RobotRun:
         folder = Path(folder)
         meta = json.loads((folder / "robot_run.json").read_text(encoding="utf-8"))
         with np.load(folder / "states.npz") as arrays:
-            data = {name: arrays[name] for name in cls.ARRAYS}
+            data = {
+                name: arrays[name]
+                for name in cls.ARRAYS
+                if name in arrays.files or name not in cls.OPTIONAL
+            }
         return cls(
             scenario=Scenario.model_validate(meta["scenario"]),
             joint_names=meta["joint_names"],

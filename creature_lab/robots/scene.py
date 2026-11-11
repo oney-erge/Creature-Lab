@@ -3,6 +3,12 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+from creature_lab.robots.terrain import Terrain, add_terrain
+
+if TYPE_CHECKING:
+    import mujoco
 
 _STUDIO = """<mujoco model="{name} check-up">
   <include file="{robot_file}"/>
@@ -51,3 +57,14 @@ def write_studio_scene(folder: Path, name: str, robot_file: str, *, tile_m: floa
     if not path.exists() or path.read_text(encoding="utf-8") != text:
         path.write_text(text, encoding="utf-8")
     return path
+
+
+def load_model(scene: Path, terrain: Terrain | None = None) -> mujoco.MjModel:
+    """Compile a studio scene, with ``terrain`` (stairs, a ramp, ...) added when there is one."""
+    import mujoco
+
+    if terrain is None:
+        return mujoco.MjModel.from_xml_path(str(scene))
+    spec = mujoco.MjSpec.from_file(str(scene))
+    add_terrain(spec, terrain)
+    return spec.compile()

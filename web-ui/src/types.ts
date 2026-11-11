@@ -1,3 +1,5 @@
+import type { GroundBox } from "./geometry";
+
 // Shapes of what creature_lab/web/server.py returns. Keep in step with that file.
 
 export type Outcome = "walked" | "fell_and_got_up" | "fell";
@@ -119,6 +121,15 @@ export interface WhatIfOption {
   label: string;
 }
 
+/** Stairs, a ramp, rough ground or stepping stones under a run (``null`` for a flat floor). */
+export interface TerrainDescription {
+  kind: "stairs" | "ramp" | "rough" | "stones";
+  label: string;
+  /** Height of the floor plane: below 0 when the course is stones over a pit. */
+  floorZ: number;
+  boxes: GroundBox[];
+}
+
 export interface Evidence {
   label: string;
   value: string;
@@ -148,6 +159,8 @@ export interface RunDetail extends RunCard {
   credit: string;
   /** One-click changes offered for this run (none for a "what if" run). */
   whatIfs: WhatIfOption[];
+  /** The ground the robot walked on, when it was not a flat floor. */
+  terrain?: TerrainDescription | null;
 }
 
 export interface SceneGeom {

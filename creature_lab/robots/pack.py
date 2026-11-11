@@ -22,6 +22,7 @@ from importlib.resources.abc import Traversable
 from pathlib import Path
 from typing import Any, Literal
 
+import numpy as np
 from pydantic import Field, ValidationError, ValidationInfo, field_validator, model_validator
 
 from creature_lab.io_utils import atomic_write_text
@@ -52,6 +53,7 @@ TERMS = (
     "last_action",  # the policy's previous output (one per joint)
     "gait_phase",  # sin and cos of the stride clock (2)
     "sensor",  # a named MuJoCo sensor (its own width)
+    "height_scan",  # height of a body above the ground on a grid around it (one per point)
 )
 
 #: Fractions of body weight tried as shoves, and of body mass tried as a carried load, when the
@@ -112,6 +114,7 @@ class ObservationTerm(StrictModel):
         "last_action",
         "gait_phase",
         "sensor",
+        "height_scan",
     ]
     #: One number for every entry, or one per entry.
     scale: float | list[float] = 1.0
@@ -121,9 +124,35 @@ class ObservationTerm(StrictModel):
     period_s: float | None = Field(default=None, gt=0)
     #: ``sensor`` only: the MuJoCo sensor to read.
     sensor: str | None = None
+    #: ``height_scan`` only: the grid's length along the robot's heading and its width, in metres.
+    grid_m: tuple[float, float] | None = None
+    #: ``height_scan`` only: metres between neighbouring points of the grid.
+    spacing_m: float | None = Field(default=None, gt=0)
+    #: ``height_scan`` only: the largest height reported (what a ray that finds no ground reads).
+    max_distance_m: float | None = Field(default=None, gt=0)
+    #: ``height_scan`` only: the body the grid is centred on and turns with (default: the trunk).
+    body: str | None = None
+
+    @property
+    def scan_points(self) -> np.ndarray:
+        """(n, 2) grid offsets of a ``height_scan``: x varies fastest, then y (mjlab's order)."""
+        length, width = self.grid_m or (0.0, 0.0)
+        step = self.spacing_m or 1.0
+        xs = np.arange(-length / 2, length / 2 + step * 0.5, step)
+        ys = np.arange(-width / 2, width / 2 + step * 0.5, step)
+        grid_x, grid_y = np.meshgrid(xs, ys, indexing="xy")
+        return np.stack([grid_x.ravel(), grid_y.ravel()], axis=1)
 
     @model_validator(mode="after")
     def _term_fields(self) -> ObservationTerm:
+        scan = self.term == "height_scan"
+        if scan and (self.grid_m is None or self.spacing_m is None or self.max_distance_m is None):
+            raise ValueError("height_scan needs grid_m, spacing_m and max_distance_m")
+        if scan and min(self.grid_m or (0.0,)) < 0:
+            raise ValueError("height_scan: grid_m must not be negative")
+        scan_fields = (self.grid_m, self.spacing_m, self.max_distance_m, self.body)
+        if not scan and any(value is not None for value in scan_fields):
+            raise ValueError("grid_m, spacing_m, max_distance_m and body are only for height_scan")
         if self.term == "gait_phase" and self.period_s is None:
             raise ValueError("gait_phase needs period_s (seconds per stride)")
         if self.term == "sensor" and not self.sensor:
@@ -149,6 +178,9 @@ class PolicySpec(StrictModel):
     gets_up: bool = False
     #: True when the title starts with a name ("Unitree ...") that keeps its capital.
     starts_with_name: bool = False
+    #: This policy's own observation list, when it reads something the pack's list does not (a
+    #: policy trained on rough ground that also reads a ``height_scan``, say).
+    observation: list[ObservationTerm] | None = Field(default=None, min_length=1)
 
     @field_validator("key")
     @classmethod
@@ -267,23 +299,37 @@ class PackSpec(StrictModel):
         if len(set(keys)) != len(keys):
             raise ValueError("policies: every key must be different")
         joints = len(self.joints)
-        for index, term in enumerate(self.observation):
-            width = _term_width(term, joints)
-            if isinstance(term.scale, list) and width is not None and len(term.scale) != width:
-                raise ValueError(
-                    f"observation[{index}] ({term.term}): scale has {len(term.scale)} numbers "
-                    f"but the term has {width}"
-                )
+        lists = [("observation", self.observation)] + [
+            (f"policies.{p.key}.observation", p.observation) for p in self.policies if p.observation
+        ]
+        for where, terms in lists:
+            for index, term in enumerate(terms):
+                width = _term_width(term, joints)
+                if isinstance(term.scale, list) and width is not None and len(term.scale) != width:
+                    raise ValueError(
+                        f"{where}[{index}] ({term.term}): scale has {len(term.scale)} numbers "
+                        f"but the term has {width}"
+                    )
         return self
+
+    def observation_for(self, policy: str | None = None) -> list[ObservationTerm]:
+        """The observation list ``policy`` reads: its own, else the pack's."""
+        for entry in self.policies:
+            if entry.key == policy and entry.observation:
+                return entry.observation
+        return self.observation
 
     @property
     def substeps(self) -> int:
         return round(1.0 / CONTROL_HZ / self.physics_dt)
 
-    def observation_length(self, sensor_widths: dict[str, int] | None = None) -> int | None:
-        """How many numbers the observation holds; None while a sensor's width is unknown."""
+    def observation_length(
+        self, sensor_widths: dict[str, int] | None = None, policy: str | None = None
+    ) -> int | None:
+        """How many numbers ``policy``'s observation holds; None while a sensor's width is
+        unknown."""
         total = 0
-        for term in self.observation:
+        for term in self.observation_for(policy):
             width = _term_width(term, len(self.joints), sensor_widths)
             if width is None:
                 return None
@@ -307,6 +353,8 @@ def _term_width(
         return fixed[term.term]
     if term.term == "command":
         return term.size or 3
+    if term.term == "height_scan":
+        return len(term.scan_points)
     return (sensor_widths or {}).get(term.sensor or "")
 
 

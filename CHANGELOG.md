@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+- **Uneven ground.** The check-up now walks every robot over four short courses, each at a few
+  heights: stairs (up four steps, along a landing, down four), a ramp up and over, rough ground of
+  randomly raised tiles, and stepping stones over a pit. Each is sized from the robot's height (for
+  the G1: steps of 4 to 16 cm, ramps of 8° to 24°, bumps up to 8 cm, gaps up to 16 cm). Every run
+  now records the force on the sides and edges of the ground and the lowest point touching it, so a
+  fall can be explained as a foot that caught a step, a foot that missed the stones, or a slope too
+  steep, with the numbers shown. The app draws the courses in 3D, puts the foot outline and the
+  balance point on the ground under the robot, and lists the runs as "Uneven ground"; the report
+  and `robots compare` include them. Flat-floor runs are unchanged, and runs saved before this read
+  as before.
+- **Robot packs can read the ground ahead.** A new observation term, `height_scan`, gives the same
+  numbers as mjlab's height scan (the body's height above the ground on a grid that turns with the
+  robot), and a policy can have its own observation list when it reads something the others do not.
+- The report says why each condition failed, and `robots compare` lists the tests in the check-up's
+  order. In the app, opening another run of the same robot carries the camera along to where the
+  new run starts, keeping its angle and zoom.
+
 - **A recorded demo for a web site.** `creature-lab app --export-static DIR` writes the app and the
   saved check-ups of the robots you choose as plain files (`--robot`, repeatable; Microduck's
   non-commercial meshes only with `--include-non-commercial`). The same page runs in *static

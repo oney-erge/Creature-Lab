@@ -13,6 +13,7 @@ from creature_lab.robots.fetch import is_installed, robot_dir
 from creature_lab.robots.policies import OnnxPolicy
 from creature_lab.robots.rollout import MujocoRobot
 from creature_lab.robots.scene import write_studio_scene
+from creature_lab.robots.terrain import add_terrain
 from creature_lab.robots.types import Scenario
 
 _PHYSICS_DT = 0.005
@@ -61,6 +62,8 @@ class Microduck(MujocoRobot):
                     candidate.solref_friction = (-5.0e4, -2.0e2)
                     candidate.solimp_friction = (0.99, 0.9999, 0.001, 0.5, 2.0)
                     break
+        if self.scenario.terrain is not None:
+            add_terrain(spec, self.scenario.terrain)
         model = spec.compile()
         model.opt.timestep = _PHYSICS_DT
         self.model = model

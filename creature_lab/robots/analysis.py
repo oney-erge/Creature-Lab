@@ -9,6 +9,7 @@ import numpy as np
 from pydantic import Field
 
 from creature_lab.robots.catalog import robot_info
+from creature_lab.robots.terrain import Terrain, layout, obstacle, phrase
 from creature_lab.robots.types import CONTROL_HZ, RobotRun
 from creature_lab.schema.base import StrictModel
 
@@ -24,8 +25,17 @@ SLIP_MEDIAN_MPS = 0.05
 #: A servo at this fraction of its torque limit is saturated.
 SATURATED_LOAD = 0.95
 _GRAVITY = 9.81
+#: On terrain, how far before the robot starts to tip a caught foot or a missed stone still
+#: counts as the start of the fall.
+_TERRAIN_LOOKBACK_S = 1.0
+#: A push on the side or edge of a step this large (a fraction of body weight) is a caught foot.
+EDGE_WEIGHT_FRACTION = 0.25
+#: A foot this far down into the pit (a fraction of its depth) went into a gap between stones.
+_GAP_DEPTH_FRACTION = 0.15
 
-Cause = Literal["slipped", "pushed", "servos_saturated", "unclear"]
+Cause = Literal[
+    "slipped", "pushed", "servos_saturated", "tripped", "missed_footing", "slope", "unclear"
+]
 
 
 class Evidence(StrictModel):
@@ -129,6 +139,8 @@ def analyze(run: RobotRun) -> RunAnalysis:
             if distance >= 0.25
             else "Stayed on its feet without making headway."
         )
+        if scenario.terrain is not None and distance >= 0.25:
+            verdict = f"Walked {distance:.1f} m {phrase(scenario.terrain)} without falling."
         if pushed:
             peak = float(tilt_deg[time >= push_window[0]].max())
             verdict = (
@@ -205,8 +217,28 @@ def analyze(run: RobotRun) -> RunAnalysis:
             ),
         )
 
-    if slide_median > SLIP_MEDIAN_MPS:
-        cause: Cause = "slipped"
+    terrain_cause = (
+        _terrain_cause(run, scenario.terrain, tilt_start, fall_time)
+        if scenario.terrain is not None
+        else None
+    )
+    if terrain_cause is not None:
+        cause: Cause = terrain_cause[0]
+        cause_text = terrain_cause[1]
+        evidence.insert(1, terrain_cause[2])
+    elif scenario.terrain is not None and scenario.terrain.kind == "ramp" and not push_near:
+        cause = "slope"
+        slid = (
+            f"the feet slid (median {slide_median:.2f} m/s while falling) and "
+            if slide_median > SLIP_MEDIAN_MPS
+            else ""
+        )
+        cause_text = (
+            f"On the {scenario.terrain.level:g}° slope {slid}its steps did not keep its weight "
+            "over its feet; nothing caught a foot and nothing pushed it."
+        )
+    elif slide_median > SLIP_MEDIAN_MPS:
+        cause = "slipped"
         cause_text = (
             f"The feet slid on the floor (median {slide_median:.2f} m/s while falling) at "
             f"{scenario.grip:g}× normal grip, so they could not push the body back under itself."
@@ -258,6 +290,52 @@ def analyze(run: RobotRun) -> RunAnalysis:
         slide_median_mps=slide_median,
         saturated_fraction=saturated,
         evidence=evidence,
+    )
+
+
+def _terrain_cause(
+    run: RobotRun, terrain: Terrain, tilt_start: float, fall_time: float
+) -> tuple[Cause, str, Evidence] | None:
+    """A foot that went into a gap or caught an edge just before the robot started to tip."""
+    time = run.time
+    window = (time >= tilt_start - _TERRAIN_LOOKBACK_S) & (time <= fall_time)
+    lay = layout(terrain)
+    if lay.floor_z < 0:
+        deep = np.flatnonzero(window & (run.lowest_contact_z < _GAP_DEPTH_FRACTION * lay.floor_z))
+        if len(deep):
+            at = float(time[deep[0]])
+            down = -float(np.nanmin(run.lowest_contact_z[window])) * 100
+            return (
+                "missed_footing",
+                f"A foot missed the stones and went down into a gap at {at:.2f} s, and the robot "
+                "could not get its weight back over the stones.",
+                Evidence(
+                    label="Foot below the stones",
+                    value=f"{down:.0f} cm down",
+                    detail=f"Lowest point touching anything, from {at:.2f} s: the tops of the "
+                    "stones are at 0 cm.",
+                ),
+            )
+    mass = float(run.provenance.get("mass_kg") or 0.0)
+    threshold = EDGE_WEIGHT_FRACTION * mass * _GRAVITY if mass else 1.0
+    early = window & (time <= tilt_start + 0.1)
+    hits = np.flatnonzero(early & (run.edge_force >= threshold))
+    if len(hits) == 0:
+        return None
+    strongest = hits[int(np.argmax(run.edge_force[hits]))]
+    at = float(time[strongest])
+    force = float(run.edge_force[strongest])
+    thing = obstacle(terrain)
+    return (
+        "tripped",
+        f"A foot caught the edge of {thing} at {at:.2f} s and the next steps could not get the "
+        f"body back over the feet; it was past 60° at {fall_time:.2f} s.",
+        Evidence(
+            label=f"Foot against the side of {thing}",
+            value=f"{force:.0f} N at {at:.2f} s",
+            detail="Strongest push on the side or edge of the ground in the second before it "
+            "started to tip, where a foot should only press down on a top.",
+        ),
     )
 
 

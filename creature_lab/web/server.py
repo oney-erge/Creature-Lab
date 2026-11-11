@@ -15,6 +15,7 @@ from creature_lab.robots.catalog import all_robots, robot_info
 from creature_lab.robots.fetch import is_installed, missing_extra
 from creature_lab.robots.pack import PackError, register_pack, unregister_pack
 from creature_lab.robots.packcheck import PackReport, validate_pack
+from creature_lab.robots.terrain import description as terrain_description
 from creature_lab.web.builder import Builder, BuilderError
 from creature_lab.web.creatures import (
     CreatureError,
@@ -291,6 +292,7 @@ def create_app(
             "tilt": _tilt_series(run),
             "credit": info.credit,
             "whatIfs": _what_ifs(entry),
+            "terrain": terrain_description(run.scenario.terrain),
         }
 
     def _what_ifs(entry: Any) -> list[dict]:

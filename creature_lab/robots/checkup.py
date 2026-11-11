@@ -12,6 +12,9 @@ from creature_lab import VERSION
 from creature_lab.io_utils import atomic_write_text
 from creature_lab.robots.analysis import RunAnalysis, analyze
 from creature_lab.robots.catalog import CheckupLevels, RobotInfo, robot_info
+from creature_lab.robots.terrain import course
+from creature_lab.robots.terrain import key as terrain_key
+from creature_lab.robots.terrain import label as terrain_label
 from creature_lab.robots.types import RobotRun, Scenario
 from creature_lab.schema.base import StrictModel
 
@@ -169,6 +172,8 @@ def run_checkup(
             )
         )
 
+    for terrain in course(info.height_cm):
+        condition(terrain_key(terrain), terrain_label(terrain), terrain=terrain)
     for grip in levels.grips:
         condition(f"grip_{grip:g}", f"Floor grip at {grip:g}× normal", grip=grip)
     for volts in levels.batteries_v:
@@ -190,7 +195,16 @@ def run_checkup(
 
 
 #: What makes two saved runs "the same test" (the app pairs runs on the same fields).
-TWIN_FIELDS = ("push_n", "push_side", "push_at_s", "push_for_s", "grip", "battery_v", "payload_kg")
+TWIN_FIELDS = (
+    "push_n",
+    "push_side",
+    "push_at_s",
+    "push_for_s",
+    "grip",
+    "battery_v",
+    "payload_kg",
+    "terrain",
+)
 
 
 def _shoves(folder: Path) -> dict[tuple, dict]:

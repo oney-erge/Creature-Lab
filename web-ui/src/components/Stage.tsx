@@ -143,6 +143,7 @@ export function Stage({ source, run, playback, follower = false, label }: Props)
           decodeOverlay(overlayBuffer),
           run.fps,
           needFrame.current,
+          run.terrain ?? null,
         );
         needFrame.current = false;
         // Start a moment before the shove, like the films, and play.

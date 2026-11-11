@@ -12,7 +12,7 @@ from creature_lab.robots.catalog import robot_info
 from creature_lab.robots.fetch import is_installed, robot_dir
 from creature_lab.robots.policies import G1WalkPolicy
 from creature_lab.robots.rollout import MujocoRobot
-from creature_lab.robots.scene import write_studio_scene
+from creature_lab.robots.scene import load_model, write_studio_scene
 from creature_lab.robots.types import Scenario
 
 # Gains and scales from unitree_rl_gym/deploy/deploy_mujoco/configs/g1.yaml.
@@ -40,7 +40,7 @@ class UnitreeG1(MujocoRobot):
             )
         folder = robot_dir("unitree_g1")
         scene = write_studio_scene(folder, "Unitree G1", "g1_12dof.xml", tile_m=0.5)
-        model = mujoco.MjModel.from_xml_path(str(scene))
+        model = load_model(scene, scenario.terrain)
         model.opt.timestep = _PHYSICS_DT
         self.model = model
         self.data = mujoco.MjData(model)

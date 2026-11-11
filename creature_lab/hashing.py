@@ -13,7 +13,8 @@ import json
 from pydantic import BaseModel
 
 
-def spec_hash(model: BaseModel) -> str:
-    """Return a deterministic ``sha256:<hex>`` digest of a Pydantic model."""
-    canonical = json.dumps(model.model_dump(mode="json"), sort_keys=True, separators=(",", ":"))
+def spec_hash(model: BaseModel, exclude: set[str] | None = None) -> str:
+    """Return a deterministic ``sha256:<hex>`` digest of a Pydantic model (minus ``exclude``)."""
+    data = model.model_dump(mode="json", exclude=exclude)
+    canonical = json.dumps(data, sort_keys=True, separators=(",", ":"))
     return "sha256:" + hashlib.sha256(canonical.encode("utf-8")).hexdigest()

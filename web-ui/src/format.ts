@@ -63,6 +63,7 @@ export function featuredRun(runs: RunCard[]): RunCard | undefined {
 export const KIND_LABEL: Record<string, string> = {
   baseline: "Walks",
   shove: "Shoves",
+  terrain: "Uneven ground",
   grip: "Slippery floors",
   battery: "Weak batteries",
   payload: "Carried loads",

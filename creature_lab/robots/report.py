@@ -215,9 +215,14 @@ def _condition_row(condition: ConditionResult) -> str:
     status = (
         '<span class="pass">pass</span>' if condition.passed else '<span class="fail">fail</span>'
     )
+    analysis = condition.analysis
+    # A fall says why: the cause sentence follows the verdict.
+    happened = " ".join(
+        filter(None, [analysis.verdict, analysis.cause_text if analysis.fell else None])
+    )
     return (
         f"<tr><td>{_e(condition.label)}</td><td>{status}</td>"
-        f"<td>{condition.relative_distance:.0%}</td><td>{_e(condition.analysis.verdict)}</td></tr>"
+        f"<td>{condition.relative_distance:.0%}</td><td>{_e(happened)}</td></tr>"
     )
 
 
@@ -234,7 +239,7 @@ def _condition_section(results: list[PolicyResult]) -> str:
             f"<th>Result</th><th>Distance vs normal</th><th>What happened</th></tr></thead>"
             f"<tbody>{rows}</tbody></table></div>"
         )
-    return "<h2>Bad floors, weak batteries and heavy loads</h2>" + "".join(blocks)
+    return "<h2>Uneven ground, bad floors, weak batteries and heavy loads</h2>" + "".join(blocks)
 
 
 def _provenance_section(results: list[PolicyResult]) -> str:

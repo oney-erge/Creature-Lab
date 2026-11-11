@@ -12,7 +12,8 @@ import numpy as np
 from creature_lab.robots.analysis import balance_margin_cm
 from creature_lab.robots.catalog import robot_info
 from creature_lab.robots.fetch import robot_dir
-from creature_lab.robots.scene import write_studio_scene
+from creature_lab.robots.scene import load_model, write_studio_scene
+from creature_lab.robots.terrain import Terrain
 from creature_lab.robots.types import CONTROL_HZ, RobotRun
 
 #: Marker colours (rgba).
@@ -59,11 +60,13 @@ class Studio:
     width: int = 1280
     height: int = 720
     shot: Shot | None = None
+    #: Stairs, a ramp, rough ground or stepping stones to film the robot on (None: flat floor).
+    terrain: Terrain | None = None
     model: mujoco.MjModel = field(init=False)
     data: mujoco.MjData = field(init=False)
 
     def __post_init__(self) -> None:
-        self.model = mujoco.MjModel.from_xml_path(str(scene_file(self.robot)))
+        self.model = load_model(scene_file(self.robot), self.terrain)
         self.model.vis.global_.offwidth = max(self.width, int(self.model.vis.global_.offwidth))
         self.model.vis.global_.offheight = max(self.height, int(self.model.vis.global_.offheight))
         self.data = mujoco.MjData(self.model)

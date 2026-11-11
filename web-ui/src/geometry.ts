@@ -49,3 +49,48 @@ export function shoveReference(unit: number): number {
 export function shoveReferenceFor(unit: number, declared?: number): number {
   return declared !== undefined && declared > 0 ? declared : shoveReference(unit);
 }
+
+/** One box of ground, as the server describes it (MuJoCo's quaternion order: w, x, y, z). */
+export interface GroundBox {
+  pos: [number, number, number];
+  half: [number, number, number];
+  quat: [number, number, number, number];
+  rgba: [number, number, number, number];
+}
+
+/** The face a foot stands on: x and y extent, height at x0 and slope along x. */
+export interface TopFace {
+  x0: number;
+  x1: number;
+  y0: number;
+  y1: number;
+  z0: number;
+  slope: number;
+}
+
+/** Top faces of the server's boxes. Boxes only ever tilt about y (a ramp), as on the server. */
+export function topFaces(boxes: GroundBox[]): TopFace[] {
+  return boxes.map(({ pos, half, quat }) => {
+    const pitch = -2 * Math.atan2(quat[2], quat[0]); // positive rises along +x
+    const [a, , b] = half;
+    const topX = pos[0] - b * Math.sin(pitch);
+    const topZ = pos[2] + b * Math.cos(pitch);
+    return {
+      x0: topX - a * Math.cos(pitch),
+      x1: topX + a * Math.cos(pitch),
+      y0: pos[1] - half[1],
+      y1: pos[1] + half[1],
+      z0: topZ - a * Math.sin(pitch),
+      slope: Math.tan(pitch),
+    };
+  });
+}
+
+/** Height of the ground under (x, y): the highest top face there, else the floor. */
+export function groundHeight(faces: TopFace[], floorZ: number, x: number, y: number): number {
+  let z = floorZ;
+  for (const f of faces) {
+    if (x >= f.x0 && x <= f.x1 && y >= f.y0 && y <= f.y1) z = Math.max(z, f.z0 + f.slope * (x - f.x0));
+  }
+  return z;
+}

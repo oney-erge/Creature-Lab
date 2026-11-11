@@ -95,7 +95,13 @@ run `creature-lab robots fetch ...` in a terminal, which shows the license first
    tried **eight times, at eight points of the stride, alternating sides**, because whether a
    shove topples a walking robot depends on which foot is down when it lands. One lucky or
    unlucky timing would otherwise decide the result.
-3. **Conditions.** Floor grip at 0.5×, 0.3× and 0.15× normal; a weak battery (Microduck); a
+3. **Uneven ground.** Four short courses laid ahead of the robot, each at a few heights: stairs
+   (four steps up, a landing, four down), a ramp up and over, rough ground of randomly raised
+   tiles, and stepping stones over a pit. Every course is sized from the robot's height: for the
+   1.34 m G1 the steps are 4, 8, 12 and 16 cm on 30 cm treads, the ramps 8°, 16° and 24°, the
+   bumps up to 3, 5 and 8 cm and the gaps between 40 cm stones 5, 11 and 16 cm; the 25 cm
+   Microduck meets the same shapes at a fifth of the size.
+4. **Conditions.** Floor grip at 0.5×, 0.3× and 0.15× normal; a weak battery (Microduck); a
    carried load (G1).
 
 A run **falls** when the trunk tilts past 60°. It **gets back up** if it is within about 26° of
@@ -109,6 +115,9 @@ fits, always showing all of them:
 | Cause | Evidence used |
 | --- | --- |
 | Pushed off balance | A shove just before the fall, and the **extrapolated centre of mass** (where the body is heading, `x + v/√(g/h)`) leaving the outline of the feet |
+| Missed the stones | On stepping stones, a foot down in a gap between them (lower than 15% of the pit's depth) in the second before it started to tip |
+| Caught a step | A foot pressing on the side or edge of a step, stone or tile (a contact whose surface leans more than 45° from flat) with at least a quarter of the body's weight, in the second before it started to tip |
+| Too steep | On a ramp, a fall with nothing caught and nothing pushing |
 | Slipped | Median sliding speed of the touching points above 0.05 m/s in the 0.8 s before the fall |
 | Servos saturated | Any servo at 95% of its torque limit for at least 30% of that window |
 | Unclear | None of the above: the report says so instead of guessing |
@@ -177,6 +186,10 @@ one for analysis or filming.
   the absolute numbers.
 - **Shove forces are applied at the trunk for 0.2 s.** They are a standard test, not a model of
   any real person's push.
+- **The courses are boxes.** Steps have sharp edges and the same grip as the floor, and the robot
+  walks straight at them with the same command it walks with on the flat. A policy that never saw
+  stairs in training is expected to trip; the courses show where, and whether another policy does
+  better.
 - **G1:** only the 12 leg joints are driven; the arms hang in a fixed pose, and the policy has no
   get-up behaviour.
 - **Rendering** needs OpenGL. On a headless Linux machine set `MUJOCO_GL=egl` (or `osmesa`).

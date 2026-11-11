@@ -114,7 +114,9 @@ function Evidence({ run }: { run: RunDetail }) {
   const blamed = (label: string) =>
     (run.cause === "pushed" && label === "Balance point vs feet") ||
     (run.cause === "slipped" && label === "Feet slide on the floor") ||
-    (run.cause === "servos_saturated" && label === "Servos at their torque limit");
+    (run.cause === "servos_saturated" && label === "Servos at their torque limit") ||
+    (run.cause === "tripped" && label.startsWith("Foot against the side of")) ||
+    (run.cause === "missed_footing" && label === "Foot below the stones");
   const rows = run.evidence.filter((e) => !e.label.startsWith("Tilt passed"));
   return (
     <ul className="evidence">

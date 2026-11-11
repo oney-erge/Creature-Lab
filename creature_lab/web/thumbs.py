@@ -76,12 +76,15 @@ def _robot_cache(robot: str) -> Path:
 
 
 _studios: dict[str, object] = {}
+#: The one studio kept for a run on stairs, a ramp, rough ground or stones (each course needs its
+#: own model, and every studio holds an OpenGL context, so only the latest is kept).
+_ground_studio: list = []
 
 
-def _studio(robot: str):
+def _studio(robot: str, terrain=None):
     from creature_lab.robots.render import Shot, Studio, default_shot
 
-    if robot not in _studios:
+    def make():
         base = default_shot(robot)
         shot = Shot(
             distance=base.distance * 1.15,
@@ -89,7 +92,17 @@ def _studio(robot: str):
             azimuth_start=135,
             azimuth_end=135,
         )
-        _studios[robot] = Studio(robot, WIDTH, HEIGHT, shot=shot)
+        return Studio(robot, WIDTH, HEIGHT, shot=shot, terrain=terrain)
+
+    if terrain is not None:
+        if _ground_studio and _ground_studio[0] == (robot, terrain):
+            return _ground_studio[1]
+        if _ground_studio:
+            _ground_studio[1].close()
+        _ground_studio[:] = [(robot, terrain), make()]
+        return _ground_studio[1]
+    if robot not in _studios:
+        _studios[robot] = make()
     return _studios[robot]
 
 
@@ -105,7 +118,7 @@ def _render_run_frame(folder: Path, at: float) -> bytes:
     from creature_lab.robots.types import RobotRun
 
     run = RobotRun.read(folder)
-    studio = _studio(run.scenario.robot)
+    studio = _studio(run.scenario.robot, run.scenario.terrain)
     studio.reset_camera()
     for step in range(_SETTLE, 0, -1):
         studio.render(run, max(at - step * 0.04, 0.05), progress=0.5, markers=False)
