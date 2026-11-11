@@ -11,6 +11,14 @@
   check-up takes about 35 to 45 s on a laptop. No robot-specific code was needed: the check-up,
   report, film and the app treat them like any other robot. `RobotInfo.pack` marks pack-driven
   robots and `catalog.builtin_robots()` lists the ones that ship with Creature Lab.
+- **Shove, improve and export what you design.** In the app's *Build your own*, **Test shoves**
+  kicks a designed creature sideways from each side at rising strength (0.2 to 5 m/s, also stated
+  in newtons for 0.2 s) and says how far it stays up; **Improve it** tries about 30 small changes to
+  the sliders and offers one only if it stays up through more shoves (or equally many and walks
+  clearly farther), re-measured on the full ladder beside the original, with the walking trade-off
+  shown (on the quadruped it went from holding 2 m/s to 5 m/s at the cost of walking half as far);
+  **Take it with you** downloads the creature as JSON, a MuJoCo model or a URDF.
+  `POST /api/creatures/{id}/shove`, `/improve` and `GET /api/creatures/{id}/export/{json|mjcf|urdf}`.
 - **Bring your own robot and policy.** A robot pack is a folder with a `robot.toml`, a MuJoCo model
   and a trained policy (`.onnx`, or the `.npz` LSTM form of Unitree's G1 policy). `robots validate`
   checks it and says each mistake in plain words (observation length against the policy's input,

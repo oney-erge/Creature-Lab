@@ -16,7 +16,13 @@ from creature_lab.robots.fetch import is_installed, missing_extra
 from creature_lab.robots.pack import PackError, register_pack, unregister_pack
 from creature_lab.robots.packcheck import PackReport, validate_pack
 from creature_lab.web.builder import Builder, BuilderError
-from creature_lab.web.creatures import CreatureError, Designer, EngineMissing, preset_catalog
+from creature_lab.web.creatures import (
+    CreatureError,
+    Designer,
+    EngineMissing,
+    NoSuchCreature,
+    preset_catalog,
+)
 from creature_lab.web.jobs import Jobs, known_robot
 from creature_lab.web.library import Library
 from creature_lab.web.scene import load_scene, overlay_payload
@@ -63,6 +69,12 @@ class WhatIfRequest(BaseModel):
     """A change from the fixed menu in ``web/whatif.py``; never numbers or paths."""
 
     change: str
+
+
+class ImproveRequest(BaseModel):
+    """How many small changes "Improve it" may try (clamped to a safe range)."""
+
+    tries: int = 30
 
 
 class BuildRequest(BaseModel):
@@ -413,6 +425,41 @@ def create_app(
     @app.get("/api/creatures/{creature_id}/overlay")
     def creature_overlay(creature_id: str) -> Response:
         return Response(_built(creature_id).overlay, media_type=_BINARY)
+
+    @app.post("/api/creatures/{creature_id}/shove")
+    def creature_shove(creature_id: str) -> dict:
+        """Shove the creature at rising strengths and say how hard before it topples."""
+        try:
+            return designer.shove(creature_id)
+        except NoSuchCreature as error:
+            raise HTTPException(404, str(error)) from error
+        except EngineMissing as error:
+            raise HTTPException(409, str(error)) from error
+
+    @app.post("/api/creatures/{creature_id}/improve")
+    def creature_improve(creature_id: str, body: ImproveRequest) -> dict:
+        """Try small design changes; the answer carries a new run only if one is clearly better."""
+        try:
+            return designer.improve(creature_id, body.tries)
+        except NoSuchCreature as error:
+            raise HTTPException(404, str(error)) from error
+        except EngineMissing as error:
+            raise HTTPException(409, str(error)) from error
+
+    @app.get("/api/creatures/{creature_id}/export/{fmt}")
+    def creature_export(creature_id: str, fmt: str) -> Response:
+        """The creature as a file: its JSON spec, a MuJoCo model (MJCF) or a URDF."""
+        try:
+            text, media_type, filename = designer.export(creature_id, fmt)
+        except NoSuchCreature as error:
+            raise HTTPException(404, str(error)) from error
+        except CreatureError as error:
+            raise HTTPException(400, str(error)) from error
+        return Response(
+            text,
+            media_type=media_type,
+            headers={"Content-Disposition": f'attachment; filename="{filename}"', **_NO_STORE},
+        )
 
     @app.get("/api/jobs")
     def running_jobs() -> dict:

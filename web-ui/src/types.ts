@@ -211,6 +211,50 @@ export interface CreatureRun extends RunDetail {
   backend?: string;
 }
 
+/** One shove strength: the speed it gives the body, and whether each side left it standing. */
+export interface ShoveLevel {
+  speed: number;
+  /** The force that gives that speed in 0.2 s, the length of a robot check-up shove. */
+  newtons: number;
+  left: boolean;
+  right: boolean;
+}
+
+/** `POST /api/creatures/{id}/shove`: how hard a sideways shove a designed creature stays up through. */
+export interface ShoveResult {
+  massKg: number;
+  /** True when it topples with no shove at all (then no levels are tried). */
+  baselineFell: boolean;
+  /** How far it walked, and its score, with no shove. */
+  score: number;
+  forward: number;
+  levels: ShoveLevel[];
+  /** The last strength of an unbroken run of passes from the gentlest, in m/s; null when none. */
+  survivesUpTo: number | null;
+  survivesUpToN: number | null;
+}
+
+export interface DesignChange {
+  key: string;
+  label: string;
+  from: number;
+  to: number;
+}
+
+/** `POST /api/creatures/{id}/improve`: a clearly better design with the numbers to prove it, or not. */
+export interface ImproveResponse {
+  improved: boolean;
+  tried: number;
+  before: ShoveResult;
+  after: ShoveResult | null;
+  changes: DesignChange[];
+  /** Only when improved: the new design's run, shaped like a build response. */
+  id?: string;
+  scene?: SceneDescription;
+  run?: CreatureRun;
+  creature?: BuildResponse["creature"];
+}
+
 export interface BuildResponse {
   scene: SceneDescription;
   run: CreatureRun;

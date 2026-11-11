@@ -65,8 +65,21 @@ build editor.
   video, and saves it as a WebM file.
 - **Build your own.** Pick a quadruped, hexapod, worm or humanoid, reshape it with sliders, and
   see it in 3D as you move them. *Run simulation* runs it toward a goal (move forward, reach a
-  target, stay balanced) with its packaged gait and shows what happened. *Open the classic
-  editor* starts the part-by-part editor in a second tab (it needs the `sim` and `viz` extras).
+  target, stay balanced) with its packaged gait and shows what happened. After a run:
+  - **Test shoves** kicks it sideways from each side at nine strengths (0.2 to 5 m/s of sideways
+    speed, which is also stated as the force that gives that speed in 0.2 s, the length of a robot
+    check-up shove) and says how far it stays up. The strength is a speed so that a 2 kg quadruped
+    and a 60 kg humanoid are shoved alike.
+  - **Improve it** tries about 30 small changes to the sliders and offers one only if it is clearly
+    better: it stays up through more of the shove ladder, or equally many and walks at least 0.05
+    score farther. The offer is re-measured on the whole ladder next to the original, and the
+    sliders move to it. A sturdier body can walk less far, so both numbers are shown. When nothing
+    beats the current design it says so: the hexapod and the worm usually get that answer.
+  - **Take it with you** downloads the creature as Creature Lab JSON, a MuJoCo model (MJCF) or a
+    URDF.
+
+  *Open the classic editor* starts the part-by-part editor in a second tab (it needs the `sim` and
+  `viz` extras).
 
 Everything works from the keyboard: the first Tab stop is a skip link to the 3D view, the run
 history is one stop (arrow keys move between runs), and the timeline takes the arrow keys, Home

@@ -22,6 +22,7 @@ from creature_lab.editor import presets
 from creature_lab.schema import CreatureSpec
 from creature_lab.schema.creature import PartSpec, ShapeType
 from creature_lab.schema.trace import FrameState
+from creature_lab.web import shoves
 
 #: Floats per frame in the pose stream (position, then quaternion w, x, y, z) and in the
 #: overlay stream. Both match the real-robot streams, so one 3D view plays either.
@@ -42,6 +43,10 @@ _FALL_DEG = 60.0
 
 class CreatureError(Exception):
     """Something the person asked for that cannot be built (an unknown preset or goal)."""
+
+
+class NoSuchCreature(CreatureError):
+    """A creature that was never built here, or was dropped to make room for newer ones."""
 
 
 class EngineMissing(CreatureError):
@@ -128,6 +133,11 @@ class Built:
     overlay: bytes
     detail: dict
     creature: dict = field(default_factory=dict)
+    #: What follow-up tests need: the creature, its task, the controller it ran with, the engine.
+    spec: CreatureSpec | None = None
+    task: Any = None
+    controller: str = "sinusoid"
+    backend_name: str = ""
 
 
 def _color(part: PartSpec, index: int) -> list[float]:
@@ -342,7 +352,7 @@ class Designer:
         try:
             return self._built[built_id]
         except KeyError:
-            raise CreatureError("that creature is no longer available") from None
+            raise NoSuchCreature("that creature is no longer available") from None
 
     def _keep(self, built: Built) -> Built:
         self._built[built.id] = built
@@ -391,7 +401,70 @@ class Designer:
                 )
         built.creature = {"preset": preset, "params": values, "goal": goal, "backend": version}
         built.detail["backend"] = backend_name
+        from creature_lab.cli import _curated_controller
+
+        built.spec, built.task = creature, task
+        built.controller, built.backend_name = _curated_controller(creature), backend_name
         return self._keep(built)
+
+    # ---- follow-up tests on a built creature ---------------------------------------------
+    def _testable(self, built_id: str) -> Built:
+        built = self.get(built_id)
+        if built.spec is None or built.task is None:
+            raise NoSuchCreature("that creature cannot be tested any more")
+        return built
+
+    def shove(self, built_id: str) -> dict:
+        """Shove the creature from each side at rising strengths: how hard before it topples."""
+        built = self._testable(built_id)
+        with self._lock:
+            return shoves.shove_test(built.spec, built.task, built.controller, built.backend_name)
+
+    def improve(self, built_id: str, tries: int = 30) -> dict:
+        """Try small changes to the design's sliders and offer one only if it is clearly better."""
+        base = self._testable(built_id)
+        meta = base.creature
+        with self._lock:
+            found = shoves.improve(
+                meta["preset"], meta["params"], base.task, base.backend_name, tries=tries
+            )
+        out: dict = {
+            "improved": found.values is not None,
+            "tried": found.tried,
+            "before": found.before,
+            "after": found.after,
+            "changes": [],
+        }
+        if found.values is None:
+            return out
+        spec = {p.key: p for p in presets.CREATURE_PRESETS[meta["preset"]].params}
+        out["changes"] = [
+            {"key": key, "label": spec[key].label, "from": meta["params"][key], "to": value}
+            for key, value in found.values.items()
+            if value != meta["params"][key]
+        ]
+        built = self.build(meta["preset"], found.values, meta["goal"], simulate=True)
+        out.update(
+            {"scene": built.scene, "run": built.detail, "creature": built.creature, "id": built.id}
+        )
+        return out
+
+    def export(self, built_id: str, fmt: str) -> tuple[str, str, str]:
+        """The creature as a file to keep: (text, media type, file name)."""
+        from creature_lab.export.mjcf import export_mjcf
+        from creature_lab.export.urdf import export_urdf
+
+        built = self._testable(built_id)
+        creature, task = built.spec, built.task
+        name = "".join(c if c.isalnum() or c in "-_" else "_" for c in creature.name) or "creature"
+        if fmt == "json":
+            return creature.model_dump_json(indent=2), "application/json", f"{name}.json"
+        if fmt == "mjcf":
+            text = export_mjcf(creature, friction=task.terrain.friction, timestep=task.timestep)
+            return text, "application/xml", f"{name}.xml"
+        if fmt == "urdf":
+            return export_urdf(creature), "application/xml", f"{name}.urdf"
+        raise CreatureError(f"unknown export format {fmt!r} (choose json, mjcf or urdf)")
 
     def _simulate(self, built_id, preset, goal_label, creature, task, backend_name, backend_cls):
         from creature_lab.cli import _curated_controller, _simulate

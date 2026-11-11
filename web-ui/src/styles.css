@@ -1433,3 +1433,51 @@ code {
   color: var(--soft);
   overflow-wrap: anywhere;
 }
+
+/* ---- the designer's shove test and export ---- */
+.shove-levels {
+  list-style: none;
+  margin: 8px 0 4px;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.shove-levels li {
+  min-width: 38px;
+  padding: 5px 8px;
+  border-radius: 8px;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 700;
+  border: 1px solid transparent;
+}
+.shove-levels li.ok {
+  color: var(--teal);
+  background: rgba(43, 196, 169, 0.14);
+  border-color: rgba(43, 196, 169, 0.4);
+}
+.shove-levels li.bad {
+  color: #ffb1ad;
+  background: rgba(242, 100, 94, 0.14);
+  border-color: rgba(242, 100, 94, 0.4);
+}
+.export-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.export-links a {
+  text-decoration: none;
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
