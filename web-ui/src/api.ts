@@ -2,12 +2,14 @@ import type {
   BuildResponse,
   BuilderInfo,
   CreatureCatalog,
+  ImproveResponse,
   Job,
   PackReport,
   RobotsResponse,
   RunCard,
   RunDetail,
   SceneDescription,
+  ShoveResult,
 } from "./types";
 
 // Changing requests carry this header; the server refuses them without it, so a page on
@@ -81,6 +83,9 @@ export const api = {
   creaturePresets: () => getJSON<CreatureCatalog>("/api/creatures/presets"),
   buildCreature: (body: { preset: string; params: Record<string, number>; goal: string; simulate: boolean }) =>
     postJSON<BuildResponse>("/api/creatures/build", body),
+  shoveCreature: (id: string) => postJSON<ShoveResult>(`/api/creatures/${id}/shove`),
+  improveCreature: (id: string, tries = 30) => postJSON<ImproveResponse>(`/api/creatures/${id}/improve`, { tries }),
+  creatureExport: (id: string, format: "json" | "mjcf" | "urdf") => `/api/creatures/${id}/export/${format}`,
   creatureMesh: (id: string, mesh: number) => getBuffer(`/api/creatures/${id}/mesh/${mesh}`),
   creaturePoses: (id: string) => getBuffer(`/api/creatures/${id}/poses`),
   creatureOverlay: (id: string) => getBuffer(`/api/creatures/${id}/overlay`),

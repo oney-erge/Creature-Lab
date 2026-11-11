@@ -1,4 +1,4 @@
-import type { Outcome, PolicySummary, RunCard, ShoveRow } from "./types";
+import type { DesignChange, Outcome, PolicySummary, RunCard, ShoveResult, ShoveRow } from "./types";
 
 export type Tone = "good" | "ok" | "bad";
 
@@ -148,6 +148,46 @@ export function roughDuration(seconds: number): string {
   if (seconds < 50) return "under a minute";
   if (seconds < 100) return "about a minute";
   return `about ${Math.round(seconds / 60)} minutes`;
+}
+
+/** A strength as people say it: "0.6 m/s (about 6 N for 0.2 s)". */
+export function shoveStrength(speed: number, newtons: number): string {
+  const force = newtons >= 100 ? Math.round(newtons) : Math.round(newtons * 10) / 10;
+  return `${speed} m/s (about ${force} N for 0.2 s)`;
+}
+
+/** What a shove test found, in one sentence. */
+export function shoveSentence(result: ShoveResult): string {
+  if (result.baselineFell) return "It falls over by itself, so there is nothing to shove yet.";
+  const first = result.levels[0];
+  if (result.survivesUpTo === null || result.survivesUpToN === null) {
+    return first
+      ? `It falls over from even the gentlest shove, ${shoveStrength(first.speed, first.newtons)}.`
+      : "It falls over from even the gentlest shove.";
+  }
+  const strongest = result.levels[result.levels.length - 1];
+  const all = strongest !== undefined && strongest.speed === result.survivesUpTo;
+  const said = shoveStrength(result.survivesUpTo, result.survivesUpToN);
+  return all
+    ? `It stays up through every shove tried, up to ${said}.`
+    : `It stays up through shoves up to ${said}.`;
+}
+
+/** A number with at most two decimals and no trailing zeros: 0.32, 0.5, 60. */
+export function plainNumber(value: number): string {
+  return String(Math.round(value * 100) / 100);
+}
+
+/** "Body width: 0.32 → 0.54". */
+export function changeLine(change: DesignChange): string {
+  return `${change.label}: ${plainNumber(change.from)} → ${plainNumber(change.to)}`;
+}
+
+/** How far a shove limit moved, for a before/after line: "2 m/s → 5 m/s", "falls → 0.4 m/s". */
+export function limitLine(before: ShoveResult, after: ShoveResult): string {
+  const say = (r: ShoveResult) =>
+    r.baselineFell ? "falls alone" : r.survivesUpTo === null ? "falls at once" : `${r.survivesUpTo} m/s`;
+  return `${say(before)} → ${say(after)}`;
 }
 
 /** The robot to open first on a clean machine: the one whose first check-up finishes soonest. */

@@ -17,9 +17,14 @@ import {
   groupRuns,
   limitText,
   outcomeTone,
+  changeLine,
+  limitLine,
   pairName,
+  plainNumber,
   quickestStart,
   roughDuration,
+  shoveSentence,
+  shoveStrength,
   totals,
   whatIfSentence,
 } from "./format";
@@ -34,7 +39,7 @@ import {
 import { HOLD_S, Playback, SLOW_FACTOR, frameAt, rateAt } from "./playback";
 import { clipFileName, clipWindow } from "./clip";
 import { HOME, hashFor, parseHash } from "./url";
-import type { PolicySummary, RunCard, RunEvents, ShoveRow } from "./types";
+import type { PolicySummary, RunCard, RunEvents, ShoveResult, ShoveRow } from "./types";
 
 const events: RunEvents = {
   pushAt: 4,
@@ -354,5 +359,51 @@ describe("what if", () => {
     const otherPolicy = card({ policy: "other", policyTitle: "Walk + get-up policy" });
     expect(pairName(otherPolicy, original)).toBe("Walk + get-up policy");
     expect(pairName(original, null)).toBe(original.policyTitle);
+  });
+});
+
+describe("saying what a designed creature's shove test found", () => {
+  const levels = (passed: number): ShoveResult["levels"] =>
+    [0.2, 0.4, 0.6, 0.8].map((speed, i) => ({
+      speed,
+      newtons: speed * 10,
+      left: i < passed,
+      right: i < passed,
+    }));
+  const result = (passed: number, extra: Partial<ShoveResult> = {}): ShoveResult => ({
+    massKg: 2,
+    baselineFell: false,
+    score: 1,
+    forward: 1,
+    levels: levels(passed),
+    survivesUpTo: passed === 0 ? null : [0.2, 0.4, 0.6, 0.8][passed - 1]!,
+    survivesUpToN: passed === 0 ? null : [0.2, 0.4, 0.6, 0.8][passed - 1]! * 10,
+    ...extra,
+  });
+
+  it("states a strength as a speed and the force that gives it in a check-up shove", () => {
+    expect(shoveStrength(0.6, 6)).toBe("0.6 m/s (about 6 N for 0.2 s)");
+    expect(shoveStrength(2, 16.04)).toBe("2 m/s (about 16 N for 0.2 s)");
+    expect(shoveStrength(5, 300.4)).toBe("5 m/s (about 300 N for 0.2 s)");
+  });
+
+  it("says how far it stays up", () => {
+    expect(shoveSentence(result(2))).toBe("It stays up through shoves up to 0.4 m/s (about 4 N for 0.2 s).");
+    expect(shoveSentence(result(4))).toMatch(/every shove tried, up to 0.8 m\/s/);
+  });
+
+  it("says so when even the gentlest shove topples it, or it falls alone", () => {
+    expect(shoveSentence(result(0))).toBe("It falls over from even the gentlest shove, 0.2 m/s (about 2 N for 0.2 s).");
+    expect(shoveSentence(result(0, { baselineFell: true, levels: [] }))).toMatch(/falls over by itself/);
+    expect(shoveSentence(result(0, { levels: [] }))).toBe("It falls over from even the gentlest shove.");
+  });
+
+  it("writes a design change and a limit as plain before-and-after lines", () => {
+    expect(plainNumber(0.3200001)).toBe("0.32");
+    expect(plainNumber(60)).toBe("60");
+    expect(changeLine({ key: "body_width", label: "Body width", from: 0.32, to: 0.54 })).toBe("Body width: 0.32 → 0.54");
+    expect(limitLine(result(2), result(4))).toBe("0.4 m/s → 0.8 m/s");
+    expect(limitLine(result(0), result(1))).toBe("falls at once → 0.2 m/s");
+    expect(limitLine(result(0, { baselineFell: true }), result(1))).toBe("falls alone → 0.2 m/s");
   });
 });

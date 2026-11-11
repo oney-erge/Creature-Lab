@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../api";
-import { outcomeTone } from "../format";
+import { changeLine, limitLine, outcomeTone, shoveSentence, shoveStrength } from "../format";
 import { Playback } from "../playback";
-import type { BuildResponse, CreatureCatalog, CreatureParam } from "../types";
+import type { BuildResponse, CreatureCatalog, CreatureParam, ImproveResponse, ShoveResult } from "../types";
 import { Stage, type StageSource } from "./Stage";
 import { Timeline } from "./Timeline";
 
@@ -53,9 +53,13 @@ export function Editor({ preset, onPreset, onClassic, classicNote }: Props) {
   const [params, setParams] = useState<Record<string, number>>({});
   const [built, setBuilt] = useState<BuildResponse | null>(null);
   const [result, setResult] = useState<BuildResponse | null>(null);
-  const [busy, setBusy] = useState<"preview" | "run" | null>(null);
+  const [busy, setBusy] = useState<"preview" | "run" | "shove" | "improve" | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [shove, setShove] = useState<ShoveResult | null>(null);
+  const [improvement, setImprovement] = useState<ImproveResponse | null>(null);
   const ticket = useRef(0);
+  /** Set when "Improve it" moves the sliders itself: the resting preview must not replace its run. */
+  const keepRun = useRef(false);
 
   useEffect(() => {
     api
@@ -71,11 +75,17 @@ export function Editor({ preset, onPreset, onClassic, classicNote }: Props) {
     if (!current) return;
     setParams(Object.fromEntries(current.params.map((p) => [p.key, p.initial])));
     setResult(null);
+    setShove(null);
+    setImprovement(null);
   }, [current?.key]);
 
   // Whenever the design changes, show it at rest (after a short pause for sliders being dragged).
   useEffect(() => {
     if (!current || Object.keys(params).length === 0) return;
+    if (keepRun.current) {
+      keepRun.current = false;
+      return;
+    }
     const mine = ++ticket.current;
     setBusy("preview");
     const timer = setTimeout(() => {
@@ -85,6 +95,7 @@ export function Editor({ preset, onPreset, onClassic, classicNote }: Props) {
           if (mine !== ticket.current) return;
           setBuilt(response);
           setResult(null);
+          setShove(null);
           setError(null);
         })
         .catch((e) => mine === ticket.current && setError(e instanceof Error ? e.message : String(e)))
@@ -102,6 +113,46 @@ export function Editor({ preset, onPreset, onClassic, classicNote }: Props) {
       const response = await api.buildCreature({ preset: current.key, params, goal, simulate: true });
       setBuilt(response);
       setResult(response);
+      setShove(null);
+      setImprovement(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const creatureId = result?.scene.robot ?? null;
+
+  const shoveIt = async () => {
+    if (!creatureId) return;
+    setBusy("shove");
+    setError(null);
+    try {
+      setShove(await api.shoveCreature(creatureId));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const improveIt = async () => {
+    if (!creatureId || !result) return;
+    setBusy("improve");
+    setError(null);
+    try {
+      const found = await api.improveCreature(creatureId);
+      setImprovement(found);
+      if (found.improved && found.scene && found.run && found.creature) {
+        // Move the sliders to the better design and play its run, without a preview replacing it.
+        keepRun.current = true;
+        setParams(found.creature.params);
+        const response: BuildResponse = { scene: found.scene, run: found.run, creature: found.creature };
+        setBuilt(response);
+        setResult(response);
+        setShove(found.after);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -226,6 +277,118 @@ export function Editor({ preset, onPreset, onClassic, classicNote }: Props) {
                 </li>
               ))}
             </ul>
+          </section>
+        )}
+
+        {result && (
+          <section className="panel" data-testid="shove-panel">
+            <h2 className="eyebrow">Shove it</h2>
+            <p className="body">
+              Kick it sideways from each side at rising strength and see how hard before it topples. The
+              strength is the speed the kick gives it, so a light creature and a heavy one are shoved alike.
+            </p>
+            <button type="button" className="ghost" disabled={busy !== null} onClick={() => void shoveIt()}>
+              {busy === "shove" ? "Shoving…" : shove ? "Shove it again" : "Test shoves"}
+            </button>
+            {shove && (
+              <>
+                <p className="verdict" data-testid="shove-verdict">
+                  {shoveSentence(shove)}
+                </p>
+                {shove.levels.length > 0 && (
+                  <ul className="shove-levels" aria-label="Each strength, from both sides">
+                    {shove.levels.map((level) => {
+                      const both = level.left && level.right;
+                      const said = shoveStrength(level.speed, level.newtons);
+                      const how = both
+                        ? "stayed up from both sides"
+                        : level.left || level.right
+                          ? `fell from the ${level.left ? "right" : "left"}`
+                          : "fell from both sides";
+                      return (
+                        <li key={level.speed} className={both ? "ok" : "bad"} title={`${said}: ${how}`}>
+                          <span className="mono">{level.speed}</span>
+                          <span className="sr-only">{`${said}: ${how}`}</span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+                <p className="muted small">m/s of sideways speed. Teal: stayed up from both sides. Red: fell.</p>
+              </>
+            )}
+          </section>
+        )}
+
+        {result && (
+          <section className="panel" data-testid="improve-panel">
+            <h2 className="eyebrow">Improve it</h2>
+            <p className="body">
+              Tries about 30 small changes to the sliders, and keeps one only if it stays up through more
+              shoves, or walks clearly farther without being easier to knock over. It takes 10 to 30 seconds.
+            </p>
+            <button type="button" className="primary" disabled={busy !== null} onClick={() => void improveIt()}>
+              {busy === "improve" ? "Trying changes…" : "Improve it"}
+            </button>
+            {improvement && !improvement.improved && (
+              <p className="muted" data-testid="improve-none" role="status">
+                Tried {improvement.tried} changes and none was clearly better. This design is already a good
+                one, or the sliders cannot fix what is wrong with it.
+              </p>
+            )}
+            {improvement?.improved && improvement.after && (
+              <div data-testid="improve-found" role="status">
+                <p className="verdict">Found a better design. The sliders have moved to it.</p>
+                <ul className="evidence">
+                  {improvement.changes.map((change) => (
+                    <li key={change.key}>
+                      <span className="bar ok" />
+                      <span className="ev-text">
+                        <span className="ev-label">{change.label}</span>
+                        <span className="ev-value">{changeLine(change).split(": ")[1]}</span>
+                      </span>
+                    </li>
+                  ))}
+                  <li>
+                    <span className="bar ok" />
+                    <span className="ev-text">
+                      <span className="ev-label">Holds up to</span>
+                      <span className="ev-value">{limitLine(improvement.before, improvement.after)}</span>
+                    </span>
+                  </li>
+                  <li>
+                    <span className="bar ok" />
+                    <span className="ev-text">
+                      <span className="ev-label">Walks</span>
+                      <span className="ev-value">
+                        {improvement.before.forward} m → {improvement.after.forward} m
+                      </span>
+                    </span>
+                  </li>
+                </ul>
+                <p className="muted small">
+                  A sturdier body can walk less far: both numbers are shown, and Reset puts the sliders back.
+                </p>
+              </div>
+            )}
+          </section>
+        )}
+
+        {creatureId && (
+          <section className="panel">
+            <h2 className="eyebrow">Take it with you</h2>
+            <p className="body">Download this creature to use it elsewhere.</p>
+            <div className="row export-links">
+              <a className="ghost" href={api.creatureExport(creatureId, "json")} download>
+                Creature Lab JSON
+              </a>
+              <a className="ghost" href={api.creatureExport(creatureId, "mjcf")} download>
+                MuJoCo model
+              </a>
+              <a className="ghost" href={api.creatureExport(creatureId, "urdf")} download>
+                URDF
+              </a>
+            </div>
           </section>
         )}
 
