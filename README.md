@@ -22,7 +22,8 @@
 
 Creature Lab runs published robots with their **real trained walking policies**. It shoves them at
 dozens of strengths and moments, walks them over stairs, ramps, rough ground and stepping stones,
-and tries slippery floors, loads and weak batteries. Then it explains every fall from the recorded
+and tries a failing motor, late commands, slippery floors, loads and weak batteries. Then it
+explains every fall from the recorded
 evidence: where the weight went relative to the feet, how fast the feet slid, whether a foot caught
 a step or missed a stone, and whether the motors ran out of torque. Change one thing, or swap the
 policy, and see whether the fall is fixed. The physics runs on the CPU (MuJoCo). It is a simulation, not

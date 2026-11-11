@@ -64,6 +64,7 @@ export const KIND_LABEL: Record<string, string> = {
   baseline: "Walks",
   shove: "Shoves",
   terrain: "Uneven ground",
+  damage: "Weak motors and late commands",
   grip: "Slippery floors",
   battery: "Weak batteries",
   payload: "Carried loads",

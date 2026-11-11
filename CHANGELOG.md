@@ -12,6 +12,12 @@
   balance point on the ground under the robot, and lists the runs as "Uneven ground"; the report
   and `robots compare` include them. Flat-floor runs are unchanged, and runs saved before this read
   as before.
+- **Damage tests.** The check-up limits the motor that works hardest in the baseline walk to 60%
+  and 30% of its torque, and delays every command by 20, 40 and 60 ms. A fall is explained as a
+  weak motor at its limit, or as late commands on a floor with normal grip; a run that stays up
+  says what it walked with. On the 29-joint G1 the small-shove policy limps 0.8 m on a right ankle
+  at 30% (4.1 m healthy) and falls with 40 ms delays; the strong-shove policy walks 2.7 m and
+  keeps its feet at 40 ms.
 - **Robot packs can read the ground ahead.** A new observation term, `height_scan`, gives the same
   numbers as mjlab's height scan (the body's height above the ground on a grid that turns with the
   robot), and a policy can have its own observation list when it reads something the others do not.

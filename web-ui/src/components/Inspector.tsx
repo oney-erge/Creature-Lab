@@ -116,7 +116,8 @@ function Evidence({ run }: { run: RunDetail }) {
     (run.cause === "slipped" && label === "Feet slide on the floor") ||
     (run.cause === "servos_saturated" && label === "Servos at their torque limit") ||
     (run.cause === "tripped" && label.startsWith("Foot against the side of")) ||
-    (run.cause === "missed_footing" && label === "Foot below the stones");
+    (run.cause === "missed_footing" && label === "Foot below the stones") ||
+    (run.cause === "weak_motor" && label === "Weak motor at its limit");
   const rows = run.evidence.filter((e) => !e.label.startsWith("Tilt passed"));
   return (
     <ul className="evidence">

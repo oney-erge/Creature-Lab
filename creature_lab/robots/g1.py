@@ -92,6 +92,9 @@ class UnitreeG1(MujocoRobot):
     def servo_load(self) -> np.ndarray:
         return self._torque / self._limit
 
+    def torque_limits(self) -> np.ndarray:
+        return self._limit
+
     def provenance(self) -> dict:
         info = robot_info("unitree_g1")
         weights = resources.files("creature_lab.robots").joinpath("data", "unitree_g1_policy.npz")

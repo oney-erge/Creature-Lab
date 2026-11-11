@@ -145,6 +145,9 @@ class Microduck(MujocoRobot):
     def servo_load(self) -> np.ndarray:
         return np.asarray(self.data.ctrl, dtype=float) / self.servos.stall_torque
 
+    def torque_limits(self) -> np.ndarray:
+        return np.full(len(self.joint_names), self.servos.stall_torque)
+
     def provenance(self) -> dict:
         info = robot_info("microduck")
         return {
