@@ -52,11 +52,14 @@ Either way it installs prebuilt packages only (no compiler, about 300 MB) and op
 - **Watch a shove in 3D**, slowed down at the shove and the fall. The app draws the floor area that
   holds the robot up and the point where its weight would land.
 - **Read why it fell** in plain words, with the numbers behind it.
+- **Walk it over uneven ground**: stairs, a ramp, rough ground and stepping stones, sized to the
+  robot. A fall there is explained as a toe caught on a step, a foot down a gap or a slope too
+  steep.
 - **Ask "what if"**: shove from the other side, harder or gentler, on a slippery floor, slower,
   faster or carrying a load. It runs again in about a second and plays beside the original.
-- **Compare two policies** on the same shove. The 29-joint Unitree G1 has two policies trained for
+- **Compare policies** on the same test. The 29-joint Unitree G1 has two policies trained for
   Creature Lab, one with small shoves and one with strong shoves; the Microduck has Pollen's walk-only
-  and walk-and-get-up policies.
+  and walk-and-get-up policies. A robot with more than two lets you pick which to compare.
 - **Bring your own robot and policy**: a MuJoCo model, an ONNX policy and a small `robot.toml`
   (`robots validate`, `robots add`; [guide](docs/ROBOT_PACKS.md)) get the same shoves and explanations.
 - **Check for regressions** from the command line: `robots compare` says which tests got better or
@@ -69,6 +72,12 @@ Either way it installs prebuilt packages only (no compiler, about 300 MB) and op
 </p>
 
 <p align="center"><sub>Same 400 N shove, same moment, two policies trained the same way except for how hard they were shoved in training (simulation). Over eight shoves at 400 N the small-shove policy fell 5 times, the strong-shove policy once. Unitree G1 model: Unitree Robotics, BSD 3-Clause.</sub></p>
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/oney-erge/Creature-Lab/main/docs/assets/g1-terrain.gif" width="720" alt="The Creature Lab app showing the 29-joint Unitree G1 on stairs with 4 cm steps: a toe catches a step and it falls at 2.8 s, and the panel names the step it caught, with the force on the step's edge. Then the G1 on stepping stones 11 cm apart: a foot goes down into a gap and it falls." />
+</p>
+
+<p align="center"><sub>Uneven ground (simulation): stairs with 4 cm steps and stepping stones 11 cm apart. Neither of the G1's policies was trained on anything but a flat floor, and both fall on every stair height the check-up tries. Unitree G1 model: Unitree Robotics, BSD 3-Clause.</sub></p>
 
 ## From the command line
 

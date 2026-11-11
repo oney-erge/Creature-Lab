@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from creature_lab.robots.analysis import RunAnalysis, analyze
@@ -38,9 +38,12 @@ class RunEntry:
     analysis: RunAnalysis
     scenario: dict
     mtime: float
-    #: The same test run with the robot's other policy (same shove, floor, battery, load). For a
-    #: "what if" run it is the run it was made from, so the two can be shown together.
+    #: The same test run with another of the robot's policies (same shove, floor, battery, load),
+    #: the one whose outcome differs most. For a "what if" run it is the run it was made from, so
+    #: the two can be shown together.
     pair: str | None = None
+    #: The same test under every other policy, in the robot's policy order.
+    pairs: list[str] = field(default_factory=list)
     #: For a "what if" run: what was changed (``label``, ``short``, ``change``, ``from``).
     what_if: dict | None = None
 
@@ -62,6 +65,7 @@ class RunEntry:
             "distance": round(a.distance_m, 2),
             "pushN": self.scenario.get("push_n", 0.0),
             "pair": self.pair,
+            "pairs": self.pairs,
             "whatIf": self.what_if["label"] if self.what_if else None,
             "whatIfShort": self.what_if["short"] if self.what_if else None,
         }
@@ -108,8 +112,28 @@ def _link_pairs(entries: list[RunEntry]) -> None:
             source = by_folder.get((entry.policy, str(entry.what_if.get("from"))))
             entry.pair = source.id if source else None
             continue
-        twins = [e for e in groups[_pair_key(entry)] if e.policy != entry.policy]
-        entry.pair = twins[0].id if len(twins) == 1 else None
+        twins = _one_per_policy(e for e in groups[_pair_key(entry)] if e.policy != entry.policy)
+        entry.pairs = [twin.id for twin in twins]
+        # The comparison worth opening first: the twin whose outcome differs most (a fall beside a
+        # walk), else the first policy.
+        entry.pair = (
+            max(twins, key=lambda t: abs(_severity(t) - _severity(entry))).id if twins else None
+        )
+
+
+def _one_per_policy(twins) -> list[RunEntry]:
+    """The first run of each policy (entries arrive sorted), in the robot's policy order."""
+    chosen: dict[str, RunEntry] = {}
+    for twin in twins:
+        chosen.setdefault(twin.policy, twin)
+    if not chosen:
+        return []
+    order = [p.key for p in robot_info(next(iter(chosen.values())).robot).policies]
+    return sorted(chosen.values(), key=lambda t: order.index(t.policy) if t.policy in order else 99)
+
+
+def _severity(entry: RunEntry) -> int:
+    return {"walked": 0, "fell_and_got_up": 1}.get(entry.analysis.outcome, 2)
 
 
 def _title(name: str, scenario: dict) -> str:

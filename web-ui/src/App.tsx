@@ -326,8 +326,17 @@ export default function App() {
     };
   }, [runId]);
 
-  // The other policy's run of the same test, while the two are shown together.
-  const twin = runs.find((r) => r.id === detail?.pair) ?? null;
+  // Another policy's run of the same test, while the two are shown together. With three or more
+  // policies the person can pick which one; the server's choice (the outcome that differs most)
+  // comes first.
+  const [twinPick, setTwinPick] = useState<string | null>(null);
+  useEffect(() => setTwinPick(null), [runId]);
+  const twins = (detail?.pairs ?? []).map((id) => runs.find((r) => r.id === id)).filter(
+    (r): r is RunCard => r !== undefined,
+  );
+  const twin =
+    runs.find((r) => r.id === (twinPick && detail?.pairs?.includes(twinPick) ? twinPick : detail?.pair)) ??
+    null;
   useEffect(() => {
     if (!compare) {
       setOther(null);
@@ -679,6 +688,8 @@ export default function App() {
             run={detail}
             onRun={watch}
             twin={twin}
+            twins={twins}
+            onTwin={setTwinPick}
             compare={pairShown}
             onCompare={setCompareOn}
             onWhatIf={(key) => void askWhatIf(key)}

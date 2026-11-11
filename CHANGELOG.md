@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- **Robots with more than two policies.** Each run now lists the same test under every other
+  policy, and the app opens on the one whose outcome differs most (a walk beside a fall); the
+  "another policy" panel lets you pick another. Before, a run was paired only when exactly one
+  other policy had the same test, so a robot with three policies had no comparisons at all.
+- README clip `docs/assets/g1-terrain.gif`: the 29-joint G1 tripping on 4 cm stairs and missing a
+  stepping stone, with the panel naming the cause. `scripts/media` records it (`g1stairs`,
+  `g1stones`) and composes it (`compose_app.py terrain`, and `site_terrain` for the site card);
+  the recorder now waits for a robot's first run before opening another, which had let the
+  featured run replace the chosen one.
 - **Uneven ground.** The check-up now walks every robot over four short courses, each at a few
   heights: stairs (up four steps, along a landing, down four), a ramp up and over, rough ground of
   randomly raised tiles, and stepping stones over a pit. Each is sized from the robot's height (for
