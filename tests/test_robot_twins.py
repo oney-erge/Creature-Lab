@@ -67,3 +67,29 @@ def test_one_policy_needs_no_twins(tmp_path, monkeypatch):
     saved_checkup(folder, "velstand", stays_down=False)
     calls = _fake_simulator(monkeypatch)
     assert add_twins({"velstand": folder}) == 0 and calls == []
+
+
+def test_with_three_policies_every_run_lists_both_twins_and_opens_on_the_one_that_differs(
+    tmp_path, monkeypatch
+):
+    import dataclasses
+
+    from creature_lab.robots.catalog import PolicyInfo, robot_info
+
+    # A stand-in robot with a third policy (a robot pack can list as many as it likes).
+    duck = robot_info("microduck")
+    third = PolicyInfo("steady", "Steady policy", "A third policy.", "policies/steady.onnx")
+    three = dataclasses.replace(duck, policies=(*duck.policies, third))
+    for module in ("creature_lab.web.library", "creature_lab.robots.analysis"):
+        monkeypatch.setattr(f"{module}.robot_info", lambda key: three)
+    root = tmp_path / "checkups" / "microduck-1"
+    # Two policies stay down after the shove; the third gets back up, so it is the comparison
+    # worth opening first.
+    for policy, stays_down in (("velstand", True), ("alpha_walking", True), ("steady", False)):
+        saved_checkup(root / policy, policy, stays_down=stays_down)
+    runs = Library(tmp_path / "checkups").runs("microduck")
+    fall = next(r for r in runs if r.policy == "velstand" and r.name == "shove_3N_fall")
+    policy_of = {r.id: r.policy for r in runs}
+    assert [policy_of[i] for i in fall.pairs] == ["alpha_walking", "steady"]  # policy order
+    assert policy_of[fall.pair] == "steady"
+    assert fall.card()["pairs"] == fall.pairs

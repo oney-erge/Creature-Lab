@@ -436,8 +436,42 @@ def _g1pair_plan() -> list:
     ]
 
 
+def _g1terrain_plan() -> list:
+    """A toe caught on stairs, then a stone missed: each fall named by the panel. The captions
+    quote the saved runs (info.json written by the recorder)."""
+    stairs_file = HERE / "frames" / "g1stairs" / "info.json"
+    stones_file = HERE / "frames" / "g1stones" / "info.json"
+    if not stairs_file.exists() or not stones_file.exists():
+        return []
+    stairs = json.loads(stairs_file.read_text())
+    stones = json.loads(stones_file.read_text())
+    steps = stairs["title"].removeprefix("Stairs with ").lower()
+    return [
+        Cut(
+            "g1stairs",
+            "play",
+            -0.3,
+            4.2,
+            f"Stairs with {steps}: a toe catches a step and it falls at {stairs['fellAt']:.1f} s. "
+            "The panel names the step it caught.",
+            G1_MJLAB,
+            fade=True,
+        ),
+        Cut(
+            "g1stones",
+            "play",
+            -0.2,
+            4.6,
+            f"{stones['title']}: a foot goes into a gap, and the panel says so.",
+            G1_MJLAB,
+            fade=True,
+        ),
+    ]
+
+
 PLANS = {
     "pair_gif": _g1pair_plan(),
+    "terrain_gif": _g1terrain_plan(),
     "tour": [
         Card("title", 2.6),
         *FIRST_RUN,
@@ -462,6 +496,31 @@ if __name__ == "__main__":
             fps=int(sys.argv[2]) if len(sys.argv) > 2 else 10,
             width=int(sys.argv[3]) if len(sys.argv) > 3 else 800,
             crop=(452, 0, UI_W, UI_H),
+        )
+    elif what == "terrain":
+        # The README clip for uneven ground: stairs side by side, then a missed stepping stone.
+        encode_gif(
+            PLANS["terrain_gif"],
+            OUT / "creature-lab-terrain.gif",
+            fps=int(sys.argv[2]) if len(sys.argv) > 2 else 10,
+            width=int(sys.argv[3]) if len(sys.argv) > 3 else 800,
+            crop=(452, 0, UI_W, UI_H),
+        )
+    elif what == "site_terrain":
+        # The portfolio card: a shove, stairs and stepping stones, no captions (the card has words).
+        plan = [
+            Cut("g1pair", "play", 0.2, 6.2),
+            Cut("g1stairs", "play", -0.2, 4.4, fade=True),
+            Cut("g1stones", "play", 0.0, 4.4, fade=True),
+        ]
+        encode_mp4(
+            plan,
+            OUT / "creature-lab-demo.mp4",
+            fps=30,
+            crf=28,
+            captions=False,
+            crop=(480, 127, 1366, 681),
+            size=(960, 600),
         )
     elif what == "gif":
         # The README GIF leaves out the robot list on the left: the robot and the words are bigger.

@@ -716,6 +716,10 @@ code {
   background: var(--accent);
   color: var(--accent-ink);
 }
+.twin-choice {
+  margin: 2px 0 10px;
+}
+
 .seg.small button {
   min-height: 32px;
   padding: 4px 10px;

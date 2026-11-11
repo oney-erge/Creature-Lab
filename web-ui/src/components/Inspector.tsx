@@ -8,8 +8,11 @@ interface Props {
   onPolicy: (key: string) => void;
   run: RunDetail | null;
   onRun: (id: string) => void;
-  /** The same test under the other policy, if the check-up has one. */
+  /** The same test under another policy, if the check-up has one. */
   twin: RunCard | null;
+  /** The same test under every other policy (a choice when there are two or more). */
+  twins?: RunCard[];
+  onTwin?: (id: string) => void;
   compare: boolean;
   onCompare: (on: boolean) => void;
   /** Ask for the same run with one thing changed (a key from `run.whatIfs`). */
@@ -21,8 +24,39 @@ interface Props {
 /** A pair is a "what if" when both runs are the same policy: the same robot with one change. */
 const isWhatIf = (a: RunCard, b: RunCard) => a.policy === b.policy;
 
-/** "Can it be fixed?": the same shove under the other policy, one click away. */
-function FixPanel({ run, twin, onCompare }: { run: RunDetail; twin: RunCard; onCompare: (on: boolean) => void }) {
+/** Which other policy to compare with, when the robot has more than one other. */
+function TwinChoice({ twin, twins, onTwin }: { twin: RunCard; twins: RunCard[]; onTwin: (id: string) => void }) {
+  if (twins.length < 2) return null;
+  return (
+    <div className="seg small twin-choice" role="group" aria-label="Compare with">
+      {twins.map((t) => (
+        <button
+          key={t.id}
+          type="button"
+          aria-pressed={t.id === twin.id}
+          onClick={() => onTwin(t.id)}
+        >
+          {t.policyTitle}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** "Can it be fixed?": the same shove under another policy, one click away. */
+function FixPanel({
+  run,
+  twin,
+  twins,
+  onTwin,
+  onCompare,
+}: {
+  run: RunDetail;
+  twin: RunCard;
+  twins: RunCard[];
+  onTwin: (id: string) => void;
+  onCompare: (on: boolean) => void;
+}) {
   if (isWhatIf(run, twin)) {
     return (
       <section className="panel fix" data-testid="fix">
@@ -40,9 +74,10 @@ function FixPanel({ run, twin, onCompare }: { run: RunDetail; twin: RunCard; onC
   return (
     <section className="panel fix" data-testid="fix">
       <h2 className="eyebrow">{better ? "Can it be fixed?" : "Another policy"}</h2>
+      <TwinChoice twin={twin} twins={twins} onTwin={onTwin} />
       <p className="body">
         {better
-          ? `Yes, for this shove. The ${twin.policyTitle.toLowerCase()} met the same push and `
+          ? `Yes, for this ${run.kind === "shove" ? "shove" : "test"}. The ${twin.policyTitle.toLowerCase()} met the same ${run.kind === "shove" ? "push" : "test"} and `
           : `The ${twin.policyTitle.toLowerCase()} met the same test and `}
         <strong className={`tone-${outcomeTone(twin.outcome)}`}>{twin.outcomeText.toLowerCase()}</strong>.
       </p>
@@ -188,7 +223,21 @@ function ShoveMatrix({ policy, onRun }: { policy: PolicySummary; onRun: (id: str
   );
 }
 
-export function Inspector({ robot, checkup, policyKey, onPolicy, run, onRun, twin, compare, onCompare, onWhatIf, asking }: Props) {
+export function Inspector({
+  robot,
+  checkup,
+  policyKey,
+  onPolicy,
+  run,
+  onRun,
+  twin,
+  twins = [],
+  onTwin = () => undefined,
+  compare,
+  onCompare,
+  onWhatIf,
+  asking,
+}: Props) {
   const policy = checkup?.policies.find((p) => p.policy === policyKey) ?? checkup?.policies[0] ?? null;
   return (
     <aside className="side-col" aria-label="Inspector">
@@ -227,7 +276,9 @@ export function Inspector({ robot, checkup, policyKey, onPolicy, run, onRun, twi
         </section>
       )}
 
-      {run && twin && !compare && <FixPanel run={run} twin={twin} onCompare={onCompare} />}
+      {run && twin && !compare && (
+        <FixPanel run={run} twin={twin} twins={twins} onTwin={onTwin} onCompare={onCompare} />
+      )}
 
       {run && run.whatIfs.length > 0 && <WhatIfPanel run={run} asking={asking} onWhatIf={onWhatIf} />}
 

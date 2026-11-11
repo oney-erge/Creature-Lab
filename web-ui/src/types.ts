@@ -110,6 +110,8 @@ export interface RunCard {
    * run it was made from.
    */
   pair: string | null;
+  /** The same test under every other policy, in the robot's policy order (`pair` is one). */
+  pairs?: string[];
   /** For a "what if" run: what was changed, as a button label ("A harder shove"). */
   whatIf: string | null;
   /** The same change inside a sentence ("shoved harder (4.5 N)"). */

@@ -7,6 +7,7 @@
 | `app-build.webp` | Screenshot of the browser app's creature designer (Creature Lab's own shapes) | Apache-2.0 |
 | `checkup-unitree-g1.webp`, `.gif`, `.mp4` | Unitree Robotics' G1 model, rendered by Creature Lab | BSD 3-Clause model; renders Apache-2.0 |
 | `g1-two-policies.gif` | A screen recording of the browser app showing Unitree's G1 model (29 joints) with two policies trained for Creature Lab | BSD 3-Clause model; recording and policies Apache-2.0 |
+| `g1-terrain.gif` | A screen recording of the browser app showing Unitree's G1 model (29 joints) on stairs and stepping stones | BSD 3-Clause model; recording and policies Apache-2.0 |
 | `creature-lab-demo.gif` | A screen recording of the browser app showing Unitree's G1 model | BSD 3-Clause model; recording Apache-2.0 |
 | The tour video ([oneyerge.com/media/creature-lab-tour.mp4](https://oneyerge.com/media/creature-lab-tour.mp4), not in the repository) | Screen recordings of the app with both robots | **CC BY-NC-SA 4.0** (it shows the Microduck) |
 | `social-preview.png` | The image for the GitHub link card (a frame of the G1 render plus text) | BSD 3-Clause model; image Apache-2.0 |

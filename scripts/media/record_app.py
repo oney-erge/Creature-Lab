@@ -11,7 +11,8 @@ downloads and checks up the G1 from an empty robot cache.
     export CREATURE_LAB_ROBOTS_DIR=<empty>
     creature-lab app --port 8766 --no-open-browser --checkups <empty2>
     python scripts/media/record_app.py firstrun http://127.0.0.1:8766/
-    python scripts/media/record_app.py fall|whatif|policies|g1pair|overview http://127.0.0.1:8765/
+    python scripts/media/record_app.py fall|whatif|policies|g1pair|g1stairs|g1stones|overview \
+        http://127.0.0.1:8765/
 
 Needs the `browser` extra. Uses Microsoft Edge when installed (it renders WebGL on the real GPU
 in headless mode), else Playwright's Chromium.
@@ -185,6 +186,24 @@ def show_verdict(page: Page) -> None:
     page.wait_for_timeout(300)
 
 
+def open_run(page: Page, robot_title: str, robot: str, run: dict) -> None:
+    """Show one saved run, paused. Picking the robot first loads its featured run; setting the
+    run's address before that has finished lets the featured run win, so wait for it, then go to
+    the run and confirm the panel describes it."""
+    ready = "() => document.querySelector('[data-testid=stage]')?.dataset.state === 'ready'"
+    page.get_by_text(robot_title, exact=True).first.click()
+    page.wait_for_function(ready, timeout=60_000)
+    page.evaluate(f"location.hash = '#/robots/{robot}/{run['id']}'")
+    page.wait_for_function(
+        "([hash, title]) => location.hash === hash && document.body.innerText.toLowerCase()"
+        ".includes(('What happened · ' + title).toLowerCase())",
+        arg=[f"#/robots/{robot}/{run['id']}", run["title"]],
+        timeout=60_000,
+    )
+    page.wait_for_function(ready, timeout=60_000)
+    page.get_by_role("button", name="Pause").click()
+
+
 # ---- scenes -----------------------------------------------------------------------------------
 def scene_firstrun(page: Page, rec: Recorder) -> None:
     page.get_by_test_id("hero").wait_for()
@@ -319,13 +338,7 @@ def scene_g1pair(page: Page, rec: Recorder) -> None:
             }
         )
     )
-    page.get_by_text("Unitree G1 (29 joints)", exact=True).first.click()
-    page.evaluate(f"location.hash = '#/robots/{robot}/{small['id']}'")
-    page.wait_for_function(
-        "() => document.querySelector('[data-testid=stage]')?.dataset.state === 'ready'",
-        timeout=60_000,
-    )
-    page.get_by_role("button", name="Pause").click()
+    open_run(page, "Unitree G1 (29 joints)", robot, small)
     rec.hold(0.5)
     rec.start()
     rec.mark("one")
@@ -369,12 +382,75 @@ def scene_overview(page: Page, rec: Recorder) -> None:
     rec.stop()
 
 
+def _g1_runs(page: Page) -> list[dict]:
+    return page.evaluate("fetch('/api/robots/unitree_g1_29dof/runs').then(r => r.json())")["runs"]
+
+
+def _open_run(page: Page, run: dict) -> None:
+    open_run(page, "Unitree G1 (29 joints)", "unitree_g1_29dof", run)
+
+
+def scene_g1stairs(page: Page, rec: Recorder) -> None:
+    """Unitree G1 (29 joints) on stairs: a toe catches the first steps, the robot falls, and the
+    panel names the step it caught. The steps are the lowest it falls on; the run's numbers go to
+    info.json for the caption."""
+    falls = [
+        r
+        for r in _g1_runs(page)
+        if r["kind"] == "terrain"
+        and r["title"].startswith("Stairs")
+        and r["policy"] == "standard"
+        and r["outcome"] == "fell"
+    ]
+    assert falls, "no stairs run the small-shove policy falls on"
+    run = sorted(falls, key=lambda r: float(r["title"].split()[2]))[0]
+    (rec.dir / "info.json").write_text(json.dumps({"title": run["title"], "fellAt": run["fallAt"]}))
+    _open_run(page, run)
+    rec.hold(0.5)
+    rec.start()
+    rec.mark("one")
+    rec.seek(max((run["fallAt"] or 3.0) - 2.4, 0.0), 10.0)
+    rec.hold(0.6)
+    rec.click(page.get_by_role("button", name="Play"), "play")
+    rec.glide(640, 610, 0.4)
+    rec.hold(6.0)
+    rec.stop()
+
+
+def scene_g1stones(page: Page, rec: Recorder) -> None:
+    """Unitree G1 (29 joints) on stepping stones: a foot goes into a gap and the panel says so."""
+    runs = _g1_runs(page)
+    falls = [
+        r
+        for r in runs
+        if r["kind"] == "terrain"
+        and r["title"].startswith("Stepping stones")
+        and r["outcome"] == "fell"
+        and r["policy"] == "standard"
+    ]
+    assert falls, "no stepping-stones fall saved"
+    run = sorted(falls, key=lambda r: r["title"])[0]
+    (rec.dir / "info.json").write_text(json.dumps({"title": run["title"], "fellAt": run["fallAt"]}))
+    _open_run(page, run)
+    rec.hold(0.5)
+    rec.start()
+    rec.mark("one")
+    rec.seek(max((run["fallAt"] or 3.0) - 2.2, 0.0), 10.0)
+    rec.hold(0.6)
+    rec.click(page.get_by_role("button", name="Play"), "play")
+    rec.glide(640, 610, 0.4)
+    rec.hold(5.5)
+    rec.stop()
+
+
 SCENES = {
     "firstrun": scene_firstrun,
     "fall": scene_fall,
     "whatif": scene_whatif,
     "policies": scene_policies,
     "g1pair": scene_g1pair,
+    "g1stairs": scene_g1stairs,
+    "g1stones": scene_g1stones,
     "overview": scene_overview,
 }
 
