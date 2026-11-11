@@ -125,6 +125,72 @@ def _show_report(report) -> None:
         console.print(f"[dim]{name}[/dim]  {value}", highlight=False)
 
 
+@robots_app.command("init")
+def init(
+    folder: Annotated[Path, typer.Argument(help="A folder holding your model and policies.")],
+    model: Annotated[
+        Path | None, typer.Option("--model", help="The MuJoCo file (default: the only .xml).")
+    ] = None,
+    policy: Annotated[
+        list[Path] | None,
+        typer.Option("--policy", help="A policy file (repeatable; default: every .onnx/.npz)."),
+    ] = None,
+    key: Annotated[
+        str | None, typer.Option(help="The robot's key (default: the folder name).")
+    ] = None,
+    title: Annotated[
+        str | None, typer.Option(help="The robot's name (default: the folder name).")
+    ] = None,
+    force: Annotated[bool, typer.Option("--force", help="Replace an existing robot.toml.")] = False,
+) -> None:
+    """Draft robot.toml from your model and policies, reading what they already say.
+
+    Joint order, gains, default pose, action scales and the observation layout come from an ONNX
+    policy's metadata (mjlab writes it) and from the model; what only you know is left as TODO.
+    """
+    from creature_lab.robots.packinit import draft_pack, write_draft
+
+    folder = folder.expanduser().resolve()
+    if not folder.is_dir():
+        console.print(f"[red]{folder} is not a folder.[/red]")
+        raise typer.Exit(code=1)
+    models = (
+        [model.expanduser()]
+        if model
+        else [p for p in sorted(folder.glob("*.xml")) if p.name != "checkup_scene.xml"]
+    )
+    if len(models) != 1:
+        console.print(
+            "[red]Say which MuJoCo file to use with --model[/red] "
+            f"({len(models)} .xml files in {folder})."
+        )
+        raise typer.Exit(code=1)
+    policies = (
+        [p.expanduser() for p in policy]
+        if policy
+        else sorted([*folder.glob("*.onnx"), *folder.glob("*.npz")])
+    )
+    if not policies:
+        console.print(
+            "[red]No policy found.[/red] Put an .onnx or .npz file in the folder, or use --policy."
+        )
+        raise typer.Exit(code=1)
+    try:
+        model_path = models[0] if models[0].is_absolute() else folder / models[0]
+        policy_paths = [p if p.is_absolute() else folder / p for p in policies]
+        for path in (model_path, *policy_paths):
+            path.resolve().relative_to(folder)
+        text = draft_pack(
+            model_path.resolve(), [p.resolve() for p in policy_paths], key=key, title=title
+        )
+        target = write_draft(folder, text, force=force)
+    except ValueError as error:  # a path outside the folder, or a PackError
+        console.print(f"[red]{error}[/red]", highlight=False)
+        raise typer.Exit(code=1) from error
+    console.print(f"Wrote [bold]{target}[/bold]. Fix the lines that say TODO, then run:")
+    console.print(f"  creature-lab robots validate {folder}")
+
+
 @robots_app.command("validate")
 def validate(
     folder: Annotated[Path, typer.Argument(help="A folder holding robot.toml (or the file).")],

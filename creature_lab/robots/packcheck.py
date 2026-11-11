@@ -13,6 +13,7 @@ from creature_lab.robots.pack import (
     PackSpec,
     load_pack,
     missing_files,
+    pack_file,
     sensor_widths,
 )
 
@@ -51,6 +52,16 @@ def validate_pack(path: Path, *, simulate: bool = True) -> PackReport:
         report.errors.extend(error.problems)
         return report
     report.pack = pack
+    todo = [
+        number
+        for number, line in enumerate(pack_file(path).read_text(encoding="utf-8").splitlines(), 1)
+        if "TODO" in line and not line.lstrip().startswith("#")
+    ]
+    if todo:
+        shown = ", ".join(str(n) for n in todo[:6]) + (" ..." if len(todo) > 6 else "")
+        report.warnings.append(
+            f"robot.toml still says TODO on line {shown}: fill those in (they appear on reports)"
+        )
     report.errors.extend(missing_files(pack))
     if report.errors:
         return report
