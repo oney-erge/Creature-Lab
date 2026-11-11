@@ -1,4 +1,4 @@
-"""Robots that ship as a bundled pack: Unitree's H1 and H1-2, run from a robot.toml."""
+"""Robots that ship as a bundled pack (H1, H1-2, the 29-joint G1), run from a robot.toml."""
 
 from __future__ import annotations
 
@@ -17,9 +17,11 @@ from creature_lab.robots.pack import (
     parse_pack,
     sync_bundled,
 )
-from creature_lab.robots.policies import RecurrentNpzPolicy
+from creature_lab.robots.policies import RecurrentNpzPolicy, load_policy
 
-BUNDLED = ("unitree_h1", "unitree_h1_2")
+BUNDLED = ("unitree_g1_29dof", "unitree_h1", "unitree_h1_2")
+#: The ones whose policy is Unitree's TorchScript motion.pt converted to .npz.
+CONVERTED = ("unitree_h1", "unitree_h1_2")
 
 
 @pytest.fixture
@@ -41,11 +43,17 @@ def test_a_bundled_pack_describes_a_policy_that_fits_it(key):
     assert info.first_run_s > 0 and info.credit and "BSD 3-Clause" in info.license_notice
     from importlib import resources
 
-    weights = resources.files("creature_lab.robots").joinpath("data", "packs", key, "policy.npz")
-    with resources.as_file(weights) as file:
-        policy = RecurrentNpzPolicy(file)
-    assert policy.obs_len == spec.observation_length()
-    assert policy.action_len == len(spec.joints)
+    for entry in spec.policies:
+        weights = resources.files("creature_lab.robots").joinpath("data", "packs", key, entry.file)
+        with resources.as_file(weights) as file:
+            policy = load_policy(file)
+        assert policy.obs_len == spec.observation_length(_sensor_widths(key)), entry.key
+        assert policy.action_len == len(spec.joints), entry.key
+
+
+def _sensor_widths(key: str) -> dict[str, int]:
+    """Widths of the sensors a pack reads; only the 29-joint G1 reads any (its IMU)."""
+    return {"imu_lin_vel": 3, "imu_ang_vel": 3} if key == "unitree_g1_29dof" else {}
 
 
 # Unitree's own TorchScript motion.pt: three steps of one run, each fed
@@ -70,7 +78,7 @@ EXPECTED = {
 }
 
 
-@pytest.mark.parametrize("key", BUNDLED)
+@pytest.mark.parametrize("key", CONVERTED)
 def test_the_converted_policy_matches_unitrees_torchscript_outputs(key):
     from importlib import resources
 
@@ -80,6 +88,28 @@ def test_the_converted_policy_matches_unitrees_torchscript_outputs(key):
     for step, expected in enumerate(EXPECTED[key]):
         obs = np.linspace(-1, 1, policy.obs_len).astype(np.float32) * (1 + 0.1 * step)
         assert np.allclose(policy.act(obs.astype(np.float64)), expected, atol=2e-5), (key, step)
+
+
+# The two G1 policies trained for Creature Lab: first six actions for obs = linspace(-1, 1, 99).
+G1_POLICY_OUTPUTS = {
+    "standard": [-0.98683, -0.814, 1.14782, 1.10039, -0.30069, 0.99459],
+    "shoved": [-0.57455, -1.17237, 0.96018, 1.65732, -1.35054, 1.02123],
+}
+
+
+@pytest.mark.parametrize("policy", list(G1_POLICY_OUTPUTS))
+def test_the_trained_g1_policies_are_the_ones_that_were_checked_up(policy):
+    """Pins the policy files: replacing one would change what the docs and results describe."""
+    pytest.importorskip("onnxruntime")
+    from importlib import resources
+
+    weights = resources.files("creature_lab.robots").joinpath(
+        "data", "packs", "unitree_g1_29dof", f"{policy}.onnx"
+    )
+    with resources.as_file(weights) as file:
+        loaded = load_policy(file)
+    actions = loaded.act(np.linspace(-1, 1, 99).astype(np.float32))
+    assert np.allclose(actions[:6], G1_POLICY_OUTPUTS[policy], atol=1e-4)
 
 
 def test_the_files_are_copied_beside_the_download_and_only_when_they_differ(cache):
@@ -111,6 +141,28 @@ def test_ensure_robot_copies_the_pack_files_after_downloading(cache, monkeypatch
     monkeypatch.setattr(fetch, "load_manifest", lambda info: {"files": []})
     assert fetch.ensure_robot("unitree_h1_2") == cache / "unitree_h1_2"
     assert (cache / "unitree_h1_2" / "policy.npz").is_file()
+    fetch.ensure_robot("unitree_g1_29dof")
+    assert (cache / "unitree_g1_29dof" / "g1_mjlab.xml").is_file()  # the XML ships in the package
+
+
+def test_running_a_bundled_robot_that_is_not_downloaded_says_how_to_fetch_it(cache):
+    from creature_lab.robots.pack import pack_for
+
+    with pytest.raises(FileNotFoundError, match="robots fetch unitree_h1"):
+        pack_for("unitree_h1")
+
+
+def test_asking_for_a_pack_to_run_puts_the_current_bundled_files_in_place(cache, monkeypatch):
+    from creature_lab.robots.pack import pack_for
+
+    monkeypatch.setattr(fetch, "load_manifest", lambda info: {"files": []})  # as if downloaded
+    folder = sync_bundled("unitree_h1")
+    (folder / "policy.npz").write_bytes(b"left by an older version")
+    (folder / "robot.toml").write_text("stale", encoding="utf-8")
+    pack = pack_for("unitree_h1")
+    assert pack.folder == folder
+    assert (folder / "policy.npz").stat().st_size > 1000  # the current policy, not the stale one
+    assert "unitree_h1" in (folder / "robot.toml").read_text(encoding="utf-8")
 
 
 @pytest.mark.parametrize("key", BUNDLED)

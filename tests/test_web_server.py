@@ -104,7 +104,7 @@ def test_a_bundled_intro_clip_is_offered_only_when_it_exists(results, installed,
 def test_robots_lists_every_robot_with_the_newest_check_up(client):
     data = client.get("/api/robots").json()
     keys = [r["key"] for r in data["robots"]]
-    assert keys == ["microduck", "unitree_g1", "unitree_h1", "unitree_h1_2"]
+    assert keys == ["microduck", "unitree_g1", "unitree_g1_29dof", "unitree_h1", "unitree_h1_2"]
     duck = data["robots"][0]
     assert duck["installed"] and duck["hasResults"]
     assert duck["nonCommercial"] and "CC BY-NC-SA 4.0" in duck["licenseNotice"]

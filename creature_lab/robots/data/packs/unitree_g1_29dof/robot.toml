@@ -1,0 +1,97 @@
+# Unitree G1 with 29 joints, as trained in mjlab (v1.6.0), with two walking policies trained for
+# Creature Lab. g1_mjlab.xml is mjlab's finished G1 (position actuators with the gains, effort
+# limits and armature of its task, collision settings, IMU sensors) written out with the physics
+# mjlab simulates with. The default pose and action scales are mjlab's own constants.
+schema_id = "creature-lab.robot-pack/1"
+key = "unitree_g1_29dof"
+title = "Unitree G1 (29 joints)"
+maker = "Unitree Robotics (model); policies trained with mjlab"
+summary = "The 1.3 m G1 with all 29 joints driven, from mjlab. Two walking policies trained the same way, one with small random shoves and one with shoves twice as strong."
+height_cm = 134
+mass_kg = 33.34
+first_run_s = 100
+
+model = "g1_mjlab.xml"
+trunk = "pelvis"
+physics_dt = 0.005
+actuator = "position"
+walk_command = 0.6
+gait_period_s = 0.4
+spawn_height_m = 0.76
+
+[license]
+notice = "The G1 model and meshes are Unitree Robotics' (BSD 3-Clause; byte-identical to MuJoCo Menagerie's unitree_g1) as distributed with mjlab (Apache-2.0, github.com/mujocolab/mjlab at v1.6.0); the XML here is mjlab's G1 task as simulated, exported by Creature Lab. The two walking policies were trained for Creature Lab with mjlab's own G1 velocity task and are released under Apache-2.0. Creature Lab downloads the meshes on first use; the model and policies are bundled with the license texts beside them."
+credit = "Unitree G1 model: Unitree Robotics, BSD 3-Clause · mjlab: Apache-2.0"
+non_commercial = false
+
+[joints]
+left_hip_pitch_joint = { default = -0.312, action_scale = 0.547546 }
+left_hip_roll_joint = { default = 0.0, action_scale = 0.350661 }
+left_hip_yaw_joint = { default = 0.0, action_scale = 0.547546 }
+left_knee_joint = { default = 0.669, action_scale = 0.350661 }
+left_ankle_pitch_joint = { default = -0.363, action_scale = 0.438577 }
+left_ankle_roll_joint = { default = 0.0, action_scale = 0.438577 }
+right_hip_pitch_joint = { default = -0.312, action_scale = 0.547546 }
+right_hip_roll_joint = { default = 0.0, action_scale = 0.350661 }
+right_hip_yaw_joint = { default = 0.0, action_scale = 0.547546 }
+right_knee_joint = { default = 0.669, action_scale = 0.350661 }
+right_ankle_pitch_joint = { default = -0.363, action_scale = 0.438577 }
+right_ankle_roll_joint = { default = 0.0, action_scale = 0.438577 }
+waist_yaw_joint = { default = 0.0, action_scale = 0.547546 }
+waist_roll_joint = { default = 0.0, action_scale = 0.438577 }
+waist_pitch_joint = { default = 0.0, action_scale = 0.438577 }
+left_shoulder_pitch_joint = { default = 0.2, action_scale = 0.438577 }
+left_shoulder_roll_joint = { default = 0.2, action_scale = 0.438577 }
+left_shoulder_yaw_joint = { default = 0.0, action_scale = 0.438577 }
+left_elbow_joint = { default = 0.6, action_scale = 0.438577 }
+left_wrist_roll_joint = { default = 0.0, action_scale = 0.438577 }
+left_wrist_pitch_joint = { default = 0.0, action_scale = 0.0745009 }
+left_wrist_yaw_joint = { default = 0.0, action_scale = 0.0745009 }
+right_shoulder_pitch_joint = { default = 0.2, action_scale = 0.438577 }
+right_shoulder_roll_joint = { default = -0.2, action_scale = 0.438577 }
+right_shoulder_yaw_joint = { default = 0.0, action_scale = 0.438577 }
+right_elbow_joint = { default = 0.6, action_scale = 0.438577 }
+right_wrist_roll_joint = { default = 0.0, action_scale = 0.438577 }
+right_wrist_pitch_joint = { default = 0.0, action_scale = 0.0745009 }
+right_wrist_yaw_joint = { default = 0.0, action_scale = 0.0745009 }
+
+[[observation]]
+term = "sensor"
+sensor = "imu_lin_vel"
+
+[[observation]]
+term = "sensor"
+sensor = "imu_ang_vel"
+
+[[observation]]
+term = "projected_gravity"
+
+[[observation]]
+term = "joint_pos"
+
+[[observation]]
+term = "joint_vel"
+
+[[observation]]
+term = "last_action"
+
+[[observation]]
+term = "command"
+
+# This G1 shrugs off the shoves sized from its weight alone (up to 290 N): both policies stay up.
+# The ladder covers where they differ, measured over eight shoves each: at 400 N the small-shove
+# policy falls 5 times and the strong-shove policy once.
+[levels]
+shoves_n = [150, 300, 400, 550, 700]
+
+[[policies]]
+key = "standard"
+title = "Small-shove policy"
+summary = "mjlab's standard G1 recipe: random pushes of up to 0.5 m/s every 1 to 3 seconds. 1500 training iterations."
+file = "standard.onnx"
+
+[[policies]]
+key = "shoved"
+title = "Strong-shove policy"
+summary = "The same run, then 600 more iterations with pushes of up to 1.0 m/s, twice as strong. 1500 iterations in all."
+file = "shoved.onnx"

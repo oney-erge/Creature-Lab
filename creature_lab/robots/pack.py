@@ -456,11 +456,19 @@ def bundled_pack(key: str) -> Pack:
 
 
 def pack_for(key: str) -> Pack:
-    """The pack that runs ``key``: a bundled one from the package, else the user's folder."""
-    if key in bundled_keys():
-        return bundled_pack(key)
-    from creature_lab.robots.fetch import robot_dir
+    """The pack that runs ``key``: a bundled one from the package, else the user's folder.
 
+    A bundled robot must be downloaded (its model and meshes); asking checks that, and copies its
+    pack files into place, so a run never uses a stale policy file from an older version.
+    """
+    from creature_lab.robots.fetch import is_installed, robot_dir
+
+    if key in bundled_keys():
+        if not is_installed(key):  # also copies the bundled files beside the download
+            raise FileNotFoundError(
+                f"{key} is not downloaded yet; run: creature-lab robots fetch {key}"
+            )
+        return bundled_pack(key)
     return load_pack(robot_dir(key))
 
 

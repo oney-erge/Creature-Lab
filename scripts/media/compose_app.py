@@ -297,6 +297,10 @@ def encode_gif(plan, path: Path, fps: int = 15, width: int = 960, **kw) -> None:
 # ---- the plans --------------------------------------------------------------------------------
 G1 = "Unitree G1 model and policy: Unitree Robotics, BSD 3-Clause. Simulation."
 DUCK = "Microduck model by Pollen Robotics, CC BY-NC-SA 4.0. Simulation."
+G1_MJLAB = (
+    "Unitree G1 model: Unitree Robotics, BSD 3-Clause. Policies trained with mjlab, Apache-2.0. "
+    "Simulation."
+)
 
 FIRST_RUN = [
     Cut(
@@ -397,7 +401,43 @@ OVERVIEW = [
     ),
 ]
 
+
+def _g1pair_plan() -> list:
+    """The two G1 policies on one shove, with the shove's own numbers in the caption."""
+    info_file = HERE / "frames" / "g1pair" / "info.json"
+    if not info_file.exists():
+        return []
+    info = json.loads(info_file.read_text())
+    return [
+        Cut(
+            "g1pair",
+            "one",
+            0.0,
+            1.6,
+            "The 29-joint G1 has two walking policies: one trained with small shoves, "
+            "one with strong ones.",
+            G1_MJLAB,
+            fade=True,
+        ),
+        Cut(
+            "g1pair",
+            "play",
+            -0.3,
+            9.2,
+            f"Same {info['pushN']:g} N shove at the same moment: the small-shove policy falls at "
+            f"{info['smallFellAt']:.1f} s, the strong-shove policy "
+            + (
+                "keeps walking."
+                if info["strongOutcome"].startswith("Walked")
+                else f"{info['strongOutcome'].lower()}."
+            ),
+            G1_MJLAB,
+        ),
+    ]
+
+
 PLANS = {
+    "pair_gif": _g1pair_plan(),
     "tour": [
         Card("title", 2.6),
         *FIRST_RUN,
@@ -414,6 +454,15 @@ if __name__ == "__main__":
     what = sys.argv[1]
     if what == "tour":
         encode_mp4(PLANS["tour"], OUT / "creature-lab-tour.mp4", fps=30, crf=21)
+    elif what == "pair":
+        # The README clip for the 29-joint G1: both policies, one shove.
+        encode_gif(
+            PLANS["pair_gif"],
+            OUT / "creature-lab-g1-policies.gif",
+            fps=int(sys.argv[2]) if len(sys.argv) > 2 else 10,
+            width=int(sys.argv[3]) if len(sys.argv) > 3 else 800,
+            crop=(452, 0, UI_W, UI_H),
+        )
     elif what == "gif":
         # The README GIF leaves out the robot list on the left: the robot and the words are bigger.
         encode_gif(
