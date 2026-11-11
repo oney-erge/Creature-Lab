@@ -25,6 +25,10 @@ uv run creature-lab robots remove stick-biped             # forgets it; your fil
 Copy the folder, replace the model and the policy with yours, and edit `robot.toml`.
 `validate` lists every problem in plain words; fix them and run it again.
 
+In the [browser app](WEB_APP.md), **Add your own robot** (under the robot cards) does the same:
+type the folder, press **Check it**, read what it found, then **Add**. An added robot gets a
+**Your robot** badge, runs the same check-up, and **Remove from the list** forgets it again.
+
 The folder stays where it is (nothing is copied), so edits to `robot.toml` or the policy are
 picked up on the next run. Creature Lab writes one generated file, `checkup_scene.xml` (the model
 plus a floor and lights), beside your model. Only add folders you trust: Creature Lab opens the
@@ -150,4 +154,6 @@ identically to the built-in G1 (tests `test_the_g1_as_a_pack_matches_the_built_i
 - The trunk must carry the robot's free joint, and the model must not contain a ground plane.
 - Every actuated joint is listed and driven by the policy. A policy that drives only some joints
   and holds the rest still is not supported yet.
-- The browser app draws the robot from its mesh geoms.
+- The browser app draws a model's visible meshes. A model with no meshes is drawn from its
+  boxes, capsules, cylinders, spheres and ellipsoids (geom groups 0 to 2); a model that has both
+  draws only the meshes, since published robots keep their collision shapes beside them.

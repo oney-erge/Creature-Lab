@@ -13,7 +13,9 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from creature_lab.robots.analysis import RunAnalysis
-from creature_lab.robots.fetch import robot_dir
+from creature_lab.robots.catalog import robot_info
+from creature_lab.robots.fetch import cache_root, robot_dir
+from creature_lab.robots.pack import PACK_FILE
 
 WIDTH, HEIGHT = 640, 360
 #: Frames rendered first so the follow camera settles on the robot before the one we keep.
@@ -48,14 +50,29 @@ class Thumbnails:
 
     def for_robot(self, robot: str, folder: Path | None, at: float) -> bytes:
         """A card picture for a robot: a frame of its baseline walk, else its resting pose."""
-        cache = robot_dir(robot) / "thumb.jpg"
+        cache = _robot_cache(robot)
         if folder is None and cache.exists():
             return cache.read_bytes()
         if folder is not None:
             return self.for_run(folder, at)
         data = self._pool.submit(_render_rest_pose, robot).result(timeout=120)
+        cache.parent.mkdir(parents=True, exist_ok=True)
         cache.write_bytes(data)
         return data
+
+
+def _robot_cache(robot: str) -> Path:
+    """Where a robot's card picture is kept: beside a downloaded robot's files, but in the app's
+    cache (named by the pack file's age, so an edited pack is drawn again) for a pack, whose
+    folder belongs to its author."""
+    info = robot_info(robot)
+    if info.folder is None:
+        return robot_dir(robot) / "thumb.jpg"
+    try:
+        stamp = int((info.folder / PACK_FILE).stat().st_mtime)
+    except OSError:
+        stamp = 0
+    return cache_root() / "pack-thumbs" / f"{robot}-{stamp}.jpg"
 
 
 _studios: dict[str, object] = {}

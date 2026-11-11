@@ -15,7 +15,7 @@ import {
   framingFor,
   pointInConvexPolygon,
   robotUnit,
-  shoveReference,
+  shoveReferenceFor,
 } from "./geometry";
 import { frameAt } from "./playback";
 import { isSoftwareGL } from "./prefs";
@@ -33,6 +33,8 @@ const ORANGE = 0xff7a30;
 interface Loaded {
   key: string;
   unit: number;
+  /** A shove of this many newtons draws a mid-length arrow. */
+  shoveReferenceN: number;
   bodies: THREE.Group[];
   root: THREE.Group;
 }
@@ -199,6 +201,7 @@ export class RobotView {
     description: SceneDescription,
     fetchMesh: (id: number) => Promise<ArrayBuffer>,
     reframe = true,
+    shoveReferenceN?: number,
   ): Promise<void> {
     const geometries = new Map<number, THREE.BufferGeometry>();
     await Promise.all(
@@ -237,7 +240,7 @@ export class RobotView {
       body.add(mesh);
     }
     this.scene.add(root);
-    this.loaded = { key, unit, bodies, root };
+    this.loaded = { key, unit, shoveReferenceN: shoveReferenceFor(unit, shoveReferenceN), bodies, root };
     this.dress(unit);
     if (reframe) this.frameCamera();
     this.dirty = true;
@@ -364,7 +367,7 @@ export class RobotView {
     const force = pushForceAt(overlay, frame);
     this.arrow.visible = force !== 0;
     if (force !== 0) {
-      const length = arrowLength(force, shoveReference(unit), unit);
+      const length = arrowLength(force, this.loaded?.shoveReferenceN ?? shoveReferenceFor(unit), unit);
       const headLength = 0.22 * length;
       const shaftLength = length - headLength;
       const gap = 0.05 * unit; // the tip stops this far short of the trunk

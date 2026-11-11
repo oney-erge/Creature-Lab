@@ -31,6 +31,10 @@ build editor.
   of its shove. **Download and check up** shows the license first; nothing is downloaded until you
   tick that you have read it. After the download the check-up starts by itself, and the results
   open when it ends.
+- **Add your own robot.** *Add your own robot* under the cards takes the folder of a
+  [robot pack](ROBOT_PACKS.md) (a MuJoCo model, a trained policy and a `robot.toml`), checks it,
+  says each problem in plain words, and adds it. The robot gets a **Your robot** badge and the same
+  check-up, 3D view and what-ifs; *Remove from the list* forgets it and leaves its files alone.
 - **Ask "what if…".** Under a run, one click changes one thing (the shove from the other side, a
   harder or gentler shove, a very slippery floor, half speed or faster walking, a 6 kg load on the
   G1, a weak battery on the Microduck) and runs the robot again, about a second or two on a laptop.

@@ -60,10 +60,28 @@ export interface RobotInfo {
   hasResults: boolean;
   /** Rough time from nothing on disk to a finished first check-up; 0 when unknown. */
   firstRunSeconds: number;
+  /** True for a robot the person added from their own folder. */
+  custom: boolean;
+  /** The folder an added robot lives in; null for the built-in robots. */
+  folder: string | null;
+  /** A shove of this many newtons draws a mid-length arrow. */
+  shoveReferenceN: number;
   /** A short looping clip bundled with the app, shown before the robot is downloaded. */
   introClip: string | null;
   policies: PolicyInfo[];
   checkup: CheckupSummary | null;
+}
+
+/** What checking a robot folder found (`POST /api/robots/validate` and `/add`). */
+export interface PackReport {
+  ok: boolean;
+  errors: string[];
+  warnings: string[];
+  facts: { name: string; value: string }[];
+  title: string | null;
+  key: string | null;
+  /** Only in the answer to adding: whether the robot is now in the list. */
+  added?: boolean;
 }
 
 export interface RobotsResponse {

@@ -44,3 +44,8 @@ export function arrowLength(force: number, referenceN: number, unit: number): nu
 export function shoveReference(unit: number): number {
   return unit > 2 ? 150 : 4;
 }
+
+/** The robot's own reference when the server names one (an added robot), else the size guess. */
+export function shoveReferenceFor(unit: number, declared?: number): number {
+  return declared !== undefined && declared > 0 ? declared : shoveReference(unit);
+}

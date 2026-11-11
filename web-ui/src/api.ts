@@ -3,6 +3,7 @@ import type {
   BuilderInfo,
   CreatureCatalog,
   Job,
+  PackReport,
   RobotsResponse,
   RunCard,
   RunDetail,
@@ -47,6 +48,11 @@ async function postJSON<T>(path: string, body?: unknown): Promise<T> {
   return (await (await check(response)).json()) as T;
 }
 
+async function deleteJSON<T>(path: string): Promise<T> {
+  const response = await fetch(path, { method: "DELETE", headers: GUARD });
+  return (await (await check(response)).json()) as T;
+}
+
 async function getBuffer(path: string): Promise<ArrayBuffer> {
   return await (await check(await fetch(path))).arrayBuffer();
 }
@@ -55,6 +61,9 @@ export const api = {
   robots: () => getJSON<RobotsResponse>("/api/robots"),
   runs: async (robot: string) => (await getJSON<{ runs: RunCard[] }>(`/api/robots/${robot}/runs`)).runs,
   run: (id: string) => getJSON<RunDetail>(`/api/runs/${id}`),
+  checkRobotFolder: (path: string) => postJSON<PackReport>("/api/robots/validate", { path }),
+  addRobotFolder: (path: string) => postJSON<PackReport>("/api/robots/add", { path }),
+  removeRobot: (robot: string) => deleteJSON<{ removed: string }>(`/api/robots/${robot}`),
   scene: (robot: string) => getJSON<SceneDescription>(`/api/robots/${robot}/scene`),
   mesh: (robot: string, id: number) => getBuffer(`/api/robots/${robot}/mesh/${id}`),
   poses: (id: string) => getBuffer(`/api/runs/${id}/poses`),
