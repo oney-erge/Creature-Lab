@@ -104,7 +104,7 @@ def list_robots() -> None:
 
 @robots_app.command("fetch")
 def fetch(
-    robot: Annotated[str, typer.Argument(help="microduck or unitree-g1")],
+    robot: Annotated[str, typer.Argument(help="a built-in robot, e.g. unitree-g1")],
     yes: Annotated[bool, typer.Option("--yes", help="Accept the license notice.")] = False,
 ) -> None:
     """Download a robot's model files, verified against pinned hashes."""
@@ -252,7 +252,7 @@ def remove(
 
 @robots_app.command("checkup")
 def checkup(
-    robot: Annotated[str, typer.Argument(help="microduck, unitree-g1 or a robot you added")],
+    robot: Annotated[str, typer.Argument(help="a built-in robot (robots list) or one you added")],
     policy: Annotated[
         list[str] | None, typer.Option("--policy", help="Policy to test (repeatable).")
     ] = None,

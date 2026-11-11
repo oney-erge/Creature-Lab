@@ -83,6 +83,9 @@ class RobotInfo:
     #: The folder that holds a user-added robot's files (a robot pack). None for the built-in
     #: robots, which live in the download cache.
     folder: Path | None = None
+    #: True when the robot is run from a ``robot.toml`` (a user's pack or one bundled with
+    #: Creature Lab) rather than by one of the hand-written adapters.
+    pack: bool = False
     #: Extra credit lines for the end card of the film.
     film_credits: tuple[str, ...] = ()
     #: Rough seconds from nothing on disk to a finished first check-up on a laptop (download plus
@@ -197,11 +200,18 @@ ROBOTS: dict[str, RobotInfo] = {
 }
 
 
+def builtin_robots() -> dict[str, RobotInfo]:
+    """The robots that ship with Creature Lab: the hand-written adapters, then bundled packs."""
+    from creature_lab.robots.pack import bundled_infos
+
+    return {**ROBOTS, **bundled_infos()}
+
+
 def all_robots() -> dict[str, RobotInfo]:
     """The built-in robots, then any robot packs the user has added (``robots add``)."""
     from creature_lab.robots.pack import registered_infos
 
-    return {**ROBOTS, **registered_infos()}
+    return {**builtin_robots(), **registered_infos()}
 
 
 def robot_info(key: str) -> RobotInfo:

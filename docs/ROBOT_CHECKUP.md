@@ -16,7 +16,8 @@ from. That area is the hull of the foot contacts, or, for a mesh foot such as Mi
 part of the sole within 6 mm of the floor (MuJoCo reports a mesh touching at a few points
 millimetres apart, which would make a flat foot look like a point).
 
-The first run downloads the robot (about 25 MB) after showing you its license. It then runs
+The first run downloads the robot (14 to 40 MB, depending on the robot) after showing you its
+license. It then runs
 about fifty ten-second simulations per policy on the CPU (20 to 40 seconds), and writes a folder
 containing `report.html`, a `checkup.json` per policy, and the saved runs behind every claim.
 Add `--film` for a 1080p film of the same results (about 5 minutes to encode).
@@ -39,6 +40,8 @@ Add `--film` for a 1080p film of the same results (about 5 minutes to encode).
 | **Microduck** (25 cm, 14 servos; Pollen Robotics and Hugging Face) | `alpha_walking`: an earlier walk-only policy | [pollen-robotics/microduck-policies](https://huggingface.co/pollen-robotics/microduck-policies) |
 | | `velstand`: Pollen's current walk + get-up policy | same repository |
 | **Unitree G1** (1.3 m humanoid; leg joints only, arms held still) | `motion`: Unitree's pretrained walking policy | [unitreerobotics/unitree_rl_gym](https://github.com/unitreerobotics/unitree_rl_gym) |
+| **Unitree H1** (1.8 m humanoid; 10 leg joints, upper body held still) | `motion`: Unitree's pretrained walking policy | same repository |
+| **Unitree H1-2** (1.8 m humanoid; 12 leg joints, upper body held still) | `motion`: Unitree's pretrained walking policy | same repository |
 
 Microduck is the robot Jensen Huang showed at GTC Berlin in October 2026. Creature Lab is not
 affiliated with or endorsed by any of these companies; their names only say what was tested.
@@ -50,9 +53,12 @@ affiliated with or endorsed by any of these companies; their names only say what
   bundles them. `robots fetch` shows this notice and asks before downloading, and every film and
   report that shows the meshes carries the credit line. Treat pictures and videos made with the
   meshes as non-commercial.
-- **Unitree G1:** BSD 3-Clause. The model is downloaded on first use. The policy weights are
-  bundled as a small `.npz` converted from Unitree's `motion.pt`; the license text sits beside
-  it in `creature_lab/robots/data/`.
+- **Unitree G1, H1 and H1-2:** BSD 3-Clause. The model is downloaded on first use. The policy
+  weights are bundled as a small `.npz` converted from Unitree's `motion.pt` (checked against the
+  original TorchScript outputs); the license text sits beside them in
+  `creature_lab/robots/data/` (G1) and `creature_lab/robots/data/packs/<robot>/` (H1, H1-2).
+  H1 and H1-2 are described by a bundled robot pack ([Bring your own robot](ROBOT_PACKS.md)): a
+  `robot.toml` and the policy ship with Creature Lab, and only the model and meshes are downloaded.
 - **Servo model:** Microduck's policies were trained against Rhoban's
   [BAM](https://github.com/Rhoban/bam) XL330 servo model (Apache-2.0). Creature Lab
   reimplements just those equations (`robots/actuator.py`); a test pins it to values produced by

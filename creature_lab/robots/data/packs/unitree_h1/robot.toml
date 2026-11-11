@@ -1,0 +1,68 @@
+# Unitree H1 with Unitree's pretrained walking policy. The gains, default pose, scales and
+# observation layout are from unitree_rl_gym/deploy/deploy_mujoco/configs/h1.yaml
+# (BSD 3-Clause, Copyright Unitree Robotics). The policy weights were converted from motion.pt.
+schema_id = "creature-lab.robot-pack/1"
+key = "unitree_h1"
+title = "Unitree H1"
+maker = "Unitree Robotics"
+summary = "A 1.8 m humanoid. Creature Lab runs its 10 leg joints with Unitree's own pretrained walking policy; the torso and arms are held still."
+height_cm = 182
+mass_kg = 51.65
+first_run_s = 55
+
+model = "h1.xml"
+trunk = "pelvis"
+physics_dt = 0.002
+actuator = "pd"
+action_scale = 0.25
+walk_command = 0.5
+gait_period_s = 0.8
+
+[license]
+notice = "The Unitree H1 model and walking policy come from github.com/unitreerobotics/unitree_rl_gym (BSD 3-Clause, Copyright Unitree Robotics). Creature Lab downloads the model on first use; the policy weights are bundled in converted form with the license text beside them."
+credit = "Unitree H1 model and policy: Unitree Robotics, BSD 3-Clause"
+non_commercial = false
+
+[joints]
+left_hip_yaw_joint = { default = 0.0, kp = 150.0, kd = 2.0 }
+left_hip_roll_joint = { default = 0.0, kp = 150.0, kd = 2.0 }
+left_hip_pitch_joint = { default = -0.1, kp = 150.0, kd = 2.0 }
+left_knee_joint = { default = 0.3, kp = 200.0, kd = 4.0 }
+left_ankle_joint = { default = -0.2, kp = 40.0, kd = 2.0 }
+right_hip_yaw_joint = { default = 0.0, kp = 150.0, kd = 2.0 }
+right_hip_roll_joint = { default = 0.0, kp = 150.0, kd = 2.0 }
+right_hip_pitch_joint = { default = -0.1, kp = 150.0, kd = 2.0 }
+right_knee_joint = { default = 0.3, kp = 200.0, kd = 4.0 }
+right_ankle_joint = { default = -0.2, kp = 40.0, kd = 2.0 }
+
+[[observation]]
+term = "base_ang_vel"
+scale = 0.25
+
+[[observation]]
+term = "projected_gravity"
+
+[[observation]]
+term = "command"
+scale = [2.0, 2.0, 0.25]
+
+[[observation]]
+term = "joint_pos"
+
+[[observation]]
+term = "joint_vel"
+scale = 0.05
+
+[[observation]]
+term = "last_action"
+
+[[observation]]
+term = "gait_phase"
+period_s = 0.8
+
+[[policies]]
+key = "motion"
+title = "Unitree walking policy"
+summary = "Unitree's pretrained forward-walking policy. It has no fall recovery."
+file = "policy.npz"
+starts_with_name = true

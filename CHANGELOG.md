@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- **Two more robots: Unitree H1 and H1-2**, with Unitree's own pretrained walking policies (BSD
+  3-Clause). They are the first robots described entirely by a bundled robot pack: a `robot.toml`
+  and the converted policy ship in the package (`creature_lab/robots/data/packs/`), and `robots
+  fetch` downloads only the model and meshes, verified against pinned hashes, then copies the pack
+  files beside them. The policies are Unitree's `motion.pt` converted to `.npz`; the NumPy forward
+  pass matches the original TorchScript to about 1e-6. Both walk 4.4 to 4.6 m in 10 s, and a full
+  check-up takes about 35 to 45 s on a laptop. No robot-specific code was needed: the check-up,
+  report, film and the app treat them like any other robot. `RobotInfo.pack` marks pack-driven
+  robots and `catalog.builtin_robots()` lists the ones that ship with Creature Lab.
 - **Bring your own robot and policy.** A robot pack is a folder with a `robot.toml`, a MuJoCo model
   and a trained policy (`.onnx`, or the `.npz` LSTM form of Unitree's G1 policy). `robots validate`
   checks it and says each mistake in plain words (observation length against the policy's input,

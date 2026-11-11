@@ -26,7 +26,7 @@ build editor.
 
 ## What you can do
 
-- **Choose a robot.** Microduck and the Unitree G1 are the first choices. On a clean machine the
+- **Choose a robot.** Microduck, the Unitree G1, H1 and H1-2 are the built-in choices. On a clean machine the
   app opens on the one whose first check-up is quickest (the G1, about 45 s), with a looping clip
   of its shove. **Download and check up** shows the license first; nothing is downloaded until you
   tick that you have read it. After the download the check-up starts by itself, and the results
