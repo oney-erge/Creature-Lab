@@ -17,7 +17,7 @@ from creature_lab.robots.checkup import TWIN_FIELDS, Checkup
 from creature_lab.robots.types import RobotRun
 
 #: Run folders in the order they are listed: the walk, shoves, then bad conditions.
-_ORDER = ("baseline", "shove", "terrain", "grip", "battery", "payload", "whatif")
+_ORDER = ("baseline", "shove", "terrain", "damage", "grip", "battery", "payload", "whatif")
 
 
 def _run_id(folder: Path) -> str:

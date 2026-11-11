@@ -201,6 +201,9 @@ class PackRobot(MujocoRobot):
     def servo_load(self) -> np.ndarray:
         return self._torque / self._limit
 
+    def torque_limits(self) -> np.ndarray:
+        return self._limit
+
     def provenance(self) -> dict:
         spec = self.pack.spec
         return {

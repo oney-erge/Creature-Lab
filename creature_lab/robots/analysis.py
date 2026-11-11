@@ -34,7 +34,15 @@ EDGE_WEIGHT_FRACTION = 0.25
 _GAP_DEPTH_FRACTION = 0.15
 
 Cause = Literal[
-    "slipped", "pushed", "servos_saturated", "tripped", "missed_footing", "slope", "unclear"
+    "slipped",
+    "pushed",
+    "servos_saturated",
+    "tripped",
+    "missed_footing",
+    "slope",
+    "weak_motor",
+    "delay",
+    "unclear",
 ]
 
 
@@ -141,6 +149,13 @@ def analyze(run: RobotRun) -> RunAnalysis:
         )
         if scenario.terrain is not None and distance >= 0.25:
             verdict = f"Walked {distance:.1f} m {phrase(scenario.terrain)} without falling."
+        if scenario.weak_joint is not None:
+            verdict = verdict.rstrip(".") + (
+                f", with the {joint_text(scenario.weak_joint)} motor at "
+                f"{100 * scenario.weak_strength:.0f}% strength."
+            )
+        if scenario.delay_ms > 0:
+            verdict = verdict.rstrip(".") + f", with every command {scenario.delay_ms:g} ms late."
         if pushed:
             peak = float(tilt_deg[time >= push_window[0]].max())
             verdict = (
@@ -182,6 +197,10 @@ def analyze(run: RobotRun) -> RunAnalysis:
     slide = run.slide_speed[window]
     slide_median = float(np.median(slide)) if len(slide) else 0.0
     saturated = float(np.mean(np.abs(run.load[window]).max(axis=1) >= SATURATED_LOAD))
+    weak_saturated = None
+    if scenario.weak_joint is not None and scenario.weak_joint in run.joint_names:
+        column = run.joint_names.index(scenario.weak_joint)
+        weak_saturated = float(np.mean(np.abs(run.load[window, column]) >= SATURATED_LOAD))
     push_near = pushed and (fall_time - 1.5) <= push_window[1] and fall_time >= push_window[0]
 
     evidence = [
@@ -222,6 +241,17 @@ def analyze(run: RobotRun) -> RunAnalysis:
         if scenario.terrain is not None
         else None
     )
+    if weak_saturated is not None:
+        evidence.insert(
+            1,
+            Evidence(
+                label="Weak motor at its limit",
+                value=f"{100 * weak_saturated:.0f}% of the time",
+                detail=f"The {joint_text(scenario.weak_joint or '')} motor, at "
+                f"{100 * scenario.weak_strength:.0f}% of its strength, in the 0.8 s before the "
+                "fall.",
+            ),
+        )
     if terrain_cause is not None:
         cause: Cause = terrain_cause[0]
         cause_text = terrain_cause[1]
@@ -236,6 +266,26 @@ def analyze(run: RobotRun) -> RunAnalysis:
         cause_text = (
             f"On the {scenario.terrain.level:g}° slope {slid}its steps did not keep its weight "
             "over its feet; nothing caught a foot and nothing pushed it."
+        )
+    elif weak_saturated is not None and weak_saturated >= 0.3 and not push_near:
+        cause = "weak_motor"
+        cause_text = (
+            f"The {joint_text(scenario.weak_joint or '')} motor, down to "
+            f"{100 * scenario.weak_strength:.0f}% of its strength, was at its limit for "
+            f"{100 * weak_saturated:.0f}% of the last 0.8 s, so the leg could not hold the body "
+            "where the policy wanted it."
+        )
+    elif scenario.delay_ms > 0 and scenario.grip >= 1.0 and not push_near:
+        cause = "delay"
+        slid = (
+            f" Its feet slid (median {slide_median:.2f} m/s) as its balance went."
+            if slide_median > SLIP_MEDIAN_MPS
+            else ""
+        )
+        cause_text = (
+            f"Every command reached the motors {scenario.delay_ms:g} ms late, so each correction "
+            "landed after the moment it was meant for. Nothing pushed it and the floor had its "
+            f"normal grip.{slid}"
         )
     elif slide_median > SLIP_MEDIAN_MPS:
         cause = "slipped"
@@ -291,6 +341,12 @@ def analyze(run: RobotRun) -> RunAnalysis:
         saturated_fraction=saturated,
         evidence=evidence,
     )
+
+
+def joint_text(name: str) -> str:
+    """A joint's name as words: "left_knee_joint" -> "left knee"."""
+    words = name.removesuffix("_joint").replace("_", " ").strip()
+    return words or name
 
 
 def _terrain_cause(

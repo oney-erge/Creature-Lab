@@ -107,7 +107,8 @@ def test_a_check_up_runs_on_a_pack_and_saves_its_results(cache, pack_copy, tmp_p
     from creature_lab.robots.terrain import course, key
 
     terrain = {key(t) for t in course(robot_info("stick_biped").height_cm)}
-    assert {c.key for c in result.conditions} == {"grip_0.4", "payload_2kg", *terrain}
+    damage = {"damage_weak_60", "damage_weak_30"} | {f"damage_delay_{d}ms" for d in (20, 40, 60)}
+    assert {c.key for c in result.conditions} == {"grip_0.4", "payload_2kg", *terrain, *damage}
     assert (tmp_path / "out" / "checkup.json").is_file()
 
 

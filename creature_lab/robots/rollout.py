@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 from abc import ABC, abstractmethod
+from collections import deque
 
 import mujoco
 import numpy as np
@@ -32,6 +33,8 @@ class MujocoRobot(ABC):
     #: Physics steps per 50 Hz control step.
     substeps: int
     trunk: int
+    #: The joint targets the motors chase, one per joint; ``control`` sets them every step.
+    _target: np.ndarray
 
     def __init__(self, scenario: Scenario) -> None:
         self.scenario = scenario
@@ -47,6 +50,10 @@ class MujocoRobot(ABC):
     @abstractmethod
     def servo_load(self) -> np.ndarray:
         """Signed actuator torque as a fraction of its limit, one value per joint."""
+
+    @abstractmethod
+    def torque_limits(self) -> np.ndarray:
+        """Each joint's full torque limit in N·m, in ``joint_names`` order."""
 
     @abstractmethod
     def provenance(self) -> dict:
@@ -70,6 +77,16 @@ class MujocoRobot(ABC):
         }
         self._root = int(model.body_rootid[self.trunk])
         self._contact_buffer = np.zeros(6)
+        self._weak_index: int | None = None
+        if scenario.weak_joint is not None:
+            if scenario.weak_joint not in self.joint_names:
+                raise KeyError(f"{scenario.robot} has no driven joint {scenario.weak_joint!r}")
+            self._weak_index = self.joint_names.index(scenario.weak_joint)
+            joint = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, scenario.weak_joint)
+            # The motor can push no harder than this, whatever the controller asks of it.
+            limit = float(self.torque_limits()[self._weak_index]) * scenario.weak_strength
+            model.jnt_actfrclimited[joint] = 1
+            model.jnt_actfrcrange[joint] = (-limit, limit)
 
 
 def _convex_hull(points: np.ndarray) -> np.ndarray:
@@ -166,9 +183,14 @@ def run_robot(robot: MujocoRobot) -> RobotRun:
     support, slide_speed, push_force, lowest_z, edge_force = [], [], [], [], []
     push_on = scenario.push_at_s
     push_off = scenario.push_at_s + scenario.push_for_s
+    # Late commands: the motors hold their starting targets until the first command arrives.
+    in_flight = deque([robot._target.copy()] * scenario.delay_steps)
     for step in range(steps):
         time_s = step / CONTROL_HZ
         robot.control(time_s)
+        if in_flight:
+            in_flight.append(robot._target.copy())
+            robot._target = in_flight.popleft()
         pushing = scenario.push_n > 0 and push_on <= time_s < push_off
         force = scenario.push_sign * scenario.push_n if pushing else 0.0
         data.xfrc_applied[robot.trunk, 1] = force
@@ -179,7 +201,11 @@ def run_robot(robot: MujocoRobot) -> RobotRun:
         outline, slide, lowest, edge = _ground_contacts(robot)
         columns["qpos"].append(data.qpos.copy())
         columns["qvel"].append(data.qvel.copy())
-        columns["load"].append(robot.servo_load())
+        load = robot.servo_load()
+        if robot._weak_index is not None:  # a weak motor is at its limit at its own, lower limit
+            load = load.copy()
+            load[robot._weak_index] /= scenario.weak_strength
+        columns["load"].append(load)
         columns["upright"].append(float(data.xmat[robot.trunk].reshape(3, 3)[2, 2]))
         columns["trunk_pos"].append(data.xpos[robot.trunk].copy())
         columns["com"].append(data.subtree_com[robot._root].copy())

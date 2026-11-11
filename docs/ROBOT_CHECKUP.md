@@ -101,7 +101,11 @@ run `creature-lab robots fetch ...` in a terminal, which shows the license first
    1.34 m G1 the steps are 4, 8, 12 and 16 cm on 30 cm treads, the ramps 8°, 16° and 24°, the
    bumps up to 3, 5 and 8 cm and the gaps between 40 cm stones 5, 11 and 16 cm; the 25 cm
    Microduck meets the same shapes at a fifth of the size.
-4. **Conditions.** Floor grip at 0.5×, 0.3× and 0.15× normal; a weak battery (Microduck); a
+4. **Damage.** The motor that works hardest in the baseline walk (the highest 95th-percentile share
+   of its torque limit; an ankle on most humanoids) limited to 60% and then 30% of its torque, and
+   every command reaching the motors 20, 40 and 60 ms late. A weak motor that stays up can still
+   cost distance: the table shows it beside the baseline.
+5. **Conditions.** Floor grip at 0.5×, 0.3× and 0.15× normal; a weak battery (Microduck); a
    carried load (G1).
 
 A run **falls** when the trunk tilts past 60°. It **gets back up** if it is within about 26° of
@@ -118,6 +122,8 @@ fits, always showing all of them:
 | Missed the stones | On stepping stones, a foot down in a gap between them (lower than 15% of the pit's depth) in the second before it started to tip |
 | Caught a step | A foot pressing on the side or edge of a step, stone or tile (a contact whose surface leans more than 45° from flat) with at least a quarter of the body's weight, in the second before it started to tip |
 | Too steep | On a ramp, a fall with nothing caught and nothing pushing |
+| Weak motor | The weakened motor at 95% of its reduced limit for at least 30% of the 0.8 s before the fall |
+| Late commands | Commands delayed, a floor with normal grip and no shove: what is left is the delay |
 | Slipped | Median sliding speed of the touching points above 0.05 m/s in the 0.8 s before the fall |
 | Servos saturated | Any servo at 95% of its torque limit for at least 30% of that window |
 | Unclear | None of the above: the report says so instead of guessing |

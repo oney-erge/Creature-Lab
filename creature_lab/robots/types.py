@@ -42,15 +42,31 @@ class Scenario(StrictModel):
     payload_kg: float = Field(default=0.0, ge=0.0, le=50.0)
     #: Stairs, a ramp, rough ground or stepping stones ahead of the robot; None is a flat floor.
     terrain: Terrain | None = None
+    #: A joint whose motor is failing (its MuJoCo name), and the share of its torque it still has.
+    weak_joint: str | None = None
+    weak_strength: float = Field(default=1.0, gt=0.0, le=1.0)
+    #: Milliseconds between the policy deciding and the motors getting the command, in whole
+    #: 20 ms control steps (0, 20, 40, ...).
+    delay_ms: float = Field(default=0.0, ge=0.0, le=200.0)
     title: str = ""
 
     def digest(self) -> str:
-        # A flat-floor scenario hashes as it did before terrain existed.
-        return spec_hash(self, exclude={"terrain"} if self.terrain is None else None)
+        # Fields added after the first release are left out while unused, so a scenario that does
+        # not use them hashes as it always did.
+        unused = {name for name, default in _ADDED.items() if getattr(self, name) == default}
+        return spec_hash(self, exclude=unused or None)
+
+    @property
+    def delay_steps(self) -> int:
+        return round(self.delay_ms * CONTROL_HZ / 1000.0)
 
     @property
     def push_sign(self) -> float:
         return 1.0 if self.push_side == "left" else -1.0
+
+
+#: Scenario fields added after the first release, with the value that means "not used".
+_ADDED = {"terrain": None, "weak_joint": None, "weak_strength": 1.0, "delay_ms": 0.0}
 
 
 @dataclass

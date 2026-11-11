@@ -6,11 +6,12 @@ import json
 from collections.abc import Callable
 from pathlib import Path
 
+import numpy as np
 from pydantic import Field
 
 from creature_lab import VERSION
 from creature_lab.io_utils import atomic_write_text
-from creature_lab.robots.analysis import RunAnalysis, analyze
+from creature_lab.robots.analysis import RunAnalysis, analyze, joint_text
 from creature_lab.robots.catalog import CheckupLevels, RobotInfo, robot_info
 from creature_lab.robots.terrain import course
 from creature_lab.robots.terrain import key as terrain_key
@@ -20,6 +21,18 @@ from creature_lab.schema.base import StrictModel
 
 #: Shoves per strength, spread evenly across one stride (alternating sides).
 SHOVE_PHASES = 8
+#: Shares of its torque the weakened motor keeps, and the command delays tried (ms).
+WEAK_STRENGTHS = (0.6, 0.3)
+DELAYS_MS = (20.0, 40.0, 60.0)
+
+
+def weak_joint(baseline: RobotRun) -> str | None:
+    """The joint the damage test weakens: the one that works hardest in the baseline walk (the
+    highest 95th-percentile share of its torque limit), where a failing motor matters most."""
+    if not baseline.joint_names or baseline.load.size == 0:
+        return None
+    effort = np.percentile(np.abs(baseline.load), 95, axis=0)
+    return baseline.joint_names[int(np.argmax(effort))]
 
 
 def tested_levels(robot: str) -> CheckupLevels:
@@ -174,6 +187,23 @@ def run_checkup(
 
     for terrain in course(info.height_cm):
         condition(terrain_key(terrain), terrain_label(terrain), terrain=terrain)
+    hardest = weak_joint(baseline_run)
+    if hardest is not None:
+        words = joint_text(hardest)
+        for strength in WEAK_STRENGTHS:
+            percent = round(100 * strength)
+            condition(
+                f"damage_weak_{percent}",
+                f"{words[0].upper()}{words[1:]} motor at {percent}% strength",
+                weak_joint=hardest,
+                weak_strength=strength,
+            )
+    for delay in DELAYS_MS:
+        condition(
+            f"damage_delay_{delay:g}ms",
+            f"Commands arrive {delay:g} ms late",
+            delay_ms=delay,
+        )
     for grip in levels.grips:
         condition(f"grip_{grip:g}", f"Floor grip at {grip:g}× normal", grip=grip)
     for volts in levels.batteries_v:
@@ -204,6 +234,9 @@ TWIN_FIELDS = (
     "battery_v",
     "payload_kg",
     "terrain",
+    "weak_joint",
+    "weak_strength",
+    "delay_ms",
 )
 
 
