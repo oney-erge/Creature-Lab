@@ -189,6 +189,53 @@ def run_checkup(
     return result
 
 
+#: What makes two saved runs "the same test" (the app pairs runs on the same fields).
+TWIN_FIELDS = ("push_n", "push_side", "push_at_s", "push_for_s", "grip", "battery_v", "payload_kg")
+
+
+def _shoves(folder: Path) -> dict[tuple, dict]:
+    """The saved shove runs of one policy's results, keyed by what makes them the same test."""
+    found = {}
+    for meta_file in sorted((Path(folder) / "runs").glob("shove*/robot_run.json")):
+        scenario = json.loads(meta_file.read_text(encoding="utf-8"))["scenario"]
+        found[tuple(scenario.get(f) for f in TWIN_FIELDS)] = scenario
+    return found
+
+
+def add_twins(folders: dict[str, Path], progress: Callable[[str], None] | None = None) -> int:
+    """Run each saved shove under every other policy too, so any shove can be shown side by side.
+
+    A check-up saves one example fall and one example of staying up per shove strength, at
+    whichever moment of the stride came first, so two policies rarely share a saved shove. The
+    twin is the same shove (strength, side, moment) under the other policy, saved beside its own
+    runs. Returns how many runs were added.
+    """
+    from creature_lab.robots.api import run_scenario
+
+    saved = {policy: _shoves(folder) for policy, folder in folders.items()}
+    wanted: list[tuple[str, dict]] = []
+    for policy, shoves in saved.items():
+        for other, other_shoves in saved.items():
+            if other == policy:
+                continue
+            for key, scenario in other_shoves.items():
+                if key not in shoves:
+                    wanted.append((policy, {**scenario, "policy": policy}))
+    added = 0
+    seen: set[tuple] = set()
+    for policy, scenario in wanted:
+        key = (policy, *(scenario.get(f) for f in TWIN_FIELDS))
+        if key in seen:
+            continue
+        seen.add(key)
+        if progress and added == 0:
+            progress("the same shoves for every policy")
+        name = f"shove_{scenario['push_n']:g}N_{scenario['push_side']}_{scenario['push_at_s']:.2f}s"
+        _save(run_scenario(Scenario.model_validate(scenario)), Path(folders[policy]), name)
+        added += 1
+    return added
+
+
 def read_checkup(out_dir: Path) -> Checkup:
     return Checkup.model_validate(json.loads((Path(out_dir) / "checkup.json").read_text("utf-8")))
 

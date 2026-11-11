@@ -4,7 +4,7 @@
 
 <h1 align="center">Creature Lab</h1>
 
-<p align="center"><strong>Shove a real robot, see exactly why it fell, and prove the fix.<br />On a laptop, in a browser.</strong></p>
+<p align="center"><strong>Stress-test a real robot, see exactly why it fell, and prove the fix.<br />On a laptop, in a browser.</strong></p>
 
 <p align="center">
   <a href="https://github.com/oney-erge/Creature-Lab/actions/workflows/ci.yml"><img src="https://github.com/oney-erge/Creature-Lab/actions/workflows/ci.yml/badge.svg" alt="CI status" /></a>
@@ -52,8 +52,9 @@ Either way it installs prebuilt packages only (no compiler, about 300 MB) and op
 - **Read why it fell** in plain words, with the numbers behind it.
 - **Ask "what if"**: shove from the other side, harder or gentler, on a slippery floor, slower,
   faster or carrying a load. It runs again in about a second and plays beside the original.
-- **Compare two policies** on the same shove. The Microduck has a walk-only policy and Pollen's newer
-  walk-and-get-up policy.
+- **Compare two policies** on the same shove. The 29-joint Unitree G1 has two policies trained for
+  Creature Lab, one with small shoves and one with strong shoves; the Microduck has Pollen's walk-only
+  and walk-and-get-up policies.
 - **Bring your own robot and policy**: a MuJoCo model, an ONNX policy and a small `robot.toml`
   (`robots validate`, `robots add`; [guide](docs/ROBOT_PACKS.md)) get the same shoves and explanations.
 - **Check for regressions** from the command line: `robots compare` says which tests got better or
@@ -62,10 +63,10 @@ Either way it installs prebuilt packages only (no compiler, about 300 MB) and op
 - **Build your own** quadruped, hexapod, worm or humanoid with sliders, and run it.
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/oney-erge/Creature-Lab/main/docs/assets/checkup-microduck.webp" width="720" alt="Two simulated Microduck robots take the same 3 N sideways shove. The one with the walk-only policy stays on the floor; the one with the newer walk-and-get-up policy falls and stands back up." />
+  <img src="https://raw.githubusercontent.com/oney-erge/Creature-Lab/main/docs/assets/g1-two-policies.gif" width="720" alt="The Creature Lab app showing the 29-joint Unitree G1 twice, side by side, taking the same 400 N sideways shove at the same moment. The small-shove policy falls at 4.6 s and stays down; the strong-shove policy keeps walking. The panel says the strong-shove policy stayed on its feet." />
 </p>
 
-<p align="center"><sub>The same shove at the same instant, two policies for one robot (simulation). Microduck model by Pollen Robotics, CC BY-NC-SA 4.0.</sub></p>
+<p align="center"><sub>Same 400 N shove, same moment, two policies trained the same way except for how hard they were shoved in training (simulation). Over eight shoves at 400 N the small-shove policy fell 5 times, the strong-shove policy once. Unitree G1 model: Unitree Robotics, BSD 3-Clause.</sub></p>
 
 ## From the command line
 

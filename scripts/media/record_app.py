@@ -11,7 +11,7 @@ downloads and checks up the G1 from an empty robot cache.
     export CREATURE_LAB_ROBOTS_DIR=<empty>
     creature-lab app --port 8766 --no-open-browser --checkups <empty2>
     python scripts/media/record_app.py firstrun http://127.0.0.1:8766/
-    python scripts/media/record_app.py fall|whatif|policies|overview http://127.0.0.1:8765/
+    python scripts/media/record_app.py fall|whatif|policies|g1pair|overview http://127.0.0.1:8765/
 
 Needs the `browser` extra. Uses Microsoft Edge when installed (it renders WebGL on the real GPU
 in headless mode), else Playwright's Chromium.
@@ -292,6 +292,60 @@ def scene_policies(page: Page, rec: Recorder) -> None:
     rec.stop()
 
 
+def scene_g1pair(page: Page, rec: Recorder) -> None:
+    """Unitree G1 (29 joints): one shove that the small-shove policy falls to and the strong-shove
+    policy does not, the two side by side. The shove is chosen from the saved runs (the middling
+    strength where the two differ); its numbers go to info.json so the caption can quote them."""
+    robot = "unitree_g1_29dof"
+    runs = page.evaluate(f"fetch('/api/robots/{robot}/runs').then(r => r.json())")["runs"]
+    by_id = {r["id"]: r for r in runs}
+    pairs = [
+        (r, by_id[r["pair"]])
+        for r in runs
+        if r["kind"] == "shove"
+        and r["policy"] == "standard"
+        and r["outcome"] == "fell"
+        and r["pair"] in by_id
+        and by_id[r["pair"]]["outcome"] != "fell"
+    ]
+    assert pairs, "no shove that the small-shove policy falls to and the strong-shove one survives"
+    small, strong = sorted(pairs, key=lambda p: abs(p[0]["pushN"] - 150))[0]
+    (rec.dir / "info.json").write_text(
+        json.dumps(
+            {
+                "pushN": small["pushN"],
+                "smallFellAt": small["fallAt"],
+                "strongOutcome": strong["outcomeText"],
+            }
+        )
+    )
+    page.get_by_text("Unitree G1 (29 joints)", exact=True).first.click()
+    page.evaluate(f"location.hash = '#/robots/{robot}/{small['id']}'")
+    page.wait_for_function(
+        "() => document.querySelector('[data-testid=stage]')?.dataset.state === 'ready'",
+        timeout=60_000,
+    )
+    page.get_by_role("button", name="Pause").click()
+    rec.hold(0.5)
+    rec.start()
+    rec.mark("one")
+    rec.hold(1.0)
+    rec.click(page.get_by_role("button", name="See both side by side"), "both")
+    page.wait_for_function(
+        "() => document.querySelector('[data-testid=stage-b]')?.dataset.state === 'ready'",
+        timeout=60_000,
+    )
+    page.get_by_role("button", name="Pause").click()
+    show_verdict(page)
+    rec.seek(3.4, 10.0)
+    rec.glide(640, 600, 0.5)
+    rec.hold(0.8)
+    rec.click(page.get_by_role("button", name="Play"), "play")
+    rec.glide(640, 610, 0.4)
+    rec.hold(12.0)
+    rec.stop()
+
+
 def scene_overview(page: Page, rec: Recorder) -> None:
     """G1: the check-up grid of every shove strength and moment."""
     page.get_by_text("Unitree G1", exact=True).first.click()
@@ -320,6 +374,7 @@ SCENES = {
     "fall": scene_fall,
     "whatif": scene_whatif,
     "policies": scene_policies,
+    "g1pair": scene_g1pair,
     "overview": scene_overview,
 }
 

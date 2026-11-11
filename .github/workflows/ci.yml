@@ -74,7 +74,7 @@ jobs:
           echo
           # No package was compiled from source: PyBullet must stay optional.
           uv run --no-sync python -c "import importlib.util as u; assert u.find_spec('pybullet') is None, 'PyBullet must stay optional'; import fastapi, mujoco, viser, onnxruntime"
-          curl -fsS http://127.0.0.1:8080/api/robots | python -c "import json, sys; keys = [r['key'] for r in json.load(sys.stdin)['robots']]; assert keys == ['microduck', 'unitree_g1', 'unitree_h1', 'unitree_h1_2'], keys"
+          curl -fsS http://127.0.0.1:8080/api/robots | python -c "import json, sys; keys = [r['key'] for r in json.load(sys.stdin)['robots']]; assert keys == ['microduck', 'unitree_g1', 'unitree_g1_29dof', 'unitree_h1', 'unitree_h1_2'], keys"
 
   quality-and-package:
     runs-on: ubuntu-latest

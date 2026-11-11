@@ -264,7 +264,7 @@ def checkup(
     key = _robot_arg(robot)
     info = robot_info(key)
     _require_extra()
-    from creature_lab.robots.checkup import run_checkup
+    from creature_lab.robots.checkup import add_twins, run_checkup
     from creature_lab.robots.film import film_name, make_film
     from creature_lab.robots.report import PolicyResult, limit_text, write_report
 
@@ -281,6 +281,11 @@ def checkup(
         folder = out_dir / name
         result = run_checkup(key, name, folder, progress=lambda m: console.print(f"  {m}"))
         results.append(PolicyResult(result, folder))
+    if len(results) > 1:  # so every shove can be watched under both policies, side by side
+        add_twins(
+            {item.checkup.policy: item.folder for item in results},
+            progress=lambda m: console.print(f"  {m}"),
+        )
     table = Table(title=f"{info.title} check-up")
     for column in ("Policy", "Baseline", "Never falls up to", "Never stays down up to"):
         table.add_column(column)

@@ -10,6 +10,21 @@
   a server. The exporter calls the app's own endpoints in-process, so the files are exactly what the
   live app serves; paths are relative (a `/demo/` folder works); and it refuses to write into a
   folder that is not empty or an earlier export.
+- **A third Unitree G1: all 29 joints, with two policies trained for Creature Lab.** Both were
+  trained with mjlab's own G1 recipe (1500 iterations, same seed); the second spent its last 600
+  iterations against shoves twice as strong. The check-up shows what that bought: at 400 N the
+  small-shove policy stays up in 3 of 8 shoves and the strong-shove policy in 7 of 8 (550 N: 0 vs 3,
+  700 N: 0 vs 2), it also walks on a floor with 0.15x grip, and nothing got worse. The model is
+  mjlab's G1 task exported as it is simulated (checked against mjlab on 24 model properties); the
+  meshes download from mjlab at a pinned commit and are byte-identical to MuJoCo Menagerie's
+  `unitree_g1`. The training recipe and tools are in `scripts/mjlab_g1/`. README clip:
+  `docs/assets/g1-two-policies.gif`.
+- **Every shove can be watched under both policies.** A check-up of a robot with two policies now
+  also runs each saved shove under the other policy, at the same strength, side and moment
+  (`checkup.add_twins`), so the app's side-by-side view has a twin for every shove, not only for the
+  ones that happened to be saved first.
+- Running a bundled robot first makes sure it is downloaded and its pack files are current, so a
+  run never uses a policy file left by an older version.
 - **Two more robots: Unitree H1 and H1-2**, with Unitree's own pretrained walking policies (BSD
   3-Clause). They are the first robots described entirely by a bundled robot pack: a `robot.toml`
   and the converted policy ship in the package (`creature_lab/robots/data/packs/`), and `robots

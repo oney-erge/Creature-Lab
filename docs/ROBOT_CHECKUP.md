@@ -40,6 +40,7 @@ Add `--film` for a 1080p film of the same results (about 5 minutes to encode).
 | **Microduck** (25 cm, 14 servos; Pollen Robotics and Hugging Face) | `alpha_walking`: an earlier walk-only policy | [pollen-robotics/microduck-policies](https://huggingface.co/pollen-robotics/microduck-policies) |
 | | `velstand`: Pollen's current walk + get-up policy | same repository |
 | **Unitree G1** (1.3 m humanoid; leg joints only, arms held still) | `motion`: Unitree's pretrained walking policy | [unitreerobotics/unitree_rl_gym](https://github.com/unitreerobotics/unitree_rl_gym) |
+| **Unitree G1, 29 joints** (1.3 m humanoid; every joint driven; the model as [mjlab](https://github.com/mujocolab/mjlab) trains it) | `standard`: mjlab's standard G1 recipe, trained with small random shoves; `shoved`: the same run trained further with shoves twice as strong. Both trained for Creature Lab, see [scripts/mjlab_g1](../scripts/mjlab_g1/README.md) | mjlab v1.6.0 (Apache-2.0); Unitree's model and meshes (BSD 3-Clause) |
 | **Unitree H1** (1.8 m humanoid; 10 leg joints, upper body held still) | `motion`: Unitree's pretrained walking policy | same repository |
 | **Unitree H1-2** (1.8 m humanoid; 12 leg joints, upper body held still) | `motion`: Unitree's pretrained walking policy | same repository |
 
@@ -53,6 +54,11 @@ affiliated with or endorsed by any of these companies; their names only say what
   bundles them. `robots fetch` shows this notice and asks before downloading, and every film and
   report that shows the meshes carries the credit line. Treat pictures and videos made with the
   meshes as non-commercial.
+- **Unitree G1 with 29 joints:** the model and meshes are Unitree's (BSD 3-Clause; the meshes are
+  byte-identical to MuJoCo Menagerie's `unitree_g1`) as distributed with mjlab (Apache-2.0). The
+  meshes are downloaded on first use from mjlab at a pinned commit; the model XML (mjlab's G1 task
+  exported as it is simulated) and the two policies, which were trained for Creature Lab, ship with
+  it, with both license texts beside them in `creature_lab/robots/data/packs/unitree_g1_29dof/`.
 - **Unitree G1, H1 and H1-2:** BSD 3-Clause. The model is downloaded on first use. The policy
   weights are bundled as a small `.npz` converted from Unitree's `motion.pt` (checked against the
   original TorchScript outputs); the license text sits beside them in
