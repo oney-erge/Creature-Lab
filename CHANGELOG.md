@@ -12,6 +12,12 @@
   the file ([docs/ROBOT_PACKS.md](docs/ROBOT_PACKS.md), example in `examples/robot-pack/`). The
   Unitree G1 written as a pack runs bit for bit like the built-in adapter. Per-robot staging and
   test levels moved from tables in `render.py` and `checkup.py` onto `RobotInfo`.
+- **Add a robot in the app.** Under the robot cards, **Add your own robot** takes a folder, checks
+  it (`POST /api/robots/validate`), shows each problem in plain words and adds it (`/api/robots/add`);
+  an added robot has a **Your robot** badge and **Remove from the list**
+  (`DELETE /api/robots/{key}`, which never touches its files). The 3D view now draws robots built
+  from boxes, capsules, cylinders, spheres and ellipsoids when the model has no meshes, and sizes
+  the shove arrow from the robot's own test levels.
 
 ## 0.3.0 (2026-11-10)
 

@@ -12,7 +12,13 @@ import numpy as np
 
 from creature_lab.robots.analysis import extrapolated_com
 from creature_lab.robots.types import SUPPORT_VERTICES, RobotRun
-from creature_lab.robots.visual import geom_rgba, mesh_arrays, visual_mesh_geoms
+from creature_lab.robots.visual import (
+    geom_rgba,
+    mesh_arrays,
+    primitive_arrays,
+    primitive_geoms,
+    visual_mesh_geoms,
+)
 
 #: Floats per frame in the pose stream: position (3) then quaternion w, x, y, z (4).
 POSE_STRIDE = 7
@@ -39,13 +45,22 @@ class SceneData:
         bodies: list[int] = []
         geoms: list[dict] = []
         meshes: dict[int, tuple[np.ndarray, np.ndarray]] = {}
-        for geom in visual_mesh_geoms(model):
+        drawn = visual_mesh_geoms(model)
+        # A robot built from boxes and capsules has no meshes to draw. Published robots keep such
+        # shapes as hidden collision geoms beside their meshes, so they are drawn only when alone.
+        from_shapes = not drawn
+        for geom in drawn or primitive_geoms(model):
             body = int(model.geom_bodyid[geom])
             if body not in bodies:
                 bodies.append(body)
-            mesh_id = int(model.geom_dataid[geom])
-            if mesh_id not in meshes:
-                meshes[mesh_id] = mesh_arrays(model, mesh_id)
+            if from_shapes:
+                # One entry per shape, numbered after the model's real meshes.
+                mesh_id = int(model.nmesh) + int(geom)
+                meshes[mesh_id] = primitive_arrays(model, geom)
+            else:
+                mesh_id = int(model.geom_dataid[geom])
+                if mesh_id not in meshes:
+                    meshes[mesh_id] = mesh_arrays(model, mesh_id)
             geoms.append(
                 {
                     "id": int(geom),

@@ -23,7 +23,14 @@ import {
   totals,
   whatIfSentence,
 } from "./format";
-import { arrowLength, framingFor, pointInConvexPolygon, robotUnit, shoveReference } from "./geometry";
+import {
+  arrowLength,
+  framingFor,
+  pointInConvexPolygon,
+  robotUnit,
+  shoveReference,
+  shoveReferenceFor,
+} from "./geometry";
 import { HOLD_S, Playback, SLOW_FACTOR, frameAt, rateAt } from "./playback";
 import { clipFileName, clipWindow } from "./clip";
 import { HOME, hashFor, parseHash } from "./url";
@@ -185,6 +192,11 @@ describe("geometry", () => {
     expect(arrowLength(2, 4, 1)).toBeCloseTo(0.105);
     expect(framingFor("microduck", 25).distance).toBeLessThan(framingFor("unitree_g1", 130).distance);
     expect(framingFor("new_robot", 100).distance).toBeCloseTo(2.4);
+  });
+  it("draws a robot's shove arrow against its own reference when the server names one", () => {
+    expect(shoveReferenceFor(2.8, 30)).toBe(30); // a 70 cm robot the person added
+    expect(shoveReferenceFor(2.8)).toBe(150); // no reference: guessed from its size
+    expect(shoveReferenceFor(1, 0)).toBe(4); // zero is not a reference
   });
 });
 

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "./api";
 import { Editor } from "./components/Editor";
 import { Inspector } from "./components/Inspector";
+import { AddRobotDialog } from "./components/AddRobotDialog";
 import { LicenseDialog } from "./components/LicenseDialog";
 import { Library } from "./components/Library";
 import { Stage, robotSource } from "./components/Stage";
@@ -34,19 +35,29 @@ function Hero({
   missing,
   onDownload,
   onCheckup,
+  onRemove,
 }: {
   robot: RobotInfo;
   job: Job | null;
   missing: string[];
   onDownload: () => void;
   onCheckup: () => void;
+  onRemove: () => void;
 }) {
   const busy = job?.state === "running";
   return (
     <div className="hero" data-testid="hero">
       <div className="hero-text">
         <p className="eyebrow">{robot.maker}</p>
-        <h1>{robot.installed ? `Check up the ${robot.title}` : `Meet the ${robot.title}`}</h1>
+        <h1>
+          {robot.custom
+            ? robot.installed
+              ? `Check up your ${robot.title}`
+              : `${robot.title} cannot be found`
+            : robot.installed
+              ? `Check up the ${robot.title}`
+              : `Meet the ${robot.title}`}
+        </h1>
         <p className="lede">{robot.summary}</p>
         {busy && job ? (
           <div className="hero-progress" role="status" aria-live="polite">
@@ -61,6 +72,16 @@ function Hero({
                 : "This takes a minute or two. You can leave this tab open."}
             </p>
           </div>
+        ) : robot.custom && !robot.installed ? (
+          <>
+            <p className="muted">
+              Its files are not in <code>{robot.folder}</code> any more. Put the folder back, or take the robot off
+              the list.
+            </p>
+            <button type="button" className="ghost" onClick={onRemove}>
+              Remove from the list
+            </button>
+          </>
         ) : !robot.installed ? (
           <>
             <p className="muted">
@@ -81,9 +102,18 @@ function Hero({
         ) : (
           <>
             <p className="muted">
-              The robot is on this computer. A check-up shoves it at several strengths and moments,
-              tries slippery floors and weak batteries, and writes down why each fall happened. It
-              takes a minute or two.
+              {robot.custom ? (
+                <>
+                  Your robot is read from <code>{robot.folder}</code>. A check-up shoves it at several strengths and
+                  moments, tries slippery floors and carried loads, and writes down why each fall happened. It takes a
+                  minute or two.
+                </>
+              ) : (
+                <>
+                  The robot is on this computer. A check-up shoves it at several strengths and moments, tries slippery
+                  floors and weak batteries, and writes down why each fall happened. It takes a minute or two.
+                </>
+              )}
             </p>
             <button
               type="button"
@@ -93,6 +123,11 @@ function Hero({
             >
               Run the check-up
             </button>
+            {robot.custom && (
+              <button type="button" className="link" onClick={onRemove}>
+                Remove from the list
+              </button>
+            )}
           </>
         )}
         {missing.length > 0 && (
@@ -141,6 +176,7 @@ export default function App() {
   const [policyKey, setPolicyKey] = useState<string | null>(null);
   const [job, setJob] = useState<Job | null>(null);
   const [licenseFor, setLicenseFor] = useState<RobotInfo | null>(null);
+  const [adding, setAdding] = useState(false);
   const [banner, setBanner] = useState<string | null>(null);
   const [buildNote, setBuildNote] = useState<string | null>(null);
   // The change being run for a "what if", and the run to open side by side once it has loaded.
@@ -344,6 +380,22 @@ export default function App() {
         },
       );
       if (downloaded) checkup(target);
+    })();
+  };
+
+  // A robot the person added is only forgotten; its folder is never touched.
+  const removeRobot = (target: RobotInfo) => {
+    if (!window.confirm(`Remove ${target.title} from the list? Its files stay where they are.`)) return;
+    void (async () => {
+      try {
+        await api.removeRobot(target.key);
+        userNav.current = true;
+        const list = await refresh();
+        const next = list[0];
+        if (next) await openRobot(next.key, list);
+      } catch (e) {
+        setBanner(errorText(e));
+      }
     })();
   };
 
@@ -565,6 +617,7 @@ export default function App() {
           onRun={watch}
           onBuild={openEditor}
           buildNote={buildNote}
+          onAddRobot={() => setAdding(true)}
         />
 
         <main className="center" id="player" tabIndex={-1}>
@@ -591,6 +644,7 @@ export default function App() {
               missing={missing}
               onDownload={() => setLicenseFor(robot)}
               onCheckup={() => checkup(robot)}
+              onRemove={() => removeRobot(robot)}
             />
           )}
           {hasStage && <Timeline playback={playback} run={detail} other={pairShown ? other : null} />}
@@ -624,6 +678,22 @@ export default function App() {
             Not now
           </button>
         </div>
+      )}
+
+      {adding && (
+        <AddRobotDialog
+          onCancel={() => setAdding(false)}
+          onAdded={(key) => {
+            setAdding(false);
+            userNav.current = true;
+            setCompare(false);
+            void (async () => {
+              const list = await refresh();
+              await openRobot(key, list);
+              showPlayer();
+            })();
+          }}
+        />
       )}
 
       {licenseFor && (

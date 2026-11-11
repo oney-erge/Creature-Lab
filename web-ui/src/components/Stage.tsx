@@ -17,6 +17,8 @@ export interface StageSource {
   title: string;
   credit: string;
   heightCm: number;
+  /** A shove of this many newtons draws a mid-length arrow; sized from the height when absent. */
+  shoveReferenceN?: number;
   /** Whether the run carries balance markers (support area, weight point, shove); a robot's does. */
   markers?: boolean;
   scene: () => Promise<SceneDescription>;
@@ -31,6 +33,7 @@ export function robotSource(robot: RobotInfo): StageSource {
     title: robot.title,
     credit: robot.credit,
     heightCm: robot.heightCm,
+    shoveReferenceN: robot.shoveReferenceN,
     scene: () => api.scene(robot.key),
     mesh: (id) => api.mesh(robot.key, id),
     poses: (run) => api.poses(run.id),
@@ -101,7 +104,14 @@ export function Stage({ source, run, playback, follower = false, label }: Props)
         const reframe = framedFor.current !== (subject.cameraKey ?? subject.key);
         framedFor.current = subject.cameraKey ?? subject.key;
         needFrame.current = reframe;
-        await view.current?.loadRobot(subject.key, subject.heightCm, description, (id) => subject.mesh(id), reframe);
+        await view.current?.loadRobot(
+          subject.key,
+          subject.heightCm,
+          description,
+          (id) => subject.mesh(id),
+          reframe,
+          subject.shoveReferenceN,
+        );
         if (cancelled) return;
         setLoadedRobot(subject.key);
         setStatus("ready");

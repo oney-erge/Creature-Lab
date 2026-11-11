@@ -28,6 +28,7 @@ interface Props {
   onRun: (id: string) => void;
   onBuild: (preset: string) => void;
   buildNote: string | null;
+  onAddRobot: () => void;
 }
 
 const PRESETS = [
@@ -62,7 +63,17 @@ const FILTERS: { key: Filter; label: string }[] = [
   { key: "up", label: "Stayed up" },
 ];
 
-export function Library({ robots, selected, onSelect, runs, runId, onRun, onBuild, buildNote }: Props) {
+export function Library({
+  robots,
+  selected,
+  onSelect,
+  runs,
+  runId,
+  onRun,
+  onBuild,
+  buildNote,
+  onAddRobot,
+}: Props) {
   const robot = robots.find((r) => r.key === selected);
   const [filter, setFilter] = useState<Filter>("all");
   const shown = runs.filter((run) => matchesFilter(run, filter));
@@ -88,7 +99,7 @@ export function Library({ robots, selected, onSelect, runs, runId, onRun, onBuil
               />
               <span className="row">
                 <span className="name">{r.title}</span>
-                <span className="badge">{r.installed ? "Real robot" : "Not downloaded"}</span>
+                <span className="badge">{r.custom ? "Your robot" : r.installed ? "Real robot" : "Not downloaded"}</span>
               </span>
               <span className="sub">
                 {r.maker} · {r.heightCm >= 100 ? `${(r.heightCm / 100).toFixed(1)} m` : `${r.heightCm} cm`}
@@ -96,6 +107,9 @@ export function Library({ robots, selected, onSelect, runs, runId, onRun, onBuil
             </button>
           ))}
         </div>
+        <button type="button" className="add-robot" onClick={onAddRobot}>
+          <span aria-hidden="true">+</span> Add your own robot
+        </button>
       </section>
 
       {robot && runs.length > 0 && (

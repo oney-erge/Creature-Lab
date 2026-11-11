@@ -13,6 +13,8 @@ from pydantic import BaseModel
 from creature_lab import VERSION
 from creature_lab.robots.catalog import all_robots, robot_info
 from creature_lab.robots.fetch import is_installed, missing_extra
+from creature_lab.robots.pack import PackError, register_pack, unregister_pack
+from creature_lab.robots.packcheck import PackReport, validate_pack
 from creature_lab.web.builder import Builder, BuilderError
 from creature_lab.web.creatures import CreatureError, Designer, EngineMissing, preset_catalog
 from creature_lab.web.jobs import Jobs, known_robot
@@ -47,6 +49,12 @@ class DownloadRequest(BaseModel):
     accept_license: bool = False
 
 
+class PackRequest(BaseModel):
+    """A folder on this computer that holds a robot pack (``robot.toml``)."""
+
+    path: str
+
+
 class BuilderRequest(BaseModel):
     preset: str
 
@@ -64,6 +72,19 @@ class BuildRequest(BaseModel):
     params: dict[str, float] = {}
     goal: str = "move_forward"
     simulate: bool = False
+
+
+def _pack_report(report: PackReport) -> dict:
+    """What the Add-a-robot dialog shows about a checked folder."""
+    pack = report.pack
+    return {
+        "ok": report.ok,
+        "errors": report.errors,
+        "warnings": report.warnings,
+        "facts": [{"name": name, "value": value} for name, value in report.facts.items()],
+        "title": pack.spec.title if pack else None,
+        "key": pack.spec.key if pack else None,
+    }
 
 
 def _host_name(request: Request) -> str:
@@ -127,6 +148,9 @@ def create_app(
                     "installed": is_installed(key),
                     "hasResults": key in have,
                     "firstRunSeconds": info.first_run_s,
+                    "custom": info.folder is not None,
+                    "folder": str(info.folder) if info.folder is not None else None,
+                    "shoveReferenceN": info.staging.shove_reference_n,
                     "introClip": f"/clips/{key}.webp" if clip.is_file() else None,
                     "policies": [
                         {"key": p.key, "title": p.title, "summary": p.summary, "getsUp": p.gets_up}
@@ -136,6 +160,43 @@ def create_app(
                 }
             )
         return {"robots": items, "missingPackages": missing_extra()}
+
+    def _pack_folder(text: str) -> Path:
+        folder = Path(text.strip().strip('"')).expanduser()
+        if not text.strip():
+            raise HTTPException(422, "Type the folder that holds your robot.toml.")
+        if not folder.exists():
+            raise HTTPException(422, f"There is no folder or file at {folder}.")
+        return folder
+
+    @app.post("/api/robots/validate")
+    def validate_robot(body: PackRequest) -> dict:
+        """Check a robot pack (a few seconds: it walks the robot) without adding it."""
+        return _pack_report(validate_pack(_pack_folder(body.path)))
+
+    @app.post("/api/robots/add")
+    def add_robot(body: PackRequest) -> dict:
+        """Check a robot pack and, if nothing is wrong with it, add it to the list."""
+        report = validate_pack(_pack_folder(body.path))
+        result = {**_pack_report(report), "added": False}
+        if not report.ok:
+            return result
+        try:
+            register_pack(Path(body.path.strip().strip('"')).expanduser())
+        except PackError as error:
+            return {**result, "ok": False, "errors": error.problems}
+        load_scene.cache_clear()
+        return {**result, "added": True}
+
+    @app.delete("/api/robots/{key}")
+    def remove_robot(key: str) -> dict:
+        """Forget a robot the person added. Its files stay where they are."""
+        _require_robot(key)
+        if robot_info(key).folder is None:
+            raise HTTPException(409, f"{robot_info(key).title} is built in and cannot be removed")
+        unregister_pack(key)
+        load_scene.cache_clear()
+        return {"removed": key}
 
     def _require_robot(key: str) -> None:
         if not known_robot(key):

@@ -45,7 +45,7 @@ def test_the_example_pack_validates_and_stands(pack_copy):
     assert not report.warnings
     assert report.facts["joints"] == "6"
     assert "27 numbers" in report.facts["observation"]
-    assert "stayed upright" in report.facts["trial stand"]
+    assert "stayed upright" in report.facts["trial walk (stand)"]
     assert (pack_copy / "checkup_scene.xml").is_file()  # the studio scene sits beside the model
 
 
@@ -165,7 +165,7 @@ def test_position_servos_are_supported(pack_copy):
     edit(pack_copy, "robot.toml", 'actuator = "pd"', 'actuator = "position"')
     report = validate_pack(pack_copy)
     assert report.ok, report.errors
-    assert "stayed upright" in report.facts["trial stand"]
+    assert "stayed upright" in report.facts["trial walk (stand)"]
 
 
 def test_sensors_can_feed_the_observation(pack_copy):

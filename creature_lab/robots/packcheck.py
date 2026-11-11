@@ -222,7 +222,7 @@ def _trial_walk(pack: Pack, report: PackReport) -> None:
             continue
         upright = float(run.upright.min())
         distance = float(run.trunk_pos[-1, 0] - run.trunk_pos[0, 0])
-        report.facts[f"trial {policy.key}"] = (
+        report.facts[f"trial walk ({policy.key})"] = (
             f"{_TRIAL_S:g} s walk, moved {distance:+.2f} m, "
             f"{'stayed upright' if upright >= _TRIAL_UPRIGHT else 'fell over'}"
         )
