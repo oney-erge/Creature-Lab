@@ -16,10 +16,13 @@ import json
 import re
 import tomllib
 from dataclasses import dataclass
+from functools import cache, lru_cache
+from importlib import resources
+from importlib.resources.abc import Traversable
 from pathlib import Path
 from typing import Any, Literal
 
-from pydantic import Field, ValidationError, field_validator, model_validator
+from pydantic import Field, ValidationError, ValidationInfo, field_validator, model_validator
 
 from creature_lab.io_utils import atomic_write_text
 from creature_lab.robots.catalog import (
@@ -55,6 +58,21 @@ TERMS = (
 #: pack does not list its own. For a 35 kg humanoid this gives about 50-310 N and 3.5-10 kg.
 _SHOVE_FRACTIONS = (0.15, 0.3, 0.45, 0.6, 0.9)
 _LOAD_FRACTIONS = (0.1, 0.2, 0.3)
+
+
+def _bundled_root() -> Traversable:
+    return resources.files("creature_lab.robots").joinpath("data", "packs")
+
+
+@lru_cache(maxsize=1)
+def bundled_keys() -> tuple[str, ...]:
+    """Keys of the robots whose ``robot.toml`` ships inside the package."""
+    root = _bundled_root()
+    if not root.is_dir():
+        return ()
+    return tuple(
+        sorted(e.name for e in root.iterdir() if e.is_dir() and e.joinpath(PACK_FILE).is_file())
+    )
 
 
 class PackError(ValueError):
@@ -200,6 +218,9 @@ class PackSpec(StrictModel):
     walk_command: float = Field(default=0.5, ge=0.0, le=1.0)
     #: Seconds per stride; shoves are spread across one stride.
     gait_period_s: float = Field(gt=0, le=10)
+    #: Rough seconds from nothing on disk to a first check-up, for a pack bundled with Creature
+    #: Lab (the app opens on the quickest robot). A user's pack leaves it at 0.
+    first_run_s: int = Field(default=0, ge=0, le=3600)
     #: Trunk height at the start, if the model's own default is not right.
     spawn_height_m: float | None = Field(default=None, gt=0)
     levels: LevelsSpec = LevelsSpec()
@@ -207,12 +228,13 @@ class PackSpec(StrictModel):
 
     @field_validator("key")
     @classmethod
-    def _key_shape(cls, value: str) -> str:
+    def _key_shape(cls, value: str, info: ValidationInfo) -> str:
         if not _KEY.match(value):
             raise ValueError(
                 "use 2-40 lowercase letters, digits and underscores, starting with a letter"
             )
-        if value in ROBOTS:
+        own = bool(info.context and info.context.get("bundled"))  # a bundled pack is its own key
+        if value in ROBOTS or (value in bundled_keys() and not own):
             raise ValueError(f"{value!r} is a built-in robot; pick another key")
         return value
 
@@ -321,14 +343,14 @@ def pack_file(path: Path) -> Path:
     return path if path.is_file() else path / PACK_FILE
 
 
-def parse_pack(text: str) -> PackSpec:
+def parse_pack(text: str, *, bundled: bool = False) -> PackSpec:
     """Parse the text of a ``robot.toml``; raises ``PackError`` listing every problem."""
     try:
         data = tomllib.loads(text)
     except tomllib.TOMLDecodeError as error:
         raise PackError([f"robot.toml is not valid TOML: {error}"]) from error
     try:
-        return PackSpec.model_validate(data)
+        return PackSpec.model_validate(data, context={"bundled": bundled})
     except ValidationError as error:
         raise PackError(_describe(error)) from error
 
@@ -364,8 +386,12 @@ def default_levels(mass_kg: float) -> tuple[tuple[float, ...], tuple[float, ...]
     return shoves, loads
 
 
-def pack_info(pack: Pack) -> RobotInfo:
-    """The catalog entry for a pack, so the check-up and the app treat it like any robot."""
+def pack_info(pack: Pack, *, bundled: bool = False) -> RobotInfo:
+    """The catalog entry for a pack, so the check-up and the app treat it like any robot.
+
+    A bundled pack's model and meshes are downloaded into the cache (``<key>.json`` lists them),
+    where its ``robot.toml`` and policies are copied; a user's pack lives in its own folder.
+    """
     spec = pack.spec
     shoves, loads = default_levels(spec.mass_kg)
     levels = CheckupLevels(
@@ -402,7 +428,6 @@ def pack_info(pack: Pack) -> RobotInfo:
         maker=spec.maker,
         summary=spec.summary,
         height_cm=spec.height_cm,
-        manifest=None,
         license_notice=spec.license.notice,
         credit=spec.license.credit,
         non_commercial=spec.license.non_commercial,
@@ -412,8 +437,58 @@ def pack_info(pack: Pack) -> RobotInfo:
         gait_period_s=spec.gait_period_s,
         levels=levels,
         staging=staging,
-        folder=pack.folder,
+        folder=None if bundled else pack.folder,
+        pack=True,
+        manifest=f"{spec.key}.json" if bundled else None,
+        first_run_s=spec.first_run_s,
     )
+
+
+@cache
+def _bundled_spec(key: str) -> PackSpec:
+    text = _bundled_root().joinpath(key, PACK_FILE).read_text(encoding="utf-8")
+    return parse_pack(text, bundled=True)
+
+
+def bundled_pack(key: str) -> Pack:
+    """A bundled pack, read from the package and located in the download cache."""
+    return Pack(_bundled_spec(key), cache_root() / key)
+
+
+def pack_for(key: str) -> Pack:
+    """The pack that runs ``key``: a bundled one from the package, else the user's folder."""
+    if key in bundled_keys():
+        return bundled_pack(key)
+    from creature_lab.robots.fetch import robot_dir
+
+    return load_pack(robot_dir(key))
+
+
+def bundled_infos() -> dict[str, RobotInfo]:
+    return {key: pack_info(bundled_pack(key), bundled=True) for key in bundled_keys()}
+
+
+def _copy_tree(source: Traversable, target: Path) -> None:
+    for entry in source.iterdir():
+        destination = target / entry.name
+        if entry.is_dir():
+            _copy_tree(entry, destination)
+            continue
+        data = entry.read_bytes()
+        if not destination.is_file() or destination.read_bytes() != data:
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_bytes(data)
+
+
+def sync_bundled(key: str) -> Path:
+    """Copy a bundled pack's ``robot.toml`` and policies beside its downloaded model.
+
+    Cheap and safe to repeat: only files that are missing or differ are written, so a newer
+    Creature Lab's policies replace an older copy.
+    """
+    folder = cache_root() / key
+    _copy_tree(_bundled_root().joinpath(key), folder)
+    return folder
 
 
 # ---- the registry of added packs ------------------------------------------------------------

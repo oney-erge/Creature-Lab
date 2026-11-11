@@ -85,7 +85,13 @@ def is_installed(key: str) -> bool:
     info = robot_info(key)
     if info.folder is not None:  # a robot pack: nothing to download, but its folder must exist
         return (info.folder / info.staging.model_file).is_file()
-    return not missing_files(info)
+    if missing_files(info):
+        return False
+    if info.pack:  # a bundled pack: its robot.toml and policies come with the package
+        from creature_lab.robots.pack import sync_bundled
+
+        sync_bundled(key)
+    return True
 
 
 def _download(url: str, target: Path, expected_sha: str) -> None:
@@ -119,4 +125,8 @@ def ensure_robot(key: str, progress: Callable[[str], None] | None = None) -> Pat
         if progress:
             progress(f"[{index}/{len(todo)}] {entry['path']}")
         _download(entry["url"], folder / entry["path"], entry["sha256"])
+    if info.pack:
+        from creature_lab.robots.pack import sync_bundled
+
+        sync_bundled(key)
     return folder

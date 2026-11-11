@@ -5,12 +5,12 @@ from importlib import resources
 
 import pytest
 
-from creature_lab.robots.catalog import ROBOTS, load_manifest, robot_info
+from creature_lab.robots.catalog import ROBOTS, builtin_robots, load_manifest, robot_info
 
 COMMIT_URL = re.compile(r"https://[^/]+/.+/[0-9a-f]{40}/")
 
 
-@pytest.mark.parametrize("key", [key for key, info in ROBOTS.items() if info.manifest])
+@pytest.mark.parametrize("key", [key for key, info in builtin_robots().items() if info.manifest])
 def test_manifest_files_are_pinned_and_hashed(key):
     manifest = load_manifest(robot_info(key))
     assert manifest["files"], "a robot with a manifest must download something"
@@ -32,8 +32,18 @@ def test_every_policy_file_is_in_the_manifest():
                 assert policy.file in listed
 
 
+def test_every_bundled_policy_file_ships_in_the_package():
+    for key, info in builtin_robots().items():
+        if not info.pack:
+            continue
+        folder = resources.files("creature_lab.robots").joinpath("data", "packs", key)
+        for policy in info.policies:
+            assert folder.joinpath(policy.file).is_file(), (key, policy.file)
+        assert folder.joinpath("LICENSE.txt").is_file(), f"{key} ships weights without a license"
+
+
 def test_default_policy_exists():
-    for info in ROBOTS.values():
+    for info in builtin_robots().values():
         assert info.policy(info.default_policy).key == info.default_policy
 
 
