@@ -35,3 +35,6 @@ MUJOCO_LOG.TXT
 
 # Browser app front end (the built bundle in creature_lab/web/static is committed)
 web-ui/node_modules/
+
+# Written beside a robot pack's model when it is checked up
+checkup_scene.xml

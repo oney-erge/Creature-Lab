@@ -4,35 +4,31 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
+from pathlib import Path
 
 import mujoco
 import numpy as np
 
 from creature_lab.robots.analysis import balance_margin_cm
+from creature_lab.robots.catalog import robot_info
 from creature_lab.robots.fetch import robot_dir
 from creature_lab.robots.scene import write_studio_scene
 from creature_lab.robots.types import CONTROL_HZ, RobotRun
-
-_SCENE_FILES = {
-    "microduck": ("Microduck", "robot_groundcontact.xml", 0.12),
-    "unitree_g1": ("Unitree G1", "g1_12dof.xml", 0.5),
-}
 
 #: Marker colours (rgba).
 _SHOVE = (1.0, 0.45, 0.18, 0.92)
 _SUPPORT_OK = (0.12, 0.62, 0.55, 0.9)
 _SUPPORT_WARN = (0.90, 0.22, 0.20, 0.9)
 _BALANCE = (0.99, 0.80, 0.20, 0.95)
-#: Height of each robot relative to Microduck, used to size markers.
-_UNIT = {"microduck": 1.0, "unitree_g1": 5.2}
-#: Shove strength that draws a mid-length arrow.
-_SHOVE_REFERENCE_N = {"microduck": 4.0, "unitree_g1": 150.0}
 
 
 def scene_file(robot: str):
-    """Path of the robot's studio scene (written on demand next to its downloaded files)."""
-    name, robot_file, tile = _SCENE_FILES[robot]
-    return write_studio_scene(robot_dir(robot), name, robot_file, tile_m=tile)
+    """Path of the robot's studio scene (written on demand next to its model file)."""
+    staging = robot_info(robot).staging
+    model = Path(staging.model_file)
+    return write_studio_scene(
+        robot_dir(robot) / model.parent, staging.scene_name, model.name, tile_m=staging.tile_m
+    )
 
 
 @dataclass
@@ -50,10 +46,9 @@ class Shot:
     markers: bool = True
 
 
-SHOTS = {
-    "microduck": Shot(distance=0.62, look_height=0.12),
-    "unitree_g1": Shot(distance=2.5, look_height=0.34),
-}
+def default_shot(robot: str) -> Shot:
+    staging = robot_info(robot).staging
+    return Shot(distance=staging.camera_distance, look_height=staging.look_height)
 
 
 @dataclass
@@ -76,7 +71,7 @@ class Studio:
         self._option = mujoco.MjvOption()
         self._camera = mujoco.MjvCamera()
         self._camera.type = mujoco.mjtCamera.mjCAMERA_FREE
-        self.shot = self.shot or SHOTS[self.robot]
+        self.shot = self.shot or default_shot(self.robot)
         self._focus: np.ndarray | None = None
         self._last_time = 0.0
 
@@ -159,7 +154,8 @@ class Studio:
     def _draw_markers(self, run: RobotRun, time_s: float, margin_cm: np.ndarray | None) -> None:
         scene = self._renderer.scene
         index = self._frame_index(run, time_s)
-        unit = _UNIT[self.robot]
+        staging = robot_info(self.robot).staging
+        unit = staging.unit
 
         # Outline of the feet on the floor; red once the balance point is outside it.
         outline = run.support[index]
@@ -184,7 +180,7 @@ class Studio:
         if force != 0.0:
             trunk = run.trunk_pos[index]
             direction = np.array([0.0, math.copysign(1.0, force), 0.0])
-            strength = min(abs(force) / _SHOVE_REFERENCE_N[self.robot], 2.0)
+            strength = min(abs(force) / staging.shove_reference_n, 2.0)
             length = (0.07 + 0.07 * strength) * unit
             head = trunk - direction * 0.05 * unit
             _connector(scene, head - direction * length, head, 0.0042 * unit, _SHOVE, arrow=True)

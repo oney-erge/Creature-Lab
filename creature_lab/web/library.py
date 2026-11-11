@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from creature_lab.robots.analysis import RunAnalysis, analyze
-from creature_lab.robots.catalog import ROBOTS, robot_info
+from creature_lab.robots.catalog import all_robots, robot_info
 from creature_lab.robots.checkup import Checkup
 from creature_lab.robots.types import RobotRun
 
@@ -143,7 +143,7 @@ class Library:
         return None
 
     def robots_with_results(self) -> set[str]:
-        return {robot for robot in ROBOTS if self.newest_folder(robot) is not None}
+        return {robot for robot in all_robots() if self.newest_folder(robot) is not None}
 
     # ---- runs ----------------------------------------------------------------------------
     def _entry(self, run_dir: Path, robot: str, policy: str) -> RunEntry:
@@ -191,7 +191,7 @@ class Library:
     def run(self, run_id: str) -> RunEntry:
         """A run by id (the listing is rebuilt once if the id is new)."""
         if run_id not in self._runs:
-            for robot in ROBOTS:
+            for robot in all_robots():
                 self.runs(robot)
         return self._runs[run_id]
 

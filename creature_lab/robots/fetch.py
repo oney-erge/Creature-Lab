@@ -53,7 +53,9 @@ def cache_root() -> Path:
 
 
 def robot_dir(key: str) -> Path:
-    return cache_root() / key
+    """Where a robot's files are: the download cache, or a robot pack's own folder."""
+    folder = robot_info(key).folder
+    return folder if folder is not None else cache_root() / key
 
 
 def _sha256(path: Path) -> str:
@@ -80,7 +82,10 @@ def missing_files(info: RobotInfo) -> list[dict]:
 
 
 def is_installed(key: str) -> bool:
-    return not missing_files(robot_info(key))
+    info = robot_info(key)
+    if info.folder is not None:  # a robot pack: nothing to download, but its folder must exist
+        return (info.folder / info.staging.model_file).is_file()
+    return not missing_files(info)
 
 
 def _download(url: str, target: Path, expected_sha: str) -> None:
@@ -107,6 +112,8 @@ def ensure_robot(key: str, progress: Callable[[str], None] | None = None) -> Pat
     """Download whatever is missing for ``key`` and return its folder."""
     info = robot_info(key)
     folder = robot_dir(key)
+    if info.folder is not None:
+        return folder
     todo = missing_files(info)
     for index, entry in enumerate(todo, start=1):
         if progress:

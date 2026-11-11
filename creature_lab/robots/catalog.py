@@ -5,6 +5,38 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from importlib import resources
+from pathlib import Path
+
+
+@dataclass(frozen=True)
+class CheckupLevels:
+    """The shove strengths, floors, batteries and loads a check-up tries on one robot."""
+
+    shoves_n: tuple[float, ...]
+    grips: tuple[float, ...] = (0.5, 0.3, 0.15)
+    batteries_v: tuple[float, ...] = ()
+    payloads_kg: tuple[float, ...] = ()
+
+
+@dataclass(frozen=True)
+class Staging:
+    """Where a robot's model lives and how it is filmed and framed."""
+
+    #: The robot's MuJoCo file, relative to the robot folder.
+    model_file: str
+    #: Name shown in the studio scene written next to the model.
+    scene_name: str
+    #: Side of one floor square in metres.
+    tile_m: float
+    #: Film camera distance in metres, and the height it looks at as a fraction of that distance.
+    camera_distance: float
+    look_height: float
+    #: Height relative to Microduck (25 cm): sizes the shove arrow and the support outline.
+    unit: float
+    #: A shove of this many newtons draws a mid-length arrow.
+    shove_reference_n: float
+    #: Camera distance and look-at fraction in the classic editor's 3D view.
+    editor_view: tuple[float, float]
 
 
 @dataclass(frozen=True)
@@ -46,6 +78,11 @@ class RobotInfo:
     walk_command: float
     #: Seconds per stride, measured from the baseline run; shoves are spread across one stride.
     gait_period_s: float
+    levels: CheckupLevels
+    staging: Staging
+    #: The folder that holds a user-added robot's files (a robot pack). None for the built-in
+    #: robots, which live in the download cache.
+    folder: Path | None = None
     #: Extra credit lines for the end card of the film.
     film_credits: tuple[str, ...] = ()
     #: Rough seconds from nothing on disk to a finished first check-up on a laptop (download plus
@@ -99,6 +136,17 @@ ROBOTS: dict[str, RobotInfo] = {
         default_policy="velstand",
         walk_command=0.5,
         gait_period_s=0.4,
+        levels=CheckupLevels((1, 2, 3, 4, 6, 8), (0.5, 0.3, 0.15), (6.5, 6.0), ()),
+        staging=Staging(
+            model_file="robot_groundcontact.xml",
+            scene_name="Microduck",
+            tile_m=0.12,
+            camera_distance=0.62,
+            look_height=0.12,
+            unit=1.0,
+            shove_reference_n=4.0,
+            editor_view=(0.5, 0.2),
+        ),
         film_credits=(
             "Policies: Pollen Robotics (Apache-2.0) · Servo model: Rhoban BAM (Apache-2.0) · "
             "Physics: MuJoCo",
@@ -132,17 +180,36 @@ ROBOTS: dict[str, RobotInfo] = {
         default_policy="motion",
         walk_command=0.5,
         gait_period_s=0.8,
+        levels=CheckupLevels((50, 100, 150, 200, 300), (0.5, 0.3, 0.15), (), (3, 6, 10)),
+        staging=Staging(
+            model_file="g1_12dof.xml",
+            scene_name="Unitree G1",
+            tile_m=0.5,
+            camera_distance=2.5,
+            look_height=0.34,
+            unit=5.2,
+            shove_reference_n=150.0,
+            editor_view=(2.4, 0.32),
+        ),
         film_credits=("Physics: MuJoCo",),
         first_run_s=45,
     ),
 }
 
 
+def all_robots() -> dict[str, RobotInfo]:
+    """The built-in robots, then any robot packs the user has added (``robots add``)."""
+    from creature_lab.robots.pack import registered_infos
+
+    return {**ROBOTS, **registered_infos()}
+
+
 def robot_info(key: str) -> RobotInfo:
+    known = all_robots()
     try:
-        return ROBOTS[key]
+        return known[key]
     except KeyError:
-        raise KeyError(f"unknown robot {key!r} (choose from: {', '.join(ROBOTS)})") from None
+        raise KeyError(f"unknown robot {key!r} (choose from: {', '.join(known)})") from None
 
 
 def load_manifest(info: RobotInfo) -> dict:

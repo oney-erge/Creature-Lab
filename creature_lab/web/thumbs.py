@@ -62,10 +62,10 @@ _studios: dict[str, object] = {}
 
 
 def _studio(robot: str):
-    from creature_lab.robots.render import SHOTS, Shot, Studio
+    from creature_lab.robots.render import Shot, Studio, default_shot
 
     if robot not in _studios:
-        base = SHOTS[robot]
+        base = default_shot(robot)
         shot = Shot(
             distance=base.distance * 1.15,
             look_height=base.look_height,

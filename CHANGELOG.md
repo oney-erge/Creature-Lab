@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+- **Bring your own robot and policy.** A robot pack is a folder with a `robot.toml`, a MuJoCo model
+  and a trained policy (`.onnx`, or the `.npz` LSTM form of Unitree's G1 policy). `robots validate`
+  checks it and says each mistake in plain words (observation length against the policy's input,
+  missing joints, a ground plane in the model, a missing torque limit, and more) and walks the
+  robot for two seconds; `robots add` and `robots remove` keep a list of added folders; every
+  check-up command and the app then treat it like Microduck or the G1, with shoves and loads scaled
+  from `mass_kg`. Observation terms, PD or position-servo joints, and named sensors are declared in
+  the file ([docs/ROBOT_PACKS.md](docs/ROBOT_PACKS.md), example in `examples/robot-pack/`). The
+  Unitree G1 written as a pack runs bit for bit like the built-in adapter. Per-robot staging and
+  test levels moved from tables in `render.py` and `checkup.py` onto `RobotInfo`.
+
 ## 0.3.0 (2026-11-10)
 
 - **Published on PyPI** as `creature-lab`: `pip install "creature-lab[app]"`, then `creature-lab`.

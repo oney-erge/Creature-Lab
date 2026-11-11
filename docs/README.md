@@ -7,6 +7,7 @@ the topic docs below when you need more detail.
 
 1. [Browser app](WEB_APP.md) - the app that opens first: real robots, 3D replays, check-ups.
 2. [Robot check-up](ROBOT_CHECKUP.md) - shove real robots and get their falls explained.
+   - [Bring your own robot](ROBOT_PACKS.md): check up your own MuJoCo robot and trained policy.
 3. [Getting Started](GETTING_STARTED.md) - first run, zoo, improvement, and troubleshooting.
 4. [Build Editor](BUILD_EDITOR.md) - browser setup screen for creating CreatureSpec JSON.
 5. [Concepts](CONCEPTS.md) - the mental model behind specs, tasks, traces, and backends.

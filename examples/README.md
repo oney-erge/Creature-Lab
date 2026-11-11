@@ -16,6 +16,7 @@ python scripts/start.py
 | `crawl_forward.json` | TaskSpec | Used by locomotion examples |
 | `reach_target.json` | TaskSpec | `uv run creature-lab run examples/quadruped.json --task examples/reach_target.json` |
 | `recover_after_damage.json` | TaskSpec | Use with a creature that contains the referenced damaged part |
+| `robot-pack/` | Robot pack | `uv run creature-lab robots validate examples/robot-pack` (see [Bring your own robot](../docs/ROBOT_PACKS.md)) |
 
 Validate before running:
 

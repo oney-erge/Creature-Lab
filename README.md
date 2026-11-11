@@ -54,6 +54,8 @@ Either way it installs prebuilt packages only (no compiler, about 300 MB) and op
   faster or carrying a load. It runs again in about a second and plays beside the original.
 - **Compare two policies** on the same shove. The Microduck has a walk-only policy and Pollen's newer
   walk-and-get-up policy.
+- **Bring your own robot and policy**: a MuJoCo model, an ONNX policy and a small `robot.toml`
+  (`robots validate`, `robots add`; [guide](docs/ROBOT_PACKS.md)) get the same shoves and explanations.
 - **Check for regressions** from the command line: `robots compare` says which tests got better or
   worse between two check-ups (`--fail-on-regression` for CI), and `robots card` writes an SVG
   robustness card for a README or model card.

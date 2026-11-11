@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 
-from creature_lab.robots.catalog import ROBOTS
+from creature_lab.robots.catalog import all_robots
 from creature_lab.robots.checkup import planned_steps
 from creature_lab.robots.fetch import FetchError, ensure_robot
 
@@ -169,4 +169,4 @@ class Jobs:
 
 
 def known_robot(key: str) -> bool:
-    return key in ROBOTS
+    return key in all_robots()

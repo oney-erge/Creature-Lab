@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable
-from dataclasses import dataclass
 from pathlib import Path
 
 from pydantic import Field
@@ -12,7 +11,7 @@ from pydantic import Field
 from creature_lab import VERSION
 from creature_lab.io_utils import atomic_write_text
 from creature_lab.robots.analysis import RunAnalysis, analyze
-from creature_lab.robots.catalog import RobotInfo, robot_info
+from creature_lab.robots.catalog import CheckupLevels, RobotInfo, robot_info
 from creature_lab.robots.types import RobotRun, Scenario
 from creature_lab.schema.base import StrictModel
 
@@ -20,23 +19,9 @@ from creature_lab.schema.base import StrictModel
 SHOVE_PHASES = 8
 
 
-@dataclass(frozen=True)
-class _Levels:
-    shoves_n: tuple[float, ...]
-    grips: tuple[float, ...]
-    batteries_v: tuple[float, ...]
-    payloads_kg: tuple[float, ...]
-
-
-_LEVELS = {
-    "microduck": _Levels((1, 2, 3, 4, 6, 8), (0.5, 0.3, 0.15), (6.5, 6.0), ()),
-    "unitree_g1": _Levels((50, 100, 150, 200, 300), (0.5, 0.3, 0.15), (), (3, 6, 10)),
-}
-
-
-def tested_levels(robot: str) -> _Levels:
+def tested_levels(robot: str) -> CheckupLevels:
     """The shove strengths, floors, batteries and loads the check-up tries on ``robot``."""
-    return _LEVELS[robot]
+    return robot_info(robot).levels
 
 
 class ShoveRow(StrictModel):
@@ -120,7 +105,7 @@ def run_checkup(
     from creature_lab.robots.api import run_scenario
 
     info: RobotInfo = robot_info(robot)
-    levels = _LEVELS[robot]
+    levels = info.levels
     out_dir = Path(out_dir)
     speed = info.walk_command if command is None else command
     say = progress or (lambda message: None)
@@ -210,7 +195,7 @@ def read_checkup(out_dir: Path) -> Checkup:
 
 def planned_steps(robot: str) -> int:
     """How many progress lines a full check-up of ``robot`` prints (every policy, every test)."""
-    levels = _LEVELS[robot]
+    levels = robot_info(robot).levels
     per_policy = 1 + len(levels.shoves_n) + len(levels.grips) + len(levels.batteries_v)
     per_policy += len(levels.payloads_kg)
     return per_policy * len(robot_info(robot).policies)

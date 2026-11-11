@@ -1,0 +1,59 @@
+# A robot pack: everything Creature Lab needs to shove your robot and explain each fall.
+# This example is a small two-legged robot with a stand-still policy. See docs/ROBOT_PACKS.md.
+
+schema_id = "creature-lab.robot-pack/1"
+key = "stick_biped"                 # lowercase letters, digits, underscores
+title = "Stick biped"
+maker = "Creature Lab example"
+summary = "A 70 cm, 6.4 kg two-legged example robot with a stand-still policy."
+height_cm = 70
+mass_kg = 6.4
+
+model = "stick_biped.xml"           # MuJoCo model, relative to this folder; no ground plane in it
+trunk = "trunk"                     # the body with the free joint; it counts as "upright"
+physics_dt = 0.005                  # must divide 0.02: control runs at 50 Hz
+actuator = "pd"                     # "pd": torque from the gains below; "position": model servos
+action_scale = 0.25                 # target pose = default + action * action_scale
+walk_command = 0.5                  # forward speed the policy was trained to walk at (0..1)
+gait_period_s = 0.8                 # seconds per stride; shoves are spread across one stride
+
+[license]
+notice = "Example robot and stand-still policy written for Creature Lab, Apache-2.0."
+credit = "Stick biped: Creature Lab example, Apache-2.0"
+non_commercial = false
+
+# Every actuated joint, in the order the policy outputs its actions.
+[joints]
+left_hip_roll   = { default = 0.0,  kp = 60.0, kd = 2.0 }
+left_hip_pitch  = { default = 0.0,  kp = 80.0, kd = 2.5 }
+left_knee       = { default = 0.0,  kp = 80.0, kd = 2.5 }
+right_hip_roll  = { default = 0.0,  kp = 60.0, kd = 2.0 }
+right_hip_pitch = { default = 0.0,  kp = 80.0, kd = 2.5 }
+right_knee      = { default = 0.0,  kp = 80.0, kd = 2.5 }
+
+# How the policy's input is put together, in order. 27 numbers: 3 + 3 + 3 + 6 + 6 + 6.
+[[observation]]
+term = "base_ang_vel"
+scale = 0.25
+
+[[observation]]
+term = "projected_gravity"
+
+[[observation]]
+term = "command"                    # forward speed, then zeros
+
+[[observation]]
+term = "joint_pos"                  # joint angles minus the default pose
+
+[[observation]]
+term = "joint_vel"
+scale = 0.05
+
+[[observation]]
+term = "last_action"
+
+[[policies]]
+key = "stand"
+title = "Stand-still policy"
+summary = "Always answers 'hold the default pose'. Replace it with your trained policy."
+file = "policy.onnx"

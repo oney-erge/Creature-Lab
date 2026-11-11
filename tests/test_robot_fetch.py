@@ -28,7 +28,7 @@ def source(tmp_path, monkeypatch):
 
     manifest = {"files": [entry("model.xml"), entry("mesh.stl")]}
     monkeypatch.setattr(fetch, "load_manifest", lambda info: manifest)
-    monkeypatch.setattr(fetch, "robot_info", lambda key: SimpleNamespace(key=key))
+    monkeypatch.setattr(fetch, "robot_info", lambda key: SimpleNamespace(key=key, folder=None))
     return served, manifest
 
 
