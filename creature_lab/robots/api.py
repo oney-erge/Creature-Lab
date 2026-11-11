@@ -10,7 +10,13 @@ from creature_lab.robots.types import RobotRun, Scenario
 
 
 def make_robot(scenario: Scenario) -> MujocoRobot:
-    robot_info(scenario.robot).policy(scenario.policy)  # fails early with the valid choices
+    info = robot_info(scenario.robot)
+    info.policy(scenario.policy)  # fails early with the valid choices
+    if info.folder is not None:
+        from creature_lab.robots.pack import load_pack
+        from creature_lab.robots.packbot import PackRobot
+
+        return PackRobot(scenario, load_pack(info.folder))
     if scenario.robot == "microduck":
         from creature_lab.robots.microduck import Microduck
 

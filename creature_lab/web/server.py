@@ -11,7 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from creature_lab import VERSION
-from creature_lab.robots.catalog import ROBOTS, robot_info
+from creature_lab.robots.catalog import all_robots, robot_info
 from creature_lab.robots.fetch import is_installed, missing_extra
 from creature_lab.web.builder import Builder, BuilderError
 from creature_lab.web.creatures import CreatureError, Designer, EngineMissing, preset_catalog
@@ -111,7 +111,7 @@ def create_app(
     def robots() -> dict:
         have = library.robots_with_results()
         items = []
-        for key, info in ROBOTS.items():
+        for key, info in all_robots().items():
             summary = library.checkup_summary(key) if key in have else None
             clip = static / "clips" / f"{key}.webp"
             items.append(

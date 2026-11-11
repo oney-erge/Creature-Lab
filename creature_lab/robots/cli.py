@@ -12,7 +12,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
-from creature_lab.robots.catalog import ROBOTS, robot_info
+from creature_lab.robots.catalog import all_robots, robot_info
 from creature_lab.robots.fetch import (
     FetchError,
     cache_root,
@@ -20,6 +20,12 @@ from creature_lab.robots.fetch import (
     is_installed,
     missing_extra,
     robot_dir,
+)
+from creature_lab.robots.pack import (
+    PackError,
+    register_pack,
+    registry_status,
+    unregister_pack,
 )
 
 robots_app = typer.Typer(
@@ -43,6 +49,12 @@ def _ensure_downloaded(robot: str, accept: bool) -> None:
     if is_installed(robot):
         return
     info = robot_info(robot)
+    if info.folder is not None:
+        console.print(
+            f"[red]{info.title}'s files are missing from {info.folder}.[/red] Put the folder "
+            f"back, or run: creature-lab robots remove {robot}"
+        )
+        raise typer.Exit(code=1)
     console.print(Panel(info.license_notice, title=f"{info.title}: before you download"))
     if not accept and not (sys.stdin.isatty() and typer.confirm("Download it now?", default=True)):
         console.print(
@@ -60,8 +72,9 @@ def _ensure_downloaded(robot: str, accept: bool) -> None:
 
 def _robot_arg(robot: str) -> str:
     key = robot.replace("-", "_")
-    if key not in ROBOTS:
-        raise typer.BadParameter(f"choose one of: {', '.join(ROBOTS)}")
+    known = all_robots()
+    if key not in known:
+        raise typer.BadParameter(f"choose one of: {', '.join(known)}")
     return key
 
 
@@ -71,15 +84,22 @@ def list_robots() -> None:
     table = Table(title=f"Robots (downloads go to {cache_root()})")
     for column in ("Robot", "Maker", "Height", "Policies", "Downloaded"):
         table.add_column(column)
-    for info in ROBOTS.values():
+    for info in all_robots().values():
+        if info.folder is not None:
+            ready = "yours" if is_installed(info.key) else "[red]files missing[/red]"
+        else:
+            ready = "yes" if is_installed(info.key) else "no"
         table.add_row(
             info.key.replace("_", "-"),
             info.maker,
             f"{info.height_cm} cm",
             ", ".join(p.key for p in info.policies),
-            "yes" if is_installed(info.key) else "no",
+            ready,
         )
     console.print(table)
+    for key, (folder, info, problem) in registry_status().items():
+        if info is None:
+            console.print(f"[red]{key}[/red] ({folder}) cannot be read: {problem}")
 
 
 @robots_app.command("fetch")
@@ -89,13 +109,84 @@ def fetch(
 ) -> None:
     """Download a robot's model files, verified against pinned hashes."""
     key = _robot_arg(robot)
+    if robot_info(key).folder is not None:
+        console.print(f"{robot_info(key).title} is your own robot; nothing to download.")
+        return
     _ensure_downloaded(key, yes)
     console.print(f"{robot_info(key).title} is ready in {robot_dir(key)}")
 
 
+def _show_report(report) -> None:
+    for problem in report.errors:
+        console.print(f"[red]error[/red]   {problem}", highlight=False)
+    for warning in report.warnings:
+        console.print(f"[yellow]warning[/yellow] {warning}", highlight=False)
+    for name, value in report.facts.items():
+        console.print(f"[dim]{name}[/dim]  {value}", highlight=False)
+
+
+@robots_app.command("validate")
+def validate(
+    folder: Annotated[Path, typer.Argument(help="A folder holding robot.toml (or the file).")],
+    trial: Annotated[
+        bool, typer.Option("--trial/--no-trial", help="Also walk the robot for two seconds.")
+    ] = True,
+) -> None:
+    """Check your own robot pack: every likely mistake in plain words, then a short trial walk."""
+    from creature_lab.robots.packcheck import validate_pack
+
+    report = validate_pack(folder, simulate=trial)
+    _show_report(report)
+    if not report.ok:
+        console.print("[red]Not usable yet.[/red] Fix the errors above and run this again.")
+        raise typer.Exit(code=1)
+    console.print("[green]Ready to add:[/green] creature-lab robots add " + str(folder))
+
+
+@robots_app.command("add")
+def add(
+    folder: Annotated[Path, typer.Argument(help="A folder holding robot.toml.")],
+) -> None:
+    """Add your own robot and policy, so check-ups, the report and the app can use them.
+
+    The folder stays where it is (nothing is copied), so edits to robot.toml or the policy are
+    picked up. Only add folders you trust: Creature Lab opens the model and policy files in it.
+    """
+    from creature_lab.robots.packcheck import validate_pack
+
+    report = validate_pack(folder)
+    _show_report(report)
+    if not report.ok:
+        console.print("[red]Not added.[/red] Fix the errors above and run this again.")
+        raise typer.Exit(code=1)
+    try:
+        info = register_pack(folder)
+    except PackError as error:
+        console.print(f"[red]Not added.[/red] {error}")
+        raise typer.Exit(code=1) from error
+    key = info.key.replace("_", "-")
+    console.print(
+        f"[green]Added {info.title}.[/green] Check it up with: creature-lab robots checkup {key}"
+    )
+
+
+@robots_app.command("remove")
+def remove(
+    robot: Annotated[str, typer.Argument(help="The key of a robot you added.")],
+) -> None:
+    """Forget a robot you added. Its folder and files are left exactly as they are."""
+    key = robot.replace("-", "_")
+    try:
+        folder = unregister_pack(key)
+    except KeyError:
+        console.print(f"[red]{robot} is not one of your added robots.[/red]")
+        raise typer.Exit(code=1) from None
+    console.print(f"Removed {robot}. Its files are still in {folder}.")
+
+
 @robots_app.command("checkup")
 def checkup(
-    robot: Annotated[str, typer.Argument(help="microduck or unitree-g1")],
+    robot: Annotated[str, typer.Argument(help="microduck, unitree-g1 or a robot you added")],
     policy: Annotated[
         list[str] | None, typer.Option("--policy", help="Policy to test (repeatable).")
     ] = None,
