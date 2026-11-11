@@ -55,8 +55,13 @@ def _node(op: str, inputs: list[str], output: str) -> bytes:
     return b"".join(_text(1, name) for name in inputs) + _text(2, output) + _text(4, op)
 
 
-def policy_bytes(weight: np.ndarray, bias: np.ndarray) -> bytes:
-    """An ONNX model computing ``action = observation @ weight + bias``."""
+def policy_bytes(
+    weight: np.ndarray, bias: np.ndarray, metadata: dict[str, str] | None = None
+) -> bytes:
+    """An ONNX model computing ``action = observation @ weight + bias``.
+
+    ``metadata`` becomes the model's metadata (what mjlab and Pollen Robotics write).
+    """
     inputs, outputs = weight.shape
     graph = _bytes(1, _node("MatMul", ["observation", "weight"], "hidden"))
     graph += _bytes(1, _node("Add", ["hidden", "bias"], "action"))
@@ -66,6 +71,8 @@ def policy_bytes(weight: np.ndarray, bias: np.ndarray) -> bytes:
     graph += _bytes(12, _value_info("action", outputs))
     model = _number(1, 8) + _text(2, "creature-lab-example")
     model += _bytes(8, _number(2, 13)) + _bytes(7, graph)
+    for key, value in (metadata or {}).items():
+        model += _bytes(14, _text(1, key) + _text(2, value))
     return model
 
 

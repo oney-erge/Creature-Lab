@@ -79,6 +79,8 @@ class JointSpec(StrictModel):
     kd: float | None = Field(default=None, ge=0)
     #: Torque at which the motor is "at its limit"; read from the model when left out.
     torque_limit: float | None = Field(default=None, gt=0)
+    #: This joint's own action scale, when it differs from the pack's ``action_scale``.
+    action_scale: float | None = Field(default=None, gt=0)
 
 
 class ObservationTerm(StrictModel):
@@ -185,8 +187,9 @@ class PackSpec(StrictModel):
     #: plain motors). ``position``: the model's actuators are position servos that hold their own
     #: gains; the target is sent as the control.
     actuator: Literal["pd", "position"] = "pd"
-    #: Target pose = default pose + action x action_scale.
-    action_scale: float = Field(gt=0)
+    #: Target pose = default pose + action x action_scale. A joint can set its own; this is the
+    #: one for every joint that does not (and may be left out when every joint sets one).
+    action_scale: float | None = Field(default=None, gt=0)
     #: Optional clip applied to the policy output before scaling.
     action_clip: float | None = Field(default=None, gt=0)
     #: Every actuated joint, in the order the policy outputs its actions.
@@ -232,6 +235,12 @@ class PackSpec(StrictModel):
                     f"joints without kp and kd: {', '.join(lacking)} (actuator = 'pd' needs both; "
                     "use actuator = 'position' if the model's servos hold their own gains)"
                 )
+        unscaled = [name for name, joint in self.joints.items() if joint.action_scale is None]
+        if self.action_scale is None and unscaled:
+            raise ValueError(
+                f"action_scale: set it once for the pack, or on every joint (missing on: "
+                f"{', '.join(unscaled)})"
+            )
         keys = [policy.key for policy in self.policies]
         if len(set(keys)) != len(keys):
             raise ValueError("policies: every key must be different")

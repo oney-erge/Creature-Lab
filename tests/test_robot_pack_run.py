@@ -63,6 +63,38 @@ def test_a_pack_runs_like_any_robot_and_a_hard_shove_knocks_it_over(cache, pack_
     assert result.fell and result.cause_text
 
 
+def test_each_joint_can_have_its_own_action_scale(pack_copy):
+    from creature_lab.robots.pack import load_pack
+    from creature_lab.robots.packbot import PackRobot
+
+    # A policy that always answers 1 for the first joint and 0 for the rest.
+    bias = np.zeros(6)
+    bias[0] = 1.0
+    module = make_policy_module()
+    (pack_copy / "policy.onnx").write_bytes(module.policy_bytes(np.zeros((27, 6)), bias))
+
+    def first_target(extra_toml_edit=None):
+        if extra_toml_edit:
+            edit(pack_copy, "robot.toml", *extra_toml_edit)
+        scenario = Scenario(robot="stick_biped", policy="stand", seconds=1.0)
+        robot = PackRobot(scenario, load_pack(pack_copy))
+        robot.control(0.0)
+        return robot._target
+
+    one_for_all = first_target()
+    assert one_for_all[0] == pytest.approx(0.25)  # default 0 + action 1 x scale 0.25
+    assert np.allclose(one_for_all[1:], 0.0)
+
+    own = first_target(
+        (
+            "left_hip_roll   = { default = 0.0, ",
+            "left_hip_roll   = { action_scale = 0.4, default = 0.0, ",
+        )
+    )
+    assert own[0] == pytest.approx(0.4)  # that joint's own scale replaces the pack's
+    assert np.allclose(own[1:], 0.0)
+
+
 def test_a_check_up_runs_on_a_pack_and_saves_its_results(cache, pack_copy, tmp_path):
     with (pack_copy / "robot.toml").open("a", encoding="utf-8") as handle:
         handle.write("\n[levels]\nshoves_n = [10, 500]\ngrips = [0.4]\npayloads_kg = [2]\n")

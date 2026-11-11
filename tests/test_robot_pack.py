@@ -84,6 +84,18 @@ def test_mistakes_in_robot_toml_are_named(old, new, expected):
         parse_pack(_example_text().replace(old, new, 1))
 
 
+def test_action_scale_may_be_set_per_joint_instead_of_once():
+    text = _example_text().replace("action_scale = 0.25", "")
+    with pytest.raises(PackError, match="action_scale: set it once"):
+        parse_pack(text)
+    every = text.replace("kd = 2.0 }", "kd = 2.0, action_scale = 0.3 }").replace(
+        "kd = 2.5 }", "kd = 2.5, action_scale = 0.2 }"
+    )
+    spec = parse_pack(every)
+    assert spec.action_scale is None
+    assert {j.action_scale for j in spec.joints.values()} == {0.3, 0.2}
+
+
 def test_every_problem_is_listed_at_once():
     text = _example_text().replace('key = "stick_biped"', 'key = "X"')
     text = text.replace("action_scale = 0.25", "action_scale = -1")

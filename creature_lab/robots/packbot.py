@@ -60,6 +60,13 @@ class PackRobot(MujocoRobot):
             ]
         )
         self._position_servos = spec.actuator == "position"
+        # One number for the whole robot keeps the arithmetic of a plain scalar; per-joint scales
+        # are float32 like the policy's own output.
+        self._scale: float | np.ndarray = (
+            np.array([j.action_scale or spec.action_scale for j in joints], dtype=np.float32)
+            if any(j.action_scale is not None for j in joints)
+            else float(spec.action_scale)
+        )
 
         self.policy_path = pack.policy_path(scenario.policy)
         self.policy = load_policy(self.policy_path)
@@ -142,7 +149,7 @@ class PackRobot(MujocoRobot):
         self._action = action
         clip = self.pack.spec.action_clip
         used = np.clip(action, -clip, clip) if clip else action
-        self._target = self._default + used * self.pack.spec.action_scale
+        self._target = self._default + used * self._scale
 
     def physics_step(self) -> None:
         data = self.data
