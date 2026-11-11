@@ -38,6 +38,7 @@ import {
 } from "./geometry";
 import { HOLD_S, Playback, SLOW_FACTOR, frameAt, rateAt } from "./playback";
 import { clipFileName, clipWindow } from "./clip";
+import { staticUrl } from "./api";
 import { HOME, hashFor, parseHash } from "./url";
 import type { PolicySummary, RunCard, RunEvents, ShoveResult, ShoveRow } from "./types";
 
@@ -405,5 +406,31 @@ describe("saying what a designed creature's shove test found", () => {
     expect(limitLine(result(2), result(4))).toBe("0.4 m/s → 0.8 m/s");
     expect(limitLine(result(0), result(1))).toBe("falls at once → 0.2 m/s");
     expect(limitLine(result(0, { baselineFell: true }), result(1))).toBe("falls alone → 0.2 m/s");
+  });
+});
+
+describe("where an exported copy keeps what the live app serves", () => {
+  it("maps each live path to its recorded file, relative to the page", () => {
+    expect(staticUrl("/api/robots")).toBe("data/robots.json");
+    expect(staticUrl("/api/robots/unitree_g1/runs")).toBe("data/robots/unitree_g1/runs.json");
+    expect(staticUrl("/api/robots/unitree_g1/scene")).toBe("data/robots/unitree_g1/scene.json");
+    expect(staticUrl("/api/robots/unitree_g1/mesh/12")).toBe("data/robots/unitree_g1/mesh/12.bin");
+    expect(staticUrl("/api/robots/unitree_g1/thumbnail")).toBe("data/robots/unitree_g1/thumbnail.jpg");
+    expect(staticUrl("/api/runs/3f2a9c01d4e7")).toBe("data/runs/3f2a9c01d4e7/detail.json");
+    expect(staticUrl("/api/runs/3f2a9c01d4e7/poses")).toBe("data/runs/3f2a9c01d4e7/poses.bin");
+    expect(staticUrl("/api/runs/3f2a9c01d4e7/overlay")).toBe("data/runs/3f2a9c01d4e7/overlay.bin");
+    expect(staticUrl("/api/runs/3f2a9c01d4e7/thumbnail")).toBe("data/runs/3f2a9c01d4e7/thumbnail.jpg");
+  });
+
+  it("never reaches above the page: no leading slash, no parent folder", () => {
+    for (const path of ["/api/robots", "/api/robots/x/runs", "/api/robots/x/mesh/1", "/api/runs/ab12/poses"]) {
+      expect(staticUrl(path).startsWith("/")).toBe(false);
+      expect(staticUrl(path)).not.toContain("..");
+    }
+  });
+
+  it("leaves a path the export does not hold as it is, so a stray request fails plainly", () => {
+    expect(staticUrl("/api/jobs")).toBe("/api/jobs");
+    expect(staticUrl("/api/runs/..%2Fsecret")).toBe("/api/runs/..%2Fsecret");
   });
 });

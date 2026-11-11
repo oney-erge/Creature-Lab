@@ -512,8 +512,52 @@ def web_app(
     checkups: Annotated[
         Path, typer.Option(help="Where check-up results are read from and written to.")
     ] = Path("outputs") / "checkup",
+    export_static: Annotated[
+        Path | None,
+        typer.Option(
+            "--export-static",
+            help="Write the app and these check-ups as plain files for a web site, then exit.",
+        ),
+    ] = None,
+    robot: Annotated[
+        list[str] | None,
+        typer.Option("--robot", help="With --export-static: only this robot (repeatable)."),
+    ] = None,
+    include_non_commercial: Annotated[
+        bool,
+        typer.Option(
+            "--include-non-commercial",
+            help="With --export-static: also export robots whose files are non-commercial.",
+        ),
+    ] = False,
 ) -> None:
     """Open the Creature Lab browser app: real robots, check-ups, and replays."""
+    if export_static is not None:
+        from creature_lab.web.static_export import ExportError
+        from creature_lab.web.static_export import export_static as write_files
+
+        try:
+            summary = write_files(
+                checkups,
+                export_static,
+                robots=[r.replace("-", "_") for r in robot] if robot else None,
+                include_non_commercial=include_non_commercial,
+                progress=lambda message: console.print(f"  {message}"),
+            )
+        except ExportError as error:
+            console.print(f"[red]error:[/red] {error}")
+            raise typer.Exit(code=1) from error
+        console.print(
+            f"Wrote {summary['files']} files ({summary['bytes'] / 1e6:.1f} MB) for "
+            f"{', '.join(summary['robots'])} to [bold]{export_static}[/bold]. Serve that folder "
+            "from any web server; it needs no Python."
+        )
+        if summary["skipped"]:
+            console.print(
+                f"Left out (non-commercial files; add --include-non-commercial): "
+                f"{', '.join(summary['skipped'])}"
+            )
+        return
     _serve_app(port, host, open_browser, checkups)
 
 

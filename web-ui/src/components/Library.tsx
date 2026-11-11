@@ -1,5 +1,5 @@
 import { useState, type KeyboardEvent } from "react";
-import { api } from "../api";
+import { STATIC, api } from "../api";
 import { type Filter, groupRuns, matchesFilter, outcomeTone } from "../format";
 import type { RobotInfo, RunCard } from "../types";
 
@@ -107,9 +107,11 @@ export function Library({
             </button>
           ))}
         </div>
-        <button type="button" className="add-robot" onClick={onAddRobot}>
-          <span aria-hidden="true">+</span> Add your own robot
-        </button>
+        {!STATIC && (
+          <button type="button" className="add-robot" onClick={onAddRobot}>
+            <span aria-hidden="true">+</span> Add your own robot
+          </button>
+        )}
       </section>
 
       {robot && runs.length > 0 && (
@@ -148,6 +150,7 @@ export function Library({
         </section>
       )}
 
+      {!STATIC && (
       <section>
         <h2 className="eyebrow">Build your own</h2>
         <p className="muted small">Pick a body, reshape it, and run it.</p>
@@ -164,6 +167,7 @@ export function Library({
           </p>
         )}
       </section>
+      )}
     </aside>
   );
 }

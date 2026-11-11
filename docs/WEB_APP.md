@@ -85,6 +85,32 @@ Everything works from the keyboard: the first Tab stop is a skip link to the 3D 
 history is one stop (arrow keys move between runs), and the timeline takes the arrow keys, Home
 and End. If your system asks for reduced motion, runs wait for you to press play.
 
+## Host a recorded demo on a web site
+
+The app can be written out as plain files that any web server (GitHub Pages, a static host) can
+serve, with no Python behind them:
+
+```bash
+uv run creature-lab robots checkup unitree-g1 --yes        # the check-ups to show
+uv run creature-lab app --export-static demo/ --robot unitree-g1 --robot unitree-h1
+```
+
+The export calls the app's own endpoints in-process and saves each answer, so the files hold exactly
+what the live app would send: the robot's meshes (`data/robots/<robot>/`), each run's poses, overlay
+and explanation (`data/runs/<run>/`), and card pictures. Open `demo/index.html` from any folder
+(the paths are relative, so `/demo/` works as well as `/`). The page is the same app in *static
+mode*: the same library, 3D view, timeline, side-by-side view and explanations, with a banner that
+says it is a recording and how to run the real thing. The buttons that need a server (download,
+check-up, "what if", Build your own, Add your own robot) are not there.
+
+- Only robots with a saved check-up are exported (`--robot` narrows it). A robot whose files are
+  non-commercial, such as Microduck (CC BY-NC-SA meshes), is left out unless you pass
+  `--include-non-commercial`; the command says what it left out.
+- It is about 9 to 14 MB per robot before compression (meshes are most of it; a robot with detailed
+  hands such as the H1-2 is the largest).
+- The export folder must be empty, new, or an earlier export: the command refuses to write into
+  anything else, and a repeat run replaces only its own `data/` and `assets/`.
+
 ## How it is built
 
 | Part | Where | Notes |

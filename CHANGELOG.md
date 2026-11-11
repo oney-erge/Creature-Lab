@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- **A recorded demo for a web site.** `creature-lab app --export-static DIR` writes the app and the
+  saved check-ups of the robots you choose as plain files (`--robot`, repeatable; Microduck's
+  non-commercial meshes only with `--include-non-commercial`). The same page runs in *static
+  mode*: library, 3D replay, timeline, side-by-side view and explanations read recorded files, with
+  a banner saying it is a recording and how to run the real app, and without the buttons that need
+  a server. The exporter calls the app's own endpoints in-process, so the files are exactly what the
+  live app serves; paths are relative (a `/demo/` folder works); and it refuses to write into a
+  folder that is not empty or an earlier export.
 - **Two more robots: Unitree H1 and H1-2**, with Unitree's own pretrained walking policies (BSD
   3-Clause). They are the first robots described entirely by a bundled robot pack: a `robot.toml`
   and the converted policy ship in the package (`creature_lab/robots/data/packs/`), and `robots
