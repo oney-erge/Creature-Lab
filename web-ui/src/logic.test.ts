@@ -12,6 +12,7 @@ import {
   trunkAt,
 } from "./decode";
 import {
+  conditionStatus,
   dotsFor,
   featuredRun,
   groupRuns,
@@ -247,6 +248,13 @@ describe("formatting results", () => {
     expect(outcomeTone("walked")).toBe("ok");
     expect(outcomeTone("fell_and_got_up")).toBe("good");
     expect(outcomeTone("fell")).toBe("bad");
+    // Stayed up but stopped making headway: not a fall, not fine either.
+    expect(outcomeTone("walked", true)).toBe("stuck");
+  });
+  it("calls a condition that stayed up but went nowhere stuck, not passed", () => {
+    expect(conditionStatus({ passed: true })).toEqual({ label: "Pass", tone: "pass" });
+    expect(conditionStatus({ passed: false, stalled: true })).toEqual({ label: "Stuck", tone: "stuck" });
+    expect(conditionStatus({ passed: false })).toEqual({ label: "Fail", tone: "fail" });
   });
   it("says shove limits the way the report does", () => {
     const policy = { shoves: [row(8, 0, 0, 1), row(3, 0, 5, 8)] } as unknown as PolicySummary;
@@ -269,6 +277,20 @@ describe("formatting results", () => {
     expect(featuredRun([card({ id: "a" }), shove("b", 2, "fell"), shove("c", 6, "fell")])?.id).toBe("b");
     expect(featuredRun([card({ id: "a" })])?.id).toBe("a");
     expect(featuredRun([])).toBeUndefined();
+  });
+  it("opens a robot with two policies on a shove they disagree on, on the one that fell", () => {
+    const shove = (id: string, pushN: number, outcome: RunCard["outcome"], pair: string) =>
+      card({ id, kind: "shove", pushN, outcome, pair, pairs: [pair] });
+    const runs = [
+      card({ id: "walk" }),
+      shove("small-400", 400, "fell", "strong-400"),
+      shove("strong-400", 400, "walked", "small-400"),
+      shove("small-550", 550, "fell", "strong-550"),
+      shove("strong-550", 550, "fell", "small-550"),
+    ];
+    expect(featuredRun(runs)?.id).toBe("small-400");
+    // Fell either way: no disagreement, so the usual choice.
+    expect(featuredRun(runs.filter((r) => !r.id.endsWith("400")))?.id).toBe("small-550");
   });
   it("groups runs in the order they arrive, with readable names", () => {
     const groups = groupRuns([
@@ -357,9 +379,12 @@ describe("what if", () => {
   });
   it("names the two sides of a pair by what differs, not by the shared policy", () => {
     const original = card({ title: "150 N shove" });
-    const whatIf = changed("walked", "Walked 4.2 m", "shoved more gently (100 N)");
+    const whatIf = {
+      ...changed("walked", "Walked 4.2 m", "gentler than the 150 N original"),
+      title: "100 N shove, gentler than the 150 N original",
+    };
     expect(pairName(original, whatIf)).toBe("Original: 150 N shove");
-    expect(pairName(whatIf, original)).toBe("What if: shoved more gently (100 N)");
+    expect(pairName(whatIf, original)).toBe("What if: 100 N shove, gentler than the 150 N original");
     const otherPolicy = card({ policy: "other", policyTitle: "Walk + get-up policy" });
     expect(pairName(otherPolicy, original)).toBe("Walk + get-up policy");
     expect(pairName(original, null)).toBe(original.policyTitle);

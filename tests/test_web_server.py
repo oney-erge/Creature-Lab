@@ -101,6 +101,20 @@ def test_a_bundled_intro_clip_is_offered_only_when_it_exists(results, installed,
     assert client.get("/clips/unitree_g1.webp").status_code == 200
 
 
+def test_a_robot_that_is_not_downloaded_has_a_picture_when_one_ships(results, installed, tmp_path):
+    """Every card on a first visit was a blank tile: a robot is drawn only after its download."""
+    static = tmp_path / "ui"
+    (static / "previews").mkdir(parents=True)
+    (static / "previews" / "unitree_g1.jpg").write_bytes(b"JFIF....")
+    client = _client(create_app(results, static_dir=static), headers=HEADERS)
+
+    robots = {r["key"]: r for r in client.get("/api/robots").json()["robots"]}
+
+    assert robots["unitree_g1"]["preview"] == "/previews/unitree_g1.jpg"
+    assert robots["microduck"]["preview"] is None  # CC BY-NC-SA meshes: no picture ships
+    assert client.get("/previews/unitree_g1.jpg").status_code == 200
+
+
 def test_robots_lists_every_robot_with_the_newest_check_up(client):
     data = client.get("/api/robots").json()
     keys = [r["key"] for r in data["robots"]]
@@ -534,12 +548,14 @@ def test_each_run_points_at_its_twin_under_the_other_policy(client):
 def test_a_walk_that_went_nowhere_is_not_called_a_walk():
     from creature_lab.web.library import _outcome_text
 
-    def walked(metres):
-        return SimpleNamespace(outcome="walked", distance_m=metres)
+    def walked(metres, stalled=False):
+        return SimpleNamespace(outcome="walked", distance_m=metres, stalled=stalled)
 
     assert _outcome_text(walked(1.7)) == "Walked 1.7 m"
     assert _outcome_text(walked(-0.2)) == "Stayed up, barely moved"
     assert _outcome_text(walked(0.1)) == "Stayed up, barely moved"
+    # On its feet at the foot of a ramp it never climbed: it stopped, it did not walk 0.7 m up it.
+    assert _outcome_text(walked(0.7, stalled=True)) == "Stopped at 0.7 m"
 
 
 # ---- what if --------------------------------------------------------------------------------

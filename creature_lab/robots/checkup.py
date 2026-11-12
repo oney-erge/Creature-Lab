@@ -177,7 +177,9 @@ def run_checkup(
             ConditionResult(
                 key=key,
                 label=label,
-                passed=not result.fell,
+                # Staying up is not enough: a robot stuck at the foot of a ramp did not pass it.
+                # Unless going nowhere is what its own walk does (a stand-still policy).
+                passed=not result.fell and not (result.stalled and not baseline.stalled),
                 distance_m=result.distance_m,
                 relative_distance=result.distance_m / reference,
                 analysis=result,

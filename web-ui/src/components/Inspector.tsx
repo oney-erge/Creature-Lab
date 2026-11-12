@@ -1,4 +1,4 @@
-import { compareSentence, did, dotLabel, dotsFor, limitText, outcomeTone, severity, totals, whatIfSentence } from "../format";
+import { compareSentence, conditionStatus, did, dotLabel, dotsFor, limitText, outcomeTone, severity, totals, whatIfSentence } from "../format";
 import type { CheckupSummary, PolicySummary, RobotInfo, RunCard, RunDetail } from "../types";
 
 interface Props {
@@ -79,7 +79,7 @@ function FixPanel({
         {better
           ? `Yes, for this ${run.kind === "shove" ? "shove" : "test"}. The ${twin.policyTitle.toLowerCase()} met the same ${run.kind === "shove" ? "push" : "test"} and `
           : `The ${twin.policyTitle.toLowerCase()} met the same test and `}
-        <strong className={`tone-${outcomeTone(twin.outcome)}`}>{twin.outcomeText.toLowerCase()}</strong>.
+        <strong className={`tone-${outcomeTone(twin.outcome, twin.stalled)}`}>{twin.outcomeText.toLowerCase()}</strong>.
       </p>
       <button type="button" className={better ? "primary" : "ghost"} onClick={() => onCompare(true)}>
         See both side by side
@@ -99,7 +99,7 @@ function CompareVerdict({ run, twin, onCompare }: { run: RunDetail; twin: RunCar
         {(same ? [original, changed] : [run, twin]).map((r) => (
           <li key={r.id}>
             <span className="versus-name">{same ? (r.whatIf ?? "The original run") : r.policyTitle}</span>
-            <span className={`chip ${outcomeTone(r.outcome)}`}>{r.outcomeText}</span>
+            <span className={`chip ${outcomeTone(r.outcome, r.stalled)}`}>{r.outcomeText}</span>
           </li>
         ))}
       </ul>
@@ -267,7 +267,7 @@ export function Inspector({
       {run && (
         <section className="panel" data-testid="explanation">
           <h2 className="eyebrow">What happened · {run.title}</h2>
-          <p className={`verdict tone-${outcomeTone(run.outcome)}`}>{run.verdict}</p>
+          <p className={`verdict tone-${outcomeTone(run.outcome, run.stalled)}`}>{run.verdict}</p>
           {run.causeText && <p className="body">{run.causeText}</p>}
           {run.evidence.length > 0 && <Evidence run={run} />}
           {run.outcome === "walked" && run.events.pushAt !== null && (
@@ -291,7 +291,7 @@ export function Inspector({
             {policy.conditions.map((c) => (
               <li key={c.label}>
                 <button type="button" className="cond" disabled={!c.run} onClick={() => c.run && onRun(c.run)}>
-                  <span className={`status ${c.passed ? "pass" : "fail"}`}>{c.passed ? "Pass" : "Fail"}</span>
+                  <span className={`status ${conditionStatus(c).tone}`}>{conditionStatus(c).label}</span>
                   <span className="cond-text">
                     <span>{c.label}</span>
                     <span className="muted small">

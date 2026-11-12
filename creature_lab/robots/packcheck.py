@@ -248,7 +248,7 @@ def _trial_walk(pack: Pack, report: PackReport) -> None:
         upright = float(run.upright.min())
         distance = float(run.trunk_pos[-1, 0] - run.trunk_pos[0, 0])
         report.facts[f"trial walk ({policy.key})"] = (
-            f"{_TRIAL_S:g} s walk, moved {distance:+.2f} m, "
+            f"{_TRIAL_S:g} s walk, moved {_signed_metres(distance)} m, "
             f"{'stayed upright' if upright >= _TRIAL_UPRIGHT else 'fell over'}"
         )
         if upright < _TRIAL_UPRIGHT:
@@ -257,3 +257,9 @@ def _trial_walk(pack: Pack, report: PackReport) -> None:
                 "the observation order or scales differ from training, the default pose or gains "
                 "differ, or the model differs from the one the policy was trained on"
             )
+
+
+def _signed_metres(distance: float) -> str:
+    """ "+0.42", "-0.10", and "0.00" for a stand-still walk ("-0.00" read as going backwards)."""
+    rounded = round(distance, 2) + 0.0  # + 0.0 turns -0.0 into 0.0
+    return f"{rounded:+.2f}" if rounded else "0.00"

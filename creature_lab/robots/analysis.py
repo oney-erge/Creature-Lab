@@ -9,7 +9,7 @@ import numpy as np
 from pydantic import Field
 
 from creature_lab.robots.catalog import robot_info
-from creature_lab.robots.terrain import Terrain, layout, obstacle, phrase
+from creature_lab.robots.terrain import Terrain, layout, length_text, obstacle, phrase
 from creature_lab.robots.types import CONTROL_HZ, RobotRun
 from creature_lab.schema.base import StrictModel
 
@@ -70,6 +70,8 @@ class RunAnalysis(StrictModel):
     slide_median_mps: float | None = None
     saturated_fraction: float | None = None
     evidence: list[Evidence] = Field(default_factory=list)
+    #: Stayed on its feet but stopped making headway (see ``stopped_making_headway``).
+    stalled: bool = False
 
     @property
     def fell(self) -> bool:
@@ -127,6 +129,45 @@ def balance_margin_cm(run: RobotRun) -> np.ndarray:
     return margin
 
 
+#: A run that stays up has stopped making headway when its last two seconds cover less than this
+#: share of its best two seconds. Walking runs keep most of their pace to the end (in the G1 and
+#: Microduck check-ups, at least 45%, even carrying 10 kg or on ice); a robot pressing against the
+#: foot of a ramp, or stepping in place on late commands, keeps under a quarter of it.
+STALL_SHARE = 0.25
+_STALL_WINDOW_S = 2.0
+
+
+def stopped_making_headway(run: RobotRun) -> bool:
+    """It hardly moved at all, or its last two seconds of walking went nowhere."""
+    x = run.trunk_pos[:, 0] - run.trunk_pos[0, 0]
+    if x[-1] < 0.25:
+        return True
+    step = float(run.time[1] - run.time[0]) if len(run.time) > 1 else 0.0
+    window = int(round(_STALL_WINDOW_S / step)) if step > 0 else 0
+    if window <= 0 or len(x) <= 2 * window:
+        return False
+    best = float(np.max(x[window:] - x[:-window]))
+    last = float(x[-1] - x[-1 - window])
+    return best > 0 and last < STALL_SHARE * best
+
+
+def _where_it_stopped(terrain: Terrain, distance: float, height_m: float) -> str:
+    """Where on a course a robot stopped, inside a sentence: "at the foot of the 24° ramp"."""
+    at_start = distance < terrain.start_m + 0.3 * height_m
+    level = length_text(terrain.level)
+    places = {
+        "stairs": (f"at the first {level} step", f"partway over the stairs with {level} steps"),
+        "ramp": (
+            f"at the foot of the {terrain.level:g}° ramp",
+            f"partway up the {terrain.level:g}° ramp",
+        ),
+        "rough": ("at the edge of the rough ground", "partway over the rough ground"),
+        "stones": ("at the edge of the stepping stones", "partway across the stepping stones"),
+    }
+    first, partway = places[terrain.kind]
+    return first if at_start else partway
+
+
 def analyze(run: RobotRun) -> RunAnalysis:
     scenario = run.scenario
     info = robot_info(scenario.robot)
@@ -142,6 +183,8 @@ def analyze(run: RobotRun) -> RunAnalysis:
     if len(fallen) == 0:
         margin = balance_margin_cm(run)
         evidence = []
+        # A shove's story is whether it stayed up; everything else is also whether it got anywhere.
+        stalled = not pushed and stopped_making_headway(run)
         verdict = (
             f"Walked {distance:.1f} m without falling."
             if distance >= 0.25
@@ -149,6 +192,14 @@ def analyze(run: RobotRun) -> RunAnalysis:
         )
         if scenario.terrain is not None and distance >= 0.25:
             verdict = f"Walked {distance:.1f} m {phrase(scenario.terrain)} without falling."
+        if stalled and distance >= 0.25:
+            # It "walked 0.7 m up a ramp" it never reached: say where it stopped instead.
+            verdict = (
+                f"Stopped {_where_it_stopped(scenario.terrain, distance, info.height_cm / 100.0)} "
+                f"after {distance:.1f} m and made no more headway, still on its feet."
+                if scenario.terrain is not None
+                else f"Stopped making headway after {distance:.1f} m, still on its feet."
+            )
         if scenario.weak_joint is not None:
             verdict = verdict.rstrip(".") + (
                 f", with the {joint_text(scenario.weak_joint)} motor at "
@@ -172,6 +223,7 @@ def analyze(run: RobotRun) -> RunAnalysis:
         return RunAnalysis(
             outcome="walked",
             verdict=verdict,
+            stalled=stalled,
             distance_m=distance,
             peak_tilt_deg=float(tilt_deg.max()),
             min_balance_margin_cm=_nanmin(margin),

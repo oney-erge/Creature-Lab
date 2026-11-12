@@ -2,6 +2,32 @@
 
 ## Unreleased
 
+## 0.4.2 (2026-11-12)
+
+Found by running the app end to end from a fresh `pip install`.
+
+- **Stuck is not a pass.** A run that stays on its feet but stops making headway (its last two
+  seconds cover under a quarter of its best two) is now "Stuck", not "Pass". The G1 pressed
+  against the foot of the 16° and 24° ramps for eight seconds and both counted as passes, and the
+  panel said it "walked 0.7 m up a ramp" it never reached. The sentence now says where it
+  stopped ("Stopped at the foot of the 24° ramp after 0.7 m"), the run reads amber, and the list
+  says Stuck. A policy whose own walk goes nowhere (the example pack's stand-still policy) is
+  judged on falls alone. Saved check-ups are shown by the same rule; their saved reports are not
+  rewritten.
+- **A robot with two policies opens on a shove they disagree on**, shown on the one that fell, so
+  the panel reads "Yes, for this shove" with the other one beside it. The 29-joint G1 opened on a
+  550 N shove both policies fell at.
+- **The designer's resting preview is on the floor.** It was the creature's first physics step, a
+  metre in the air: the 3D view showed only its shadow, with the legs cut off at the top.
+- **Downloads try a dropped connection again** (three tries per file). One reset connection among
+  a robot's 22 or 55 files failed the whole download; a download that still fails says the files
+  already fetched are kept.
+- **Robots show a picture before they are downloaded.** Every card on a first visit was a blank
+  tile. The Unitree robots (BSD 3-Clause) ship a small picture; the Microduck's meshes are
+  non-commercial, so it has none until it is downloaded.
+- A "what if" beside its original names the new shove ("What if: 100 N shove, gentler than the
+  150 N original"), and a pack's trial walk that did not move reads "0.00 m", not "-0.00 m".
+
 ## 0.4.1 (2026-11-12)
 
 - **`pip install creature-lab` starts again.** With no extras, `creature-lab --help` stopped on

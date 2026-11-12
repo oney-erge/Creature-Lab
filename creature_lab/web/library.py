@@ -58,6 +58,7 @@ class RunEntry:
             "title": self.title,
             "kind": self.kind,
             "outcome": a.outcome,
+            "stalled": a.stalled,
             "outcomeText": _outcome_text(a),
             "verdict": a.verdict,
             "fallAt": a.fall_time_s,
@@ -71,11 +72,41 @@ class RunEntry:
         }
 
 
+def _not_stuck_when_standing_is_normal(entries: list[RunEntry]) -> None:
+    """A policy whose own baseline goes nowhere (a stand-still policy) is never "stuck": going
+    nowhere is what it does. Its runs keep their sentences, without the stuck mark."""
+    standing = {e.policy for e in entries if e.kind == "baseline" and e.analysis.stalled}
+    for entry in entries:
+        if entry.policy in standing and entry.analysis.stalled:
+            entry.analysis = entry.analysis.model_copy(update={"stalled": False})
+
+
+def _condition_row(condition, entry, run: str | None) -> dict:
+    """One "floors, batteries and loads" row, judged by the same analysis as its run's own view.
+
+    The pass recorded in checkup.json is from when the check-up ran. The run itself is analysed
+    afresh when the library loads, so a check-up saved before a rule changed (staying up while
+    stuck at the foot of a ramp used to pass) would show "Stopped at 0.7 m" on the run and "Pass"
+    in this list.
+    """
+    analysis = entry.analysis if entry is not None else condition.analysis
+    return {
+        "label": condition.label,
+        "passed": not analysis.fell and not analysis.stalled,
+        "stalled": analysis.stalled,
+        "relativeDistance": round(condition.relative_distance, 2),
+        "verdict": analysis.verdict,
+        "run": run,
+    }
+
+
 def _outcome_text(analysis: RunAnalysis) -> str:
     if analysis.outcome == "walked":
         # A shove can leave it standing but going nowhere or backwards: "Walked -0.2 m" misleads.
         if analysis.distance_m < 0.25:
             return "Stayed up, barely moved"
+        if analysis.stalled:
+            return f"Stopped at {analysis.distance_m:.1f} m"
         return f"Walked {analysis.distance_m:.1f} m"
     if analysis.outcome == "fell_and_got_up" and analysis.recovered_time_s is not None:
         return f"Back up in {analysis.recovered_time_s - (analysis.fall_time_s or 0):.1f} s"
@@ -210,6 +241,7 @@ class Library:
         entries.sort(
             key=lambda e: (rank.get(e.kind, len(rank)), info.policy(e.policy).gets_up, e.name)
         )
+        _not_stuck_when_standing_is_normal(entries)
         _link_pairs(entries)
         return entries
 
@@ -264,13 +296,7 @@ class Library:
                         for row in checkup.shoves
                     ],
                     "conditions": [
-                        {
-                            "label": c.label,
-                            "passed": c.passed,
-                            "relativeDistance": round(c.relative_distance, 2),
-                            "verdict": c.analysis.verdict,
-                            "run": run_id(c.run),
-                        }
+                        _condition_row(c, entries.get((policy, c.run)), run_id(c.run))
                         for c in checkup.conditions
                     ],
                 }

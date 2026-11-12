@@ -173,6 +173,7 @@ def _export(
         # What the page needs to list the robot: ready on any machine, nothing local.
         robot["installed"] = True
         robot["introClip"] = None
+        robot["preview"] = None  # every robot in a recorded demo is "installed"
         robot["custom"] = False
         robot["folder"] = None
         if robot.get("checkup"):

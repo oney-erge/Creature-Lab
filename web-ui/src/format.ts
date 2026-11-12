@@ -1,10 +1,17 @@
 import type { DesignChange, Outcome, PolicySummary, RunCard, ShoveResult, ShoveRow } from "./types";
 
-export type Tone = "good" | "ok" | "bad";
+export type Tone = "good" | "ok" | "bad" | "stuck";
 
-export function outcomeTone(outcome: Outcome): Tone {
-  if (outcome === "walked") return "ok";
+/** A walk that stopped making headway is not a fall, and not fine either. */
+export function outcomeTone(outcome: Outcome, stalled = false): Tone {
+  if (outcome === "walked") return stalled ? "stuck" : "ok";
   return outcome === "fell_and_got_up" ? "good" : "bad";
+}
+
+/** A condition's status chip: "Pass", "Stuck" (stayed up, went nowhere) or "Fail" (fell). */
+export function conditionStatus(row: { passed: boolean; stalled?: boolean }): { label: string; tone: string } {
+  if (row.passed) return { label: "Pass", tone: "pass" };
+  return row.stalled ? { label: "Stuck", tone: "stuck" } : { label: "Fail", tone: "fail" };
 }
 
 export type Dot = "up" | "got" | "down";
@@ -49,10 +56,26 @@ function middleShove(runs: RunCard[]): RunCard | undefined {
   return sorted[Math.floor((sorted.length - 1) / 2)];
 }
 
-/** The run to open first: a mid-strength shove the robot got up from (the story), else a fall. */
+/**
+ * The run to open first. With more than one policy, a shove the policies disagree on, on the
+ * policy that fell, so "another policy" shows the one that did better: the robot's story is the
+ * comparison (the 29-joint G1 opened on a 550 N shove both policies fell at, beside 400 N shoves
+ * where one fell and the other walked on). Otherwise a mid-strength shove the robot got up from,
+ * else a fall.
+ */
 export function featuredRun(runs: RunCard[]): RunCard | undefined {
   const shoves = runs.filter((r) => r.kind === "shove");
+  const byId = new Map(runs.map((r) => [r.id, r]));
+  const disputed = shoves.filter((r) => {
+    if (r.outcome === "walked") return false;
+    const others = r.pairs ?? (r.pair ? [r.pair] : []);
+    return others.some((id) => {
+      const other = byId.get(id)?.outcome;
+      return other !== undefined && other !== r.outcome;
+    });
+  });
   return (
+    middleShove(disputed) ??
     middleShove(shoves.filter((r) => r.outcome === "fell_and_got_up")) ??
     middleShove(shoves.filter((r) => r.outcome === "fell")) ??
     runs.find((r) => r.kind === "baseline") ??
@@ -113,7 +136,9 @@ export function whatIfSentence(original: RunCard, changed: RunCard): string {
  */
 export function pairName(run: RunCard, other: RunCard | null): string {
   if (!other || run.policy !== other.policy) return run.policyTitle;
-  if (run.whatIf) return `What if: ${run.whatIfShort ?? run.whatIf}`;
+  // Its title names what it became ("100 N shove, gentler than the 150 N original"); the short
+  // change alone ("gentler than the 150 N original") left the new shove unsaid.
+  if (run.whatIf) return `What if: ${run.title || run.whatIfShort || run.whatIf}`;
   return `Original: ${run.title}`;
 }
 

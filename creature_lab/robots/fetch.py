@@ -6,6 +6,9 @@ import hashlib
 import importlib.util
 import os
 import sys
+import time
+import urllib.error
+import urllib.parse
 import urllib.request
 from collections.abc import Callable
 from pathlib import Path
@@ -14,6 +17,10 @@ from creature_lab.robots.catalog import RobotInfo, load_manifest, robot_info
 
 _CHUNK = 1 << 20
 _TIMEOUT_S = 60
+#: Tries per file. A robot is 20 to 60 files from raw.githubusercontent.com, and one dropped
+#: connection ("forcibly closed by the remote host") used to fail the whole download.
+_ATTEMPTS = 3
+_BACKOFF_S = (1.0, 3.0)
 
 
 class FetchError(RuntimeError):
@@ -94,7 +101,39 @@ def is_installed(key: str) -> bool:
     return True
 
 
-def _download(url: str, target: Path, expected_sha: str) -> None:
+def _transient(error: OSError) -> bool:
+    """A dropped connection, a timeout or a busy server is worth another try; a missing file not."""
+    if isinstance(error, urllib.error.HTTPError):
+        return error.code >= 500 or error.code == 429
+    reason = getattr(error, "reason", error)
+    return not isinstance(reason, (FileNotFoundError, PermissionError))
+
+
+def _download(
+    url: str, target: Path, expected_sha: str, sleep: Callable[[float], None] = time.sleep
+) -> None:
+    for attempt in range(1, _ATTEMPTS + 1):
+        try:
+            _download_once(url, target, expected_sha)
+            return
+        except _Interrupted as interrupted:
+            error = interrupted.__cause__
+            if attempt == _ATTEMPTS or not isinstance(error, OSError) or not _transient(error):
+                parts = urllib.parse.urlparse(url)
+                tries = f" after {attempt} tries" if attempt > 1 else ""
+                raise FetchError(
+                    f"Could not download {Path(parts.path).name} from {parts.netloc}{tries} "
+                    f"({error}). Check the connection and download again: the files already "
+                    "fetched are kept."
+                ) from error
+            sleep(_BACKOFF_S[min(attempt, len(_BACKOFF_S)) - 1])
+
+
+class _Interrupted(Exception):
+    """One try at one file did not finish (its cause is the network error)."""
+
+
+def _download_once(url: str, target: Path, expected_sha: str) -> None:
     target.parent.mkdir(parents=True, exist_ok=True)
     partial = target.with_name(target.name + ".part")
     request = urllib.request.Request(url, headers={"User-Agent": "creature-lab"})
@@ -107,7 +146,7 @@ def _download(url: str, target: Path, expected_sha: str) -> None:
                     handle.write(chunk)
     except OSError as error:
         partial.unlink(missing_ok=True)
-        raise FetchError(f"could not download {url}: {error}") from error
+        raise _Interrupted() from error
     if digest.hexdigest() != expected_sha:
         partial.unlink(missing_ok=True)
         raise FetchError(f"{url} does not match its pinned SHA-256; refusing to use it")

@@ -25,6 +25,8 @@ export interface ShoveRow {
 export interface ConditionRow {
   label: string;
   passed: boolean;
+  /** Did not pass without falling: it stayed up but stopped making headway. */
+  stalled?: boolean;
   relativeDistance: number;
   verdict: string;
   run: string | null;
@@ -70,6 +72,8 @@ export interface RobotInfo {
   shoveReferenceN: number;
   /** A short looping clip bundled with the app, shown before the robot is downloaded. */
   introClip: string | null;
+  /** A picture of the robot to show before it is downloaded, when one ships with the app. */
+  preview?: string | null;
   policies: PolicyInfo[];
   checkup: CheckupSummary | null;
 }
@@ -105,6 +109,8 @@ export interface RunCard {
   recoveredAt: number | null;
   distance: number;
   pushN: number;
+  /** Stayed on its feet but stopped making headway (a robot stuck at the foot of a ramp). */
+  stalled?: boolean;
   /**
    * The same test under the robot's other policy, when there is one. For a "what if" run, the
    * run it was made from.

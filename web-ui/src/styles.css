@@ -416,6 +416,11 @@ code {
   color: #7fe3d0;
   background: rgba(43, 196, 169, 0.14);
 }
+.chip.stuck,
+.status.stuck {
+  color: #f8d77a;
+  background: rgba(245, 197, 66, 0.15);
+}
 .chip.bad {
   color: #ff9c97;
   background: rgba(242, 100, 94, 0.15);
@@ -536,6 +541,10 @@ code {
 .badge-good {
   background: var(--teal);
   color: #04201b;
+}
+.badge-stuck {
+  background: var(--amber);
+  color: #2a1f02;
 }
 .badge-bad {
   background: var(--red);
@@ -996,6 +1005,9 @@ code {
 .tone-ok,
 .tone-good {
   color: var(--ink);
+}
+.tone-stuck {
+  color: #f8d77a;
 }
 .tone-bad {
   color: #ffb1ad;

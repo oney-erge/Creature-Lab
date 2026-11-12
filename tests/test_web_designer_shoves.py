@@ -184,3 +184,20 @@ def test_shoving_and_improving_need_the_custom_header(tmp_path):
     )
     assert plain.post("/api/creatures/x/shove").status_code == 403
     assert plain.post("/api/creatures/x/improve", json={}).status_code == 403
+
+
+@pytest.mark.parametrize("preset", ["quadruped", "hexapod", "worm", "humanoid"])
+def test_the_resting_preview_stands_on_the_floor(client, preset):
+    """The preview used to be the creature's first step, a metre above the floor: the 3D view
+    showed only its shadow, with the legs cut off at the top of the frame."""
+    import numpy as np
+
+    built = _build(client, preset, simulate=False)
+    scene = built["scene"]
+    poses = np.frombuffer(
+        client.get(f"/api/creatures/{_id(built)}/poses").content, dtype=np.float32
+    )
+    first = poses[: scene["bodyCount"] * scene["poseStride"]].reshape(
+        scene["bodyCount"], scene["poseStride"]
+    )
+    assert first[:, 2].min() < 0.25, first[:, 2]
