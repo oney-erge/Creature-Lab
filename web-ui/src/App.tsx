@@ -158,6 +158,15 @@ function Hero({
           />
           <figcaption className="muted small">Simulation. {robot.credit}</figcaption>
         </figure>
+      ) : robot.preview ? (
+        <figure className="hero-clip">
+          <img
+            className="hero-photo"
+            src={robot.preview}
+            alt={`${robot.title} standing in the studio (simulation)`}
+          />
+          <figcaption className="muted small">Simulation. {robot.credit}</figcaption>
+        </figure>
       ) : (
         <svg className="hero-art" viewBox="0 0 220 220" aria-hidden="true">
           <ellipse cx="110" cy="196" rx="70" ry="9" fill="rgba(0,0,0,.35)" />

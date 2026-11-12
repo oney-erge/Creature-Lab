@@ -189,7 +189,7 @@ export function Stage({ source, run, playback, follower = false, label }: Props)
     }
   };
 
-  const tone = run ? outcomeTone(run.outcome) : "ok";
+  const tone = run ? outcomeTone(run.outcome, run.stalled) : "ok";
   return (
     <div
       className={`stage${follower ? " follower" : ""}`}

@@ -93,7 +93,7 @@ export function Library({
               onClick={() => onSelect(r.key)}
             >
               <Picture
-                src={r.installed ? api.robotThumbnail(r.key) : null}
+                src={r.installed ? api.robotThumbnail(r.key) : (r.preview ?? null)}
                 alt={`${r.title}`}
                 className="robot-pic"
               />
@@ -141,7 +141,7 @@ export function Library({
                   <span className="run-text">
                     <span className="run-title">{run.title}</span>
                     <span className="run-policy">{run.policyTitle}</span>
-                    <span className={`chip ${outcomeTone(run.outcome)}`}>{run.outcomeText}</span>
+                    <span className={`chip ${outcomeTone(run.outcome, run.stalled)}`}>{run.outcomeText}</span>
                   </span>
                 </button>
               ))}

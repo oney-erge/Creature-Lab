@@ -7,7 +7,7 @@ from creature_lab.schema import (
     TaskSpec,
 )
 
-VERSION = "0.4.1"
+VERSION = "0.4.2"
 
 __all__ = [
     "VERSION",

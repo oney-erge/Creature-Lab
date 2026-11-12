@@ -277,6 +277,10 @@ def describe(
 
 # ---- presets, building and running ---------------------------------------------------------------
 
+#: Seconds a resting preview lets the creature fall and settle: every preset is on the floor by
+#: then, and the humanoid, which nothing holds up, has not toppled yet.
+_SETTLE_S = 1.0
+
 
 def preset_catalog() -> dict:
     return {
@@ -381,7 +385,12 @@ class Designer:
                 sim = backend_cls(gui=False)
                 try:
                     sim.build(creature, task, seed=0)
-                    frames = [sim.step(task.timestep)]
+                    # A creature is placed about a metre up and drops onto the floor. Its first
+                    # step showed it in the air, out of the camera's view with only its shadow on
+                    # the floor; where it comes to rest is the resting pose.
+                    for _ in range(max(1, round(_SETTLE_S / task.timestep))):
+                        frame = sim.step(task.timestep)
+                    frames = [frame]
                 finally:
                     sim.close()
                 built = describe(

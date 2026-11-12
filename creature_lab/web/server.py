@@ -148,6 +148,9 @@ def create_app(
         for key, info in all_robots().items():
             summary = library.checkup_summary(key) if key in have else None
             clip = static / "clips" / f"{key}.webp"
+            # A picture to show before the robot is downloaded (rendered from its model; shipped
+            # only for models whose license allows it, so the Microduck has none).
+            preview = static / "previews" / f"{key}.jpg"
             items.append(
                 {
                     "key": key,
@@ -165,6 +168,7 @@ def create_app(
                     "folder": str(info.folder) if info.folder is not None else None,
                     "shoveReferenceN": info.staging.shove_reference_n,
                     "introClip": f"/clips/{key}.webp" if clip.is_file() else None,
+                    "preview": f"/previews/{key}.jpg" if preview.is_file() else None,
                     "policies": [
                         {"key": p.key, "title": p.title, "summary": p.summary, "getsUp": p.gets_up}
                         for p in info.policies

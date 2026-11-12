@@ -140,3 +140,50 @@ def test_a_saved_run_reads_back_identically(tmp_path):
     for name in RobotRun.ARRAYS:
         np.testing.assert_array_equal(getattr(loaded, name), getattr(run, name))
     assert analyze(loaded) == analyze(run)
+
+
+def _stalled_at(run, stop_s: float):
+    """The same walk, standing still from ``stop_s`` on (a robot pressing against an obstacle)."""
+    x = run.trunk_pos[:, 0]
+    stop = int(np.searchsorted(run.time, stop_s))
+    x[stop:] = x[stop]
+    run.com[:, 0] = x
+    return run
+
+
+def test_a_walk_that_stops_making_headway_is_stalled():
+    """The G1 at the foot of a 24-degree ramp read "Walked 0.7 m up a ramp" and passed."""
+    result = analyze(_stalled_at(synthetic_run(), 5.0))
+    assert result.outcome == "walked" and not result.fell
+    assert result.stalled
+    assert result.verdict == "Stopped making headway after 1.0 m, still on its feet."
+
+
+def test_a_walk_that_only_slows_down_is_not_stalled():
+    run = synthetic_run()
+    slow = run.time >= 8.0
+    run.trunk_pos[slow, 0] = run.trunk_pos[slow, 0][0] + 0.12 * (run.time[slow] - 8.0)  # 60% pace
+    assert not analyze(run).stalled
+    assert not analyze(synthetic_run()).stalled
+
+
+def test_a_stall_on_a_course_says_where_it_stopped():
+    from creature_lab.robots.terrain import Terrain
+
+    for start_m, stop_s, where in (
+        (1.0, 4.5, "at the foot of the 24° ramp"),
+        (0.3, 5.0, "partway up the 24° ramp"),
+    ):
+        run = _stalled_at(synthetic_run(), stop_s)
+        terrain = Terrain(kind="ramp", level=24.0, unit_m=0.05, start_m=start_m)
+        run = RobotRun(
+            **{**run.__dict__, "scenario": run.scenario.model_copy(update={"terrain": terrain})}
+        )
+        result = analyze(run)
+        assert result.stalled
+        assert result.verdict.startswith(f"Stopped {where} after "), result.verdict
+
+
+def test_a_shove_is_never_called_stalled():
+    # A shove's question is whether it stayed up; how far it got is not the test.
+    assert not analyze(_stalled_at(synthetic_run(push_n=1.0), 5.0)).stalled

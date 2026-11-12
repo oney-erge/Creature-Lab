@@ -44,8 +44,9 @@ cd Creature-Lab
 ```
 
 Either way it installs prebuilt packages only (no compiler, about 300 MB) and opens the app. Press
-**Download and check up** on the Unitree G1 and accept its license. On a laptop, the download and a
-40-shove check-up took 31 s from an empty cache.
+**Download and check up** on the Unitree G1 and accept its license. On a laptop, the download and the
+whole check-up (40 shoves, then uneven ground, weak motors, late commands, slippery floors and loads)
+took 47 s from an empty cache.
 
 ## What you can do
 
