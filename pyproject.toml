@@ -1,6 +1,6 @@
 [project]
 name = "creature-lab"
-version = "0.3.0"
+version = "0.4.0"
 description = "Shove a real robot, see exactly why it fell, and prove the fix: a browser app and CLI that check up published robot policies in MuJoCo, plus a workbench for designing modular robots."
 readme = "README.md"
 requires-python = ">=3.11"
