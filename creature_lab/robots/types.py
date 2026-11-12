@@ -12,11 +12,10 @@ from pydantic import Field
 
 from creature_lab.hashing import spec_hash
 from creature_lab.io_utils import atomic_write_text
+from creature_lab.robots.catalog import CONTROL_HZ
 from creature_lab.robots.terrain import Terrain
 from creature_lab.schema.base import StrictModel
 
-#: Both robots are controlled at 50 Hz.
-CONTROL_HZ = 50
 #: Most contact points kept per frame for the support outline.
 SUPPORT_VERTICES = 8
 

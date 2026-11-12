@@ -2,7 +2,17 @@
 
 ## Unreleased
 
-## 0.4.0 (2026-11-11)
+## 0.4.1 (2026-11-12)
+
+- **`pip install creature-lab` starts again.** With no extras, `creature-lab --help` stopped on
+  `No module named 'numpy'`: the robots commands load `robots/pack.py`, which imported numpy at
+  the top and through `robots/types.py`. numpy is now loaded only where a height scan is built,
+  and the 50 Hz control rate lives in `robots/catalog.py`. 0.4.0's release check caught this and
+  it was never published to PyPI; 0.4.1 carries everything listed under 0.4.0. CI now installs
+  the wheel with no extras and runs `creature-lab --help`, and a test imports the CLI with every
+  optional package blocked.
+
+## 0.4.0 (2026-11-11, not published)
 
 - **Robots with more than two policies.** Each run now lists the same test under every other
   policy, and the app opens on the one whose outcome differs most (a walk beside a fall); the
