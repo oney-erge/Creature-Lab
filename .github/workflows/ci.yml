@@ -112,6 +112,12 @@ jobs:
           cd /tmp/wheel-smoke
           /tmp/wheel-venv/bin/creature-lab doctor
           /tmp/wheel-venv/bin/creature-lab zoo run quadruped --runs-dir ./runs
+      - name: The plain install (no extras) starts
+        run: |
+          python3 -m venv /tmp/bare-venv
+          /tmp/bare-venv/bin/pip install --quiet "$(ls dist/*.whl)"
+          /tmp/bare-venv/bin/creature-lab --help > /dev/null
+          /tmp/bare-venv/bin/creature-lab robots --help > /dev/null
 
   supported-platforms:
     name: ${{ matrix.os }} / Python ${{ matrix.python }}

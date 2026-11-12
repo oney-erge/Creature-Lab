@@ -7,6 +7,10 @@ from dataclasses import dataclass
 from importlib import resources
 from pathlib import Path
 
+#: Every robot is controlled at 50 Hz. Kept here, with no numpy, because the plain install's
+#: `creature-lab --help` reaches it through robots/pack.py.
+CONTROL_HZ = 50
+
 
 @dataclass(frozen=True)
 class CheckupLevels:

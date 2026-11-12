@@ -20,13 +20,13 @@ from functools import cache, lru_cache
 from importlib import resources
 from importlib.resources.abc import Traversable
 from pathlib import Path
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
-import numpy as np
 from pydantic import Field, ValidationError, ValidationInfo, field_validator, model_validator
 
 from creature_lab.io_utils import atomic_write_text
 from creature_lab.robots.catalog import (
+    CONTROL_HZ,
     ROBOTS,
     CheckupLevels,
     PolicyInfo,
@@ -34,8 +34,10 @@ from creature_lab.robots.catalog import (
     Staging,
 )
 from creature_lab.robots.fetch import cache_root
-from creature_lab.robots.types import CONTROL_HZ
 from creature_lab.schema.base import StrictModel
+
+if TYPE_CHECKING:
+    import numpy as np
 
 PACK_FILE = "robot.toml"
 SCHEMA_ID = "creature-lab.robot-pack/1"
@@ -136,6 +138,9 @@ class ObservationTerm(StrictModel):
     @property
     def scan_points(self) -> np.ndarray:
         """(n, 2) grid offsets of a ``height_scan``: x varies fastest, then y (mjlab's order)."""
+        # numpy comes with the robot extras; `creature-lab --help` imports this module without them.
+        import numpy as np
+
         length, width = self.grid_m or (0.0, 0.0)
         step = self.spacing_m or 1.0
         xs = np.arange(-length / 2, length / 2 + step * 0.5, step)
