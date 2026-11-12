@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.4.0 (2026-11-11)
+
 - **Robots with more than two policies.** Each run now lists the same test under every other
   policy, and the app opens on the one whose outcome differs most (a walk beside a fall); the
   "another policy" panel lets you pick another. Before, a run was paired only when exactly one
