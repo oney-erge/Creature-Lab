@@ -1178,7 +1178,7 @@ code {
 
 .hud.lite {
   left: 50%;
-  top: 14px;
+  top: 60px;
   transform: translateX(-50%);
   font-size: 12px;
   color: #ffe4a8;
@@ -1237,6 +1237,7 @@ code {
 }
 @media (max-width: 860px) {
   .pair {
+    flex: 0 0 auto;
     grid-template-columns: 1fr;
   }
   .pair .stage {
@@ -1251,6 +1252,16 @@ code {
   align-items: flex-start;
   gap: 2px;
   max-width: calc(100% - 140px);
+}
+.pair .hud.lite {
+  top: 86px;
+  width: max-content;
+  max-width: calc(100% - 28px);
+}
+@media (max-width: 640px) {
+  .pair .hud.lite {
+    top: 60px;
+  }
 }
 .pair .toolbar,
 .stage.follower .key3d {

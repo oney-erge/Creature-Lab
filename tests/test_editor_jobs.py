@@ -64,6 +64,29 @@ def test_job_can_be_cancelled_cooperatively():
     assert manager.status().result is None
 
 
+def test_cancel_request_is_visible_until_worker_acknowledges_it():
+    entered = threading.Event()
+    release = threading.Event()
+
+    def work(reporter: ProgressReporter):
+        entered.set()
+        assert release.wait(2)
+        reporter.check_cancelled()
+
+    manager = EditorJobManager()
+    assert manager.start(work)
+    assert entered.wait(2)
+    job_id = manager.status().job_id
+    manager.cancel()
+    waiting = manager.status()
+    assert waiting.job_id == job_id
+    assert waiting.state == "running"
+    assert waiting.cancel_requested is True
+    release.set()
+    _wait_until(lambda: manager.status().state == "cancelled")
+    assert manager.status().job_id == job_id
+
+
 def test_job_failure_is_captured_not_raised():
     def work(reporter: ProgressReporter):
         raise ValueError("boom")

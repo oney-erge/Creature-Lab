@@ -189,6 +189,44 @@ class BuildControls:
     def comparison_playing(self) -> bool:
         return self._comparing and self._comparison_playing
 
+    def lifecycle_snapshot(self) -> dict[str, Any]:
+        """Inspect current editor, job, result and playback state without mutation."""
+        job = self.job_manager.status()
+        identity = self._current_run_signature()
+        return {
+            "phase": self._current_phase,
+            "input_identity": {
+                "creature": identity[0],
+                "task": identity[1],
+                "controller": identity[2],
+            },
+            "dirty": self.session.is_dirty,
+            "external_change_pending": self.session.external_change_pending,
+            "job": {
+                "id": job.job_id,
+                "kind": self._pending_job_kind,
+                "state": job.state,
+                "cancel_requested": job.cancel_requested,
+                "progress": job.progress,
+                "message": job.message,
+                "error": job.error,
+            },
+            "result": {
+                "run_id": self._last_trace.run_id if self._last_trace is not None else None,
+                "applies_to_current_input": (
+                    self._last_run_signature == identity
+                    if self._last_run_signature is not None
+                    else None
+                ),
+                "saved_replay": self._showing_saved_replay,
+            },
+            "playback": {
+                "playing": self.playback.playing,
+                "frame_index": self.playback.frame_index,
+                "frame_count": self.playback.frame_count,
+            },
+        }
+
     # -- top-level layout -------------------------------------------------------
 
     def _build(self, *, show_onboarding: bool = False) -> None:
@@ -1380,10 +1418,14 @@ class BuildControls:
             self._job_progress_bar.animated = running and status.progress <= 0.0
         if self._job_status_md is not None:
             self._job_status_md.content = (
-                f"{status.message or 'Running…'} ({status.elapsed:.1f}s)" if running else ""
+                f"{'Stopping…' if status.cancel_requested else status.message or 'Running…'} "
+                f"({status.elapsed:.1f}s)"
+                if running
+                else ""
             )
         if self._cancel_button is not None:
             self._cancel_button.visible = running
+            self._cancel_button.disabled = status.cancel_requested
         if self._simulate_button is not None:
             self._simulate_button.disabled = running or not self.session.status().ok
         if self._robustness_button is not None:

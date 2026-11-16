@@ -24,7 +24,7 @@ from creature_lab.web.creatures import (
     NoSuchCreature,
     preset_catalog,
 )
-from creature_lab.web.jobs import Jobs, known_robot
+from creature_lab.web.jobs import Jobs, RecoveryError, known_robot
 from creature_lab.web.library import Library
 from creature_lab.web.scene import load_scene, overlay_payload
 from creature_lab.web.thumbs import Thumbnails, pick_time
@@ -60,6 +60,10 @@ class PackRequest(BaseModel):
     """A folder on this computer that holds a robot pack (``robot.toml``)."""
 
     path: str
+
+
+class InterruptionReview(BaseModel):
+    confirmed_stopped: bool = False
 
 
 class BuilderRequest(BaseModel):
@@ -357,14 +361,20 @@ def create_app(
         _require_robot(key)
         if not body.accept_license:
             raise HTTPException(400, "the license must be accepted before downloading")
-        return jobs.start_download(key).snapshot()
+        try:
+            return jobs.start_download(key).snapshot()
+        except RecoveryError as exc:
+            raise HTTPException(503, str(exc)) from exc
 
     @app.post("/api/robots/{key}/checkup")
     def checkup(key: str) -> dict:
         _require_installed(key)
         if missing_extra():
             raise HTTPException(409, f"missing packages: {', '.join(missing_extra())}")
-        return jobs.start_checkup(key).snapshot()
+        try:
+            return jobs.start_checkup(key).snapshot()
+        except RecoveryError as exc:
+            raise HTTPException(503, str(exc)) from exc
 
     @app.post("/api/builder")
     def open_builder(body: BuilderRequest) -> dict:
@@ -477,6 +487,28 @@ def create_app(
             return jobs.get(job_id).snapshot()
         except KeyError:
             raise HTTPException(404, "no such job") from None
+
+    @app.post("/api/jobs/{job_id}/cancel")
+    def cancel_job(job_id: str) -> dict:
+        try:
+            return jobs.cancel(job_id).snapshot()
+        except KeyError:
+            raise HTTPException(404, "no such job") from None
+        except ValueError as exc:
+            raise HTTPException(409, str(exc)) from exc
+        except RecoveryError as exc:
+            raise HTTPException(503, str(exc)) from exc
+
+    @app.post("/api/jobs/{job_id}/acknowledge-interruption")
+    def acknowledge_interruption(job_id: str, body: InterruptionReview) -> dict:
+        if not body.confirmed_stopped:
+            raise HTTPException(400, "confirm the check-up process has stopped before retrying")
+        try:
+            return jobs.acknowledge_interruption(job_id).snapshot()
+        except KeyError:
+            raise HTTPException(404, "no such job") from None
+        except ValueError as exc:
+            raise HTTPException(409, str(exc)) from exc
 
     # ---- the UI --------------------------------------------------------------------------
     if (static / "assets").is_dir():

@@ -410,6 +410,24 @@ def test_tick_consumes_completed_simulate_job_and_loads_playback():
     assert job_manager.status().state == "idle"  # consumed and cleared
 
 
+def test_lifecycle_snapshot_tracks_result_identity_without_changing_session():
+    session = EditorSession()
+    controls, _, _, playback = _make_controls(session)
+    before = session._snapshot()
+    initial = controls.lifecycle_snapshot()
+    assert initial["job"]["state"] == "idle"
+    assert initial["result"]["applies_to_current_input"] is None
+    assert session._snapshot() == before
+
+    controls._start_simulate()
+    _wait_for_job_consumed(controls, lambda: playback.trace is not None)
+    result = controls.lifecycle_snapshot()
+    assert result["result"]["run_id"] == playback.trace.run_id
+    assert result["result"]["applies_to_current_input"] is True
+    session.set_controller("cpg")
+    assert controls.lifecycle_snapshot()["result"]["applies_to_current_input"] is False
+
+
 def test_changing_controller_discards_the_stale_result():
     """Conflicting-info bug: after Simulate, switching the controller left the old
     score/diagnosis showing next to a status that now describes a different config

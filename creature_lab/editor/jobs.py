@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import threading
 import time
+import uuid
 from collections.abc import Callable
 from dataclasses import dataclass, replace
 from typing import Any, Literal
@@ -61,6 +62,8 @@ class JobStatus:
     """A snapshot of job state; safe to hold onto after the job moves on."""
 
     state: JobState = "idle"
+    job_id: str | None = None
+    cancel_requested: bool = False
     progress: float = 0.0
     message: str = ""
     started_at: float | None = None
@@ -110,7 +113,9 @@ class EditorJobManager:
             if self._status.state == "running":
                 return False
             self._cancel_event = threading.Event()
-            self._status = JobStatus(state="running", started_at=time.monotonic())
+            self._status = JobStatus(
+                state="running", job_id=uuid.uuid4().hex, started_at=time.monotonic()
+            )
         cancel_event = self._cancel_event
 
         def _set_progress(fraction: float, message: str) -> None:
@@ -154,7 +159,10 @@ class EditorJobManager:
 
     def cancel(self) -> None:
         """Request cancellation of the running job (a no-op if none is running)."""
-        self._cancel_event.set()
+        with self._lock:
+            if self._status.state == "running":
+                self._status.cancel_requested = True
+                self._cancel_event.set()
 
     def clear(self) -> None:
         """Reset a finished job back to idle. No-op while a job is still running."""

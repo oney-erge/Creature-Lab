@@ -27,7 +27,7 @@ function errorText(error: unknown): string {
 async function follow(job: Job, onUpdate: (job: Job) => void): Promise<Job> {
   let current = job;
   onUpdate(current);
-  while (current.state === "running") {
+  while (current.state === "running" || current.state === "cancelling") {
     await new Promise((resolve) => setTimeout(resolve, 700));
     current = await api.job(current.id);
     onUpdate(current);
@@ -42,6 +42,8 @@ function Hero({
   onDownload,
   onCheckup,
   onRemove,
+  onCancel,
+  onConfirmStopped,
 }: {
   robot: RobotInfo;
   job: Job | null;
@@ -49,8 +51,10 @@ function Hero({
   onDownload: () => void;
   onCheckup: () => void;
   onRemove: () => void;
+  onCancel: () => void;
+  onConfirmStopped: () => void;
 }) {
-  const busy = job?.state === "running";
+  const busy = job?.state === "running" || job?.state === "cancelling" || job?.outcome_unknown;
   return (
     <div className="hero" data-testid="hero">
       <div className="hero-text">
@@ -77,6 +81,17 @@ function Hero({
                 ? "This takes a few seconds."
                 : "This takes a minute or two. You can leave this tab open."}
             </p>
+            {job.kind === "checkup" && !job.outcome_unknown && (
+              <button type="button" disabled={job.cancel_requested && !job.cancel_signal_failed} onClick={onCancel}>
+                {job.cancel_signal_failed ? "Try stopping again" : job.cancel_requested ? "Stopping…" : "Stop check-up"}
+              </button>
+            )}
+            {job.outcome_unknown && (
+              <>
+                <p>Check that the previous check-up process{job.process_pid ? ` (PID ${job.process_pid})` : ""} has stopped. Its outcome is unknown.</p>
+                <button type="button" onClick={onConfirmStopped}>I confirmed it stopped</button>
+              </>
+            )}
           </div>
         ) : robot.custom && !robot.installed ? (
           <>
@@ -374,9 +389,13 @@ export default function App() {
       let succeeded = false;
       try {
         const finished = await follow(await start(), setJob);
-        if (finished.state === "failed") {
+        if (finished.outcome_unknown) {
+          setBanner(finished.message);
+        } else if (finished.state === "failed") {
           setBanner(finished.error ?? "The job failed.");
-        } else {
+        } else if (finished.state === "cancelled" || finished.state === "interrupted") {
+          setBanner(finished.message || "The check-up stopped.");
+        } else if (finished.state === "done") {
           await then(finished);
           succeeded = true;
         }
@@ -384,7 +403,7 @@ export default function App() {
         setBanner(errorText(e));
       } finally {
         jobRunning.current = false;
-        setTimeout(() => setJob((j) => (j && j.state !== "running" ? null : j)), 2500);
+        setTimeout(() => setJob((j) => (j && !j.outcome_unknown && j.state !== "running" && j.state !== "cancelling" ? null : j)), 2500);
       }
       return succeeded;
     },
@@ -436,6 +455,20 @@ export default function App() {
         await openRobot(target.key, list);
       },
     );
+
+  const cancelJob = async () => {
+    if (!job || job.kind !== "checkup") return;
+    try { setJob(await api.cancelJob(job.id)); }
+    catch (e) { setBanner(errorText(e)); }
+  };
+
+  const confirmStopped = async () => {
+    if (!job?.outcome_unknown) return;
+    try {
+      setJob(await api.acknowledgeInterruption(job.id));
+      setBanner("The interrupted check-up remains an unknown outcome. You can start a new check-up.");
+    } catch (e) { setBanner(errorText(e)); }
+  };
 
   // "What if…": run the same test with one thing changed, then show it next to the original.
   const askWhatIf = async (key: string) => {
@@ -506,7 +539,7 @@ export default function App() {
   };
 
   const hasStage = !!robot && robot.installed && robot.hasResults;
-  const busy = job?.state === "running";
+  const busy = job?.state === "running" || job?.state === "cancelling" || job?.outcome_unknown;
   live.current = { robotKey, hasStage, robots };
 
   const setCompareOn = (on: boolean) => {
@@ -600,6 +633,16 @@ export default function App() {
             {job.kind === "download" ? "Downloading" : "Check-up"} · {job.message || "working…"}
           </span>
           <progress max={1} value={job.progress} aria-label="Progress" />
+          {job.kind === "checkup" && busy && !job.outcome_unknown && (
+            <button type="button" disabled={job.cancel_requested && !job.cancel_signal_failed} onClick={() => void cancelJob()}>
+              {job.cancel_signal_failed ? "Try stopping again" : job.cancel_requested ? "Stopping…" : "Stop check-up"}
+            </button>
+          )}
+          {job.outcome_unknown && (
+            <button type="button" onClick={() => void confirmStopped()}>
+              I confirmed the previous process{job.process_pid ? ` (PID ${job.process_pid})` : ""} stopped
+            </button>
+          )}
         </div>
       )}
       {banner && (
@@ -683,6 +726,8 @@ export default function App() {
               onDownload={() => setLicenseFor(robot)}
               onCheckup={() => checkup(robot)}
               onRemove={() => removeRobot(robot)}
+              onCancel={() => void cancelJob()}
+              onConfirmStopped={() => void confirmStopped()}
             />
           )}
           {hasStage && <Timeline playback={playback} run={detail} other={pairShown ? other : null} />}

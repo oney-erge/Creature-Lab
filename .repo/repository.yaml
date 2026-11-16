@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "repository": {"id": "oney-erge/Creature-Lab", "owner": "oney-erge", "maintenance": "unclassified", "interfaces": ["browser-ui", "cli"]},
+  "capabilities": ["simulation", "local-runtime", "async-jobs", "persistent-data"],
+  "components": [{"id": "application", "root": "creature_lab"}, {"id": "web-ui", "root": "web-ui"}],
+  "environment": {"python": ">=3.11", "source": "pyproject.toml", "real_robot_requires": ["supported model", "applicable license", "runtime dependencies"]},
+  "checks": {
+    "editor": {"argv": ["python", "-m", "pytest", "tests/test_editor_history.py", "tests/test_editor_session_phase2.py", "-q"], "cwd": ".", "timeout_seconds": 180, "lane": "fast", "effects": "local-test-files"},
+    "web": {"argv": ["python", "-m", "pytest", "tests/test_web_server.py", "-q"], "cwd": ".", "timeout_seconds": 180, "lane": "journey", "effects": "local-test-files"}
+  },
+  "journeys": [{"id": "edit-run-replay", "user_outcome": "Edit a creature, run it and inspect the matching saved result", "checks": ["editor", "web"], "additional_evidence_needed": ["edit during running work", "stop/restart/recovery", "browser interaction", "real simulation or robot runtime"]}],
+  "evidence": {"status": "not-collected-by-repoctl", "note": "Current checkout has unrelated existing changes; preserve them when adopting."},
+  "agent": {"instruction_entry": "AGENTS.md", "command_trust": "external-to-repository"}
+}

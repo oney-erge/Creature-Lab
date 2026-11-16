@@ -110,6 +110,9 @@ export const api = {
   whatIf: async (runId: string, change: string) =>
     (await postJSON<{ run: RunCard }>(`/api/runs/${runId}/whatif`, { change })).run,
   job: (id: string) => getJSON<Job>(`/api/jobs/${id}`),
+  cancelJob: (id: string) => postJSON<Job>(`/api/jobs/${id}/cancel`),
+  acknowledgeInterruption: (id: string) =>
+    postJSON<Job>(`/api/jobs/${id}/acknowledge-interruption`, { confirmed_stopped: true }),
   // A recorded copy has no jobs to resume.
   runningJobs: async () => (STATIC ? [] : (await getJSON<{ jobs: Job[] }>("/api/jobs")).jobs),
   builder: (preset: string) => postJSON<BuilderInfo>("/api/builder", { preset }),

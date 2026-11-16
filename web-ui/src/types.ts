@@ -192,11 +192,16 @@ export interface Job {
   id: string;
   kind: "download" | "checkup" | string;
   robot: string;
-  state: "running" | "done" | "failed";
+  state: "running" | "cancelling" | "done" | "failed" | "cancelled" | "interrupted";
   progress: number;
   message: string;
   error: string | null;
   output: string | null;
+  cancel_requested: boolean;
+  process_pid: number | null;
+  outcome_unknown: boolean;
+  cancel_signal_failed: boolean;
+  cancel_signal_sent: boolean;
 }
 
 export interface BuilderInfo {

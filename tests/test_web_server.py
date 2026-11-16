@@ -303,7 +303,7 @@ def _wait(client, job_id, timeout=10.0):
     end = time.time() + timeout
     while time.time() < end:
         job = client.get(f"/api/jobs/{job_id}").json()
-        if job["state"] != "running":
+        if job["state"] not in {"running", "cancelling"}:
             return job
         time.sleep(0.02)
     raise AssertionError("job did not finish")
@@ -359,6 +359,47 @@ def test_checkup_job_reports_progress_from_the_cli_output(results, installed):
     assert job["state"] == "done" and job["progress"] == 1.0
 
 
+def test_saved_checkup_can_be_reviewed_after_server_restart_without_relaunch(results, installed):
+    from pathlib import Path
+
+    launches = []
+
+    def launcher(args):
+        launches.append(list(args))
+        output = Path(args[args.index("--out") + 1])
+        saved_checkup(
+            output / "motion", "motion", stays_down=True, robot="unitree_g1", qpos_width=8
+        )
+        (output / "report.html").write_text("<html>Saved check-up</html>", encoding="utf-8")
+        return SimpleNamespace(stdout=iter(["Report: saved\n"]), wait=lambda: 0)
+
+    jobs = Jobs(results, launcher=launcher)
+    client = _client(create_app(results, static_dir=results / "no-ui", jobs=jobs), headers=HEADERS)
+    response = client.post("/api/robots/unitree_g1/checkup")
+    assert response.status_code == 200
+    job = _wait(client, response.json()["id"])
+    assert job["state"] == "done" and len(launches) == 1
+    runs = client.get("/api/robots/unitree_g1/runs").json()["runs"]
+    run_id = next(run["id"] for run in runs if run["kind"] == "baseline")
+    detail = client.get(f"/api/runs/{run_id}")
+    poses = client.get(f"/api/runs/{run_id}/poses")
+    assert detail.status_code == poses.status_code == 200
+    assert detail.json()["frames"] == 500 and poses.content
+
+    def no_relaunch(_args):
+        pytest.fail("reviewing saved results must not launch another check-up")
+
+    recovered_jobs = Jobs(results, launcher=no_relaunch)
+    recovered = _client(
+        create_app(results, static_dir=results / "no-ui", jobs=recovered_jobs), headers=HEADERS
+    )
+    assert recovered.get(f"/api/jobs/{job['id']}").json()["state"] == "done"
+    assert recovered.get(f"/api/runs/{run_id}").json() == detail.json()
+    assert recovered.get(f"/api/runs/{run_id}/poses").content == poses.content
+    assert "Saved check-up" in recovered.get("/api/robots/unitree_g1/report/").text
+    assert len(launches) == 1
+
+
 def test_a_failing_checkup_says_why(results, installed):
     def launcher(args):
         return SimpleNamespace(
@@ -393,6 +434,239 @@ def test_the_same_checkup_is_not_started_twice(results, installed):
     _wait(client, first["id"])
 
 
+def test_simultaneous_download_starts_share_one_job(results):
+    import threading
+    from concurrent.futures import ThreadPoolExecutor
+
+    entered = threading.Event()
+    release = threading.Event()
+    calls = []
+
+    def fetch(key, progress=None):
+        calls.append(key)
+        entered.set()
+        assert release.wait(5)
+
+    jobs = Jobs(results, fetch=fetch)
+    try:
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            started = list(pool.map(lambda _: jobs.start_download("microduck"), range(8)))
+        assert entered.wait(5)
+        assert len({job.id for job in started}) == 1
+        assert calls == ["microduck"]
+    finally:
+        release.set()
+
+
+def test_checkup_cancel_waits_for_owned_process_exit(results, installed):
+    import threading
+
+    launched = threading.Event()
+    release = threading.Event()
+
+    class Process:
+        def __init__(self):
+            self.stdout = self.lines()
+            self.terminated = False
+
+        def lines(self):
+            launched.set()
+            assert release.wait(5)
+            yield "stopped\n"
+
+        def terminate(self):
+            self.terminated = True
+
+        def wait(self):
+            return -1 if self.terminated else 0
+
+    process = Process()
+    jobs = Jobs(results, launcher=lambda _args: process)
+    client = _client(create_app(results, static_dir=results / "no-ui", jobs=jobs), headers=HEADERS)
+    started = client.post("/api/robots/unitree_g1/checkup").json()
+    try:
+        assert launched.wait(5)
+        stopping = client.post(f"/api/jobs/{started['id']}/cancel").json()
+        assert stopping["state"] == "cancelling"
+        assert stopping["cancel_requested"] is True
+        assert process.terminated
+        assert client.post("/api/robots/unitree_g1/checkup").json()["id"] == started["id"]
+    finally:
+        release.set()
+    end = time.time() + 5
+    while time.time() < end:
+        final = client.get(f"/api/jobs/{started['id']}").json()
+        if final["state"] == "cancelled":
+            break
+        time.sleep(0.01)
+    assert final["state"] == "cancelled"
+
+
+def test_failed_stop_record_does_not_signal_or_strand_the_job(results, installed, monkeypatch):
+    import threading
+
+    launched = threading.Event()
+    release = threading.Event()
+
+    class Process:
+        def __init__(self):
+            self.stdout = self.lines()
+            self.terminated = False
+
+        def lines(self):
+            launched.set()
+            assert release.wait(5)
+            yield "stopped\n"
+
+        def terminate(self):
+            self.terminated = True
+
+        def wait(self):
+            return -1
+
+    process = Process()
+    jobs = Jobs(results, launcher=lambda _args: process)
+    client = _client(create_app(results, static_dir=results / "no-ui", jobs=jobs), headers=HEADERS)
+    started = client.post("/api/robots/unitree_g1/checkup").json()
+    persist = jobs._persist
+    try:
+        assert launched.wait(5)
+
+        def fail_persist(_job):
+            raise OSError("disk unavailable")
+
+        monkeypatch.setattr(jobs, "_persist", fail_persist)
+        failed = client.post(f"/api/jobs/{started['id']}/cancel")
+        assert failed.status_code == 503
+        assert "still running" in failed.json()["detail"]
+        assert not process.terminated
+        current = client.get(f"/api/jobs/{started['id']}").json()
+        assert current["state"] == "running" and not current["cancel_requested"]
+        monkeypatch.setattr(jobs, "_persist", persist)
+        assert client.post(f"/api/jobs/{started['id']}/cancel").json()["state"] == "cancelling"
+        assert process.terminated
+    finally:
+        monkeypatch.setattr(jobs, "_persist", persist)
+        release.set()
+    assert _wait(client, started["id"])["state"] == "cancelled"
+
+
+def test_failed_stop_signal_is_visible_and_can_be_retried(results, installed):
+    import threading
+
+    launched = threading.Event()
+    release = threading.Event()
+
+    class Process:
+        def __init__(self):
+            self.stdout = self.lines()
+            self.calls = 0
+
+        def lines(self):
+            launched.set()
+            assert release.wait(5)
+            yield "stopped\n"
+
+        def terminate(self):
+            self.calls += 1
+            if self.calls == 1:
+                raise PermissionError("cannot signal process")
+
+        def wait(self):
+            return -1
+
+    process = Process()
+    jobs = Jobs(results, launcher=lambda _args: process)
+    client = _client(create_app(results, static_dir=results / "no-ui", jobs=jobs), headers=HEADERS)
+    started = client.post("/api/robots/unitree_g1/checkup").json()
+    try:
+        assert launched.wait(5)
+        failed = client.post(f"/api/jobs/{started['id']}/cancel").json()
+        assert failed["state"] == "cancelling" and failed["cancel_signal_failed"]
+        assert "still running" in failed["message"]
+        retried = client.post(f"/api/jobs/{started['id']}/cancel").json()
+        assert retried["state"] == "cancelling" and not retried["cancel_signal_failed"]
+        assert retried["error"] is None
+        assert process.calls == 2
+    finally:
+        release.set()
+    assert _wait(client, started["id"])["state"] == "cancelled"
+
+
+def test_process_exit_before_signal_is_not_reported_as_cancelled(results, installed, monkeypatch):
+    import threading
+    from concurrent.futures import ThreadPoolExecutor
+
+    launched = threading.Event()
+    finish_process = threading.Event()
+    signal_waiting = threading.Event()
+    allow_signal = threading.Event()
+
+    class Process:
+        def __init__(self):
+            self.stdout = self.lines()
+            self.signals = 0
+
+        def lines(self):
+            launched.set()
+            assert finish_process.wait(5)
+            yield "process failed independently\n"
+
+        def terminate(self):
+            self.signals += 1
+
+        def wait(self):
+            return 7
+
+    process = Process()
+    jobs = Jobs(results, launcher=lambda _args: process)
+    client = _client(create_app(results, static_dir=results / "no-ui", jobs=jobs), headers=HEADERS)
+    started = client.post("/api/robots/unitree_g1/checkup").json()
+    original_signal = jobs._signal_stop
+
+    def delayed_signal(job, owned_process):
+        signal_waiting.set()
+        assert allow_signal.wait(5)
+        original_signal(job, owned_process)
+
+    monkeypatch.setattr(jobs, "_signal_stop", delayed_signal)
+    try:
+        assert launched.wait(5)
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            stopping = pool.submit(client.post, f"/api/jobs/{started['id']}/cancel")
+            assert signal_waiting.wait(5)
+            finish_process.set()
+            assert _wait(client, started["id"])["state"] == "failed"
+            allow_signal.set()
+            assert stopping.result(timeout=5).json()["state"] == "failed"
+        assert process.signals == 0
+    finally:
+        finish_process.set()
+        allow_signal.set()
+
+
+def test_restart_requires_review_before_repeating_an_unknown_checkup(results, installed):
+    from creature_lab.web.jobs import Job
+
+    original = Jobs(results)
+    old = Job(id="abcdef1234", kind="checkup", robot="unitree_g1", process_pid=1234)
+    original._persist(old)
+    recovered = Jobs(results)
+    client = _client(
+        create_app(results, static_dir=results / "no-ui", jobs=recovered), headers=HEADERS
+    )
+
+    job = client.get("/api/jobs/abcdef1234").json()
+    assert job["state"] == "interrupted" and job["outcome_unknown"] is True
+    assert job["process_pid"] == 1234
+    assert client.post("/api/robots/unitree_g1/checkup").json()["id"] == old.id
+    assert client.post(f"/api/jobs/{old.id}/acknowledge-interruption", json={}).status_code == 400
+    reviewed = client.post(
+        f"/api/jobs/{old.id}/acknowledge-interruption", json={"confirmed_stopped": True}
+    ).json()
+    assert reviewed["state"] == "interrupted" and reviewed["outcome_unknown"] is False
+
+
 def test_a_reloaded_page_can_find_the_running_job(results, installed):
     release = []
 
@@ -417,6 +691,21 @@ def test_a_reloaded_page_can_find_the_running_job(results, installed):
 
 def test_unknown_job_is_404(client):
     assert client.get("/api/jobs/nope").status_code == 404
+
+
+def test_unreadable_saved_job_blocks_new_work_until_reviewed(results, installed):
+    records = results / ".jobs"
+    records.mkdir(exist_ok=True)
+    (records / "0123456789.json").write_text("{broken", encoding="utf-8")
+    client = _client(create_app(results, static_dir=results / "no-ui"), headers=HEADERS)
+
+    response = client.post("/api/robots/unitree_g1/checkup")
+    assert response.status_code == 503
+    assert "0123456789.json" in response.json()["detail"]
+    assert "processes have stopped" in response.json()["detail"]
+
+    response = client.post("/api/robots/unitree_g1/download", json={"accept_license": True})
+    assert response.status_code == 503
 
 
 # ---- the UI --------------------------------------------------------------------------------

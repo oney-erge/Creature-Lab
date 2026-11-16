@@ -58,7 +58,9 @@ build editor.
 - **Run a check-up.** *Run check-up* starts the same run as `creature-lab robots checkup` in the
   background and shows its progress (about two minutes). If you reload the page meanwhile, it
   picks the running job up again. If you are watching a run when it finishes, you are told, not
-  moved.
+  moved. *Stop check-up* requests that the owned process stop; the app shows *Stopping* until
+  it observes the process exit. If the signal cannot be sent, it explains that the process is
+  still running and lets you retry. Downloads cannot be stopped from this control.
 - **Open the report.** *Open report* shows the HTML report of the newest check-up, with its film.
 - **Save a clip.** The camera button on the 3D view records the run from a moment before the
   shove to two seconds after the outcome, slow motion included, with the credit line on the
@@ -84,6 +86,14 @@ build editor.
 Everything works from the keyboard: the first Tab stop is a skip link to the 3D view, the run
 history is one stop (arrow keys move between runs), and the timeline takes the arrow keys, Home
 and End. If your system asks for reduced motion, runs wait for you to press play.
+
+After a server restart, a check-up that was running is shown with an unknown outcome. Check that
+the earlier process has stopped before confirming it in the app and starting a new check-up.
+The displayed process ID is a clue, not proof of ownership: operating systems can reuse IDs.
+The app does not signal a process recovered from an earlier server. Job records live under the
+selected check-up folder in `.jobs`; if one cannot be read, new jobs are blocked until the old
+processes and records are reviewed. These controls coordinate jobs within one server process;
+do not run multiple server processes against the same check-up folder.
 
 ## Host a recorded demo on a web site
 
@@ -122,6 +132,26 @@ check-up, "what if", Build your own, Add your own robot) are not there.
 The server sends meshes once per robot and poses per run as plain little-endian arrays (the layout
 is documented in `scene.py`), not as JSON. The browser interpolates between frames, so a run
 plays smoothly at any speed.
+
+### Browser replay check
+
+The optional browser replay test uses synthetic saved check-ups and a stand-in model. It checks
+saved replay after restarting the local test server, keyboard play/pause, and desktop and mobile
+comparison layouts. It does not run a real robot policy or contact an external service. Install
+the existing `browser`, `web`, and `robots` extras, the `dev` dependency group, and a Playwright
+Chromium browser first. On Windows, point temporary files to a dedicated existing scratch folder
+outside the user Temp directory, then run:
+
+```powershell
+$env:TEMP = '<existing scratch folder outside Windows user Temp>'
+$env:TMP = $env:TEMP
+$env:TMPDIR = $env:TEMP
+$env:CREATURE_LAB_BROWSER_REPLAY = '1'
+python -m pytest tests/test_web_replay_browser.py
+```
+
+On macOS or Linux, set `CREATURE_LAB_BROWSER_REPLAY=1` before the same pytest command. The test
+is skipped by default, and it is not a hardware or accessibility-conformance test.
 
 ### Safety
 
